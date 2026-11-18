@@ -1,0 +1,33 @@
+{
+  "name": "boucle",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Boucle : créer des parcours de course et de vélo à partir de quelques réglages.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "@mapbox/vector-tile": "3.0.0",
+    "maplibre-gl": "5.24.0",
+    "pbf": "5.1.2"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "2.1.1",
+    "@playwright/test": "1.64.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "24.19.2",
+    "svelte": "5.57.3",
+    "svelte-check": "4.7.8",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "5.1.0"
+  }
+}

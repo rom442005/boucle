@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dev-dist/
+test-results/
+playwright-report/
+.DS_Store
+*.log
+
+# Contexte de travail local (contient des informations personnelles) : pas dans le dépôt public
+PRODUCT.md
+.impeccable/
