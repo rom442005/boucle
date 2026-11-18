@@ -4,6 +4,7 @@
   import RangeField from './RangeField.svelte';
   import EnvChips from './EnvChips.svelte';
   import PlaceField from './PlaceField.svelte';
+  import InstallGuide from './InstallGuide.svelte';
   import { app } from '../lib/state.svelte';
   import { elevationLevel, SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
   import { kmSetting, pace, speed } from '../lib/format';
@@ -11,6 +12,11 @@
   import type { IconName } from '../lib/icons';
 
   const SPORT_ICON: Record<string, IconName> = { run: 'run', trail: 'hike', road: 'bicycle', gravel: 'bike' };
+
+  // Dans Safari sur iPhone (pas encore installée) : rappel pour l'ajouter à l'écran d'accueil.
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const installHint = $derived(ios && !standalone && !app.flags.installVu);
 
   const p = $derived(app.params);
   const def = $derived(SPORTS[p.sport]);
@@ -50,6 +56,9 @@
 </script>
 
 <div class="composer">
+  {#if installHint}
+    <InstallGuide mode="banner" />
+  {/if}
   <Segmented
     label="Sport"
     tall

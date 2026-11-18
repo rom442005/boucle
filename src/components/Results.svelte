@@ -4,7 +4,7 @@
   import ElevationProfile from './ElevationProfile.svelte';
   import Breakdown from './Breakdown.svelte';
   import { app } from '../lib/state.svelte';
-  import { duration, km, meters, percent, NNBSP } from '../lib/format';
+  import { duration, km, meters, pace, percent, speed, NNBSP } from '../lib/format';
   import { ENVS, ENV_ORDER, SHAPES, SPORTS } from '../lib/sports';
   import type { EnvClass, Route } from '../lib/types';
 
@@ -61,6 +61,20 @@
     return out;
   }
   const fits = $derived(r ? fitsOf(r) : []);
+
+  /** Sortie de l'historique affichée en détail. */
+  const done = $derived(app.detailFrom?.kind === 'historique' ? app.history.find((h) => h.id === app.detailFrom?.id) ?? null : null);
+  const doneText = $derived.by(() => {
+    if (!done || !r) return '';
+    const when = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' }).format(done.date);
+    const parts = [`Fait le ${when}`, km(done.distanceM)];
+    if (done.durationS) {
+      parts.push(duration(done.durationS));
+      const kmDone = done.distanceM / 1000;
+      if (kmDone > 0.2) parts.push(SPORTS[r.sport].bike ? speed(kmDone / (done.durationS / 3600)) : pace(done.durationS / kmDone));
+    }
+    return parts.join(' · ') + (done.complete ? '' : ' · parcours partiel');
+  });
 
   let strip: HTMLDivElement | undefined = $state();
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -155,6 +169,7 @@
       {/if}
     </div>
     <p class="kind">{SPORTS[r.sport].long} · {SHAPES[r.shape].label}</p>
+    {#if doneText}<p class="done-line"><Icon name="done" size={16} fill />{doneText}</p>{/if}
     {/if}
 
     {#if !app.wide}
@@ -178,7 +193,10 @@
 
     <div class="actions">
       <button type="button" class="act" aria-pressed={app.isSaved(r)} onclick={() => app.toggleSave(r)}>
-        <span class="act-ic"><Icon name="bookmark" fill={app.isSaved(r)} /></span>{app.isSaved(r) ? 'Enregistré' : 'Enregistrer'}
+        <span class="act-ic"><Icon name="star" fill={app.isSaved(r)} /></span>Favori
+      </button>
+      <button type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => app.markDone(r)}>
+        <span class="act-ic"><Icon name="done" fill={app.isDoneToday(r)} /></span>Fait
       </button>
       <button type="button" class="act" onclick={() => app.exportGPX(r)}>
         <span class="act-ic"><Icon name="download" /></span>GPX
@@ -424,8 +442,21 @@
   }
   .actions {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+  }
+  .done-line {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    margin: -6px 0 0;
+    font-size: 0.875rem;
+    line-height: 1.35;
+    color: var(--label);
+  }
+  .done-line :global(.icon) {
+    color: var(--ok);
+    margin-top: 1px;
   }
   .act {
     display: grid;

@@ -4,6 +4,11 @@ import {
   deserialize,
   loadLast,
   loadLibrary,
+  loadHistory,
+  saveHistory,
+  loadFlags,
+  saveFlag,
+  type HistoryEntry,
   loadSettings,
   packRoute,
   parseGPX,
@@ -58,6 +63,11 @@ class AppState {
   drawTick = $state(0);
 
   library = $state.raw<SerialRoute[]>(loadLibrary());
+  history = $state.raw<HistoryEntry[]>(loadHistory());
+  libTab = $state<'favoris' | 'historique'>('favoris');
+  /** origine du parcours affiché en détail (pour l'en-tête et le retour) */
+  detailFrom = $state<null | { kind: 'favori' | 'historique' | 'lien' | 'gpx'; id?: string }>(null);
+  flags = $state<Record<string, boolean>>(loadFlags());
   weather = $state.raw<Weather | null>(null);
 
   search = $state<null | 'start' | 'destination'>(null);
@@ -280,6 +290,9 @@ class AppState {
   back() {
     this.scrub = null;
     if (this.phase === 'detail') {
+      if (this.detailFrom?.kind === 'historique') this.libTab = 'historique';
+      else if (this.detailFrom?.kind === 'favori') this.libTab = 'favoris';
+      this.detailFrom = null;
       this.phase = 'library';
       this.routes = [];
       return;
@@ -321,7 +334,7 @@ class AppState {
     if (this.isSaved(r)) {
       this.library = this.library.filter((s) => s.id !== r.id);
       saveLibrary(this.library);
-      this.showToast('Retiré de tes parcours');
+      this.showToast('Retiré des favoris');
       return;
     }
     const next = [serialize(r), ...this.library];
@@ -330,7 +343,7 @@ class AppState {
       return;
     }
     this.library = next;
-    this.showToast('Enregistré dans tes parcours');
+    this.showToast('Ajouté aux favoris');
   }
 
   rename(r: Route, name: string) {
@@ -346,11 +359,68 @@ class AppState {
   openSaved(id: string) {
     const s = this.library.find((x) => x.id === id);
     if (!s) return;
+    this.detailFrom = { kind: 'favori', id };
     this.routes = [deserialize(s, this.settings)];
     this.selected = 0;
     this.scrub = null;
     this.phase = 'detail';
     this.drawTick++;
+  }
+
+  /** Ajoute une sortie à l'historique (copie compacte du parcours). */
+  addHistory(r: Route, opts: { date?: number; durationS?: number | null; distanceM?: number; source: 'follow' | 'manual' }) {
+    const distanceM = Math.round(opts.distanceM ?? r.lengthM);
+    const entry: HistoryEntry = {
+      id: `h-${Date.now().toString(36)}`,
+      date: opts.date ?? Date.now(),
+      durationS: opts.durationS ?? null,
+      distanceM,
+      complete: distanceM >= r.lengthM * 0.95,
+      source: opts.source,
+      route: serialize(r, true),
+    };
+    const next = [entry, ...this.history].sort((a, b) => b.date - a.date);
+    if (!saveHistory(next)) {
+      this.showToast('Mémoire pleine : supprime d’anciennes sorties.');
+      return null;
+    }
+    this.history = next;
+    return entry;
+  }
+
+  /** « Fait » : la sortie du jour, ajoutée à la main. */
+  markDone(r: Route) {
+    const recent = this.history.find((h) => h.route.id === r.id && Date.now() - h.date < 6 * 3600 * 1000);
+    if (recent) {
+      this.showToast('Déjà dans l’historique aujourd’hui');
+      return;
+    }
+    if (this.addHistory(r, { source: 'manual' })) this.showToast('Ajouté à l’historique');
+  }
+
+  isDoneToday(r: Route | null): boolean {
+    return !!r && this.history.some((h) => h.route.id === r.id && Date.now() - h.date < 6 * 3600 * 1000);
+  }
+
+  removeHistory(id: string) {
+    this.history = this.history.filter((h) => h.id !== id);
+    saveHistory(this.history);
+  }
+
+  openHistory(id: string) {
+    const h = this.history.find((x) => x.id === id);
+    if (!h) return;
+    this.routes = [deserialize(h.route, this.settings)];
+    this.selected = 0;
+    this.scrub = null;
+    this.detailFrom = { kind: 'historique', id };
+    this.phase = 'detail';
+    this.drawTick++;
+  }
+
+  setFlag(name: string, value = true) {
+    this.flags = { ...this.flags, [name]: value };
+    saveFlag(name, value);
   }
 
   removeSaved(id: string) {
@@ -425,6 +495,7 @@ class AppState {
     };
     this.routes = [r];
     this.selected = 0;
+    this.detailFrom = { kind: 'gpx' };
     this.phase = 'detail';
     this.drawTick++;
   }
@@ -434,6 +505,7 @@ class AppState {
       const r = await unpackRoute(hash, this.settings);
       this.routes = [r];
       this.selected = 0;
+      this.detailFrom = { kind: 'lien' };
       this.phase = 'detail';
       this.drawTick++;
       this.showToast('Parcours reçu : enregistre-le pour le garder.');
@@ -504,6 +576,12 @@ class AppState {
   }
 
   stopFollow() {
+    const r = this.route;
+    const f = this.follow;
+    if (r && f && f.progress >= 300) {
+      const e = this.addHistory(r, { date: f.startedAt, durationS: Math.round((Date.now() - f.startedAt) / 1000), distanceM: f.progress, source: 'follow' });
+      if (e) this.showToast(`Sortie ajoutée à l’historique : ${(e.distanceM / 1000).toFixed(1).replace('.', ',')} km`);
+    }
     this.follower?.stop();
     this.follower = null;
     this.follow = null;

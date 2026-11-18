@@ -11,6 +11,7 @@
   import FollowHUD from './components/FollowHUD.svelte';
   import ElevationProfile from './components/ElevationProfile.svelte';
   import Icon from './components/Icon.svelte';
+  import InstallGuide from './components/InstallGuide.svelte';
   import { app } from './lib/state.svelte';
   import { SHAPES } from './lib/sports';
   import { RAMP, RAMP_LABELS } from './lib/elevation';
@@ -43,7 +44,31 @@
           : 'Nouveau parcours',
   );
   const busy = $derived(app.generating);
+  let showInstall = $state(false);
 </script>
+
+{#snippet footer()}
+      {#if app.phase === 'compose'}
+        {#if app.error}
+          <div class="banner is-error err" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{app.error}</span></div>
+        {/if}
+        <div class="cta-row">
+          <button type="button" class="cta" class:is-busy={busy} aria-live="polite" onclick={() => (busy ? null : app.create())} aria-disabled={busy}>
+            {#if busy}
+              <span class="bar" style:transform="scaleX({app.progress?.ratio ?? 0.05})"></span>
+              <span class="busy-text">{app.progress?.message ?? 'Recherche…'}</span>
+            {:else}
+              {SHAPES[app.params.shape].cta}
+            {/if}
+          </button>
+          {#if busy}
+            <button type="button" class="round cancel" aria-label="Annuler la création" onclick={() => app.cancel()}><Icon name="close" size={18} /></button>
+          {/if}
+        </div>
+      {:else if (app.phase === 'results' || app.phase === 'detail') && app.route}
+        <button type="button" class="cta" onclick={() => app.startFollow()}><Icon name="play" size={18} />Suivre ce parcours</button>
+      {/if}
+{/snippet}
 
 <MapView />
 
@@ -51,16 +76,15 @@
   {#if !app.wide && app.phase === 'compose'}
     <div class="topbar">
       <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} floating onclick={() => (app.search = 'start')} />
-      <button type="button" class="round glass" aria-label="Mes parcours ({app.library.length})" onclick={() => app.openLibrary()}>
-        <Icon name="bookmark" />
-        {#if app.library.length}<span class="count tabular" aria-hidden="true">{app.library.length}</span>{/if}
+      <button type="button" class="round glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
+        <Icon name="list" />
       </button>
     </div>
   {/if}
 
   <MapControls />
 
-  <Panel label={headTitle}>
+  <Panel label={headTitle} footer={app.phase === 'library' ? undefined : footer}>
     {#snippet header()}
       {#if app.wide}
         <div class="brand">
@@ -68,6 +92,9 @@
             <svg viewBox="0 0 1024 1024" width="30" height="30"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
           </span>
           <h1>Boucle</h1>
+          <button type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
+            <Icon name="phone" size={18} />
+          </button>
           <nav class="tabs" aria-label="Sections">
             <button type="button" class="pill" class:is-on={app.phase !== 'library' && app.phase !== 'detail'} onclick={() => (app.phase === 'library' || app.phase === 'detail' ? app.closeLibrary() : null)}>Créer</button>
             <button type="button" class="pill" class:is-on={app.phase === 'library' || app.phase === 'detail'} onclick={() => app.openLibrary()}>
@@ -75,6 +102,9 @@
             </button>
           </nav>
         </div>
+      {/if}
+      {#if app.wide && showInstall}
+        <InstallGuide mode="card" onclose={() => (showInstall = false)} />
       {/if}
       {#if app.phase === 'compose'}
         {#if app.wide}
@@ -105,28 +135,7 @@
       <Results />
     {/if}
 
-    {#snippet footer()}
-      {#if app.phase === 'compose'}
-        {#if app.error}
-          <div class="banner is-error err" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{app.error}</span></div>
-        {/if}
-        <div class="cta-row">
-          <button type="button" class="cta" class:is-busy={busy} aria-live="polite" onclick={() => (busy ? null : app.create())} aria-disabled={busy}>
-            {#if busy}
-              <span class="bar" style:transform="scaleX({app.progress?.ratio ?? 0.05})"></span>
-              <span class="busy-text">{app.progress?.message ?? 'Recherche…'}</span>
-            {:else}
-              {SHAPES[app.params.shape].cta}
-            {/if}
-          </button>
-          {#if busy}
-            <button type="button" class="round cancel" aria-label="Annuler la création" onclick={() => app.cancel()}><Icon name="close" size={18} /></button>
-          {/if}
-        </div>
-      {:else if (app.phase === 'results' || app.phase === 'detail') && app.route}
-        <button type="button" class="cta" onclick={() => app.startFollow()}><Icon name="play" size={18} />Suivre ce parcours</button>
-      {/if}
-    {/snippet}
+
   </Panel>
 
   {#if app.wide && app.route && (app.phase === 'results' || app.phase === 'detail')}
@@ -186,20 +195,6 @@
     position: relative;
     color: var(--label);
   }
-  .count {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    background: var(--tint);
-    color: #fff;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    line-height: 18px;
-  }
   .brand {
     display: flex;
     align-items: center;
@@ -215,6 +210,15 @@
   }
   .logo {
     display: grid;
+  }
+  .phone {
+    width: 34px;
+    height: 34px;
+    color: var(--label-2);
+  }
+  .phone[aria-expanded='true'] {
+    color: var(--tint);
+    background: var(--tint-soft);
   }
   .tabs {
     display: flex;

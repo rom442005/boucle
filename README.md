@@ -6,7 +6,7 @@ Crée des parcours de course et de vélo sur mesure, sur iPhone comme sur Mac : 
 
 L'app est une web app installable : pas d'App Store, mises à jour automatiques.
 
-- **iPhone** : ouvrir l'adresse de l'app dans Safari, toucher le bouton Partager, puis « Sur l'écran d'accueil ». Autoriser la localisation au premier lancement.
+- **iPhone** : ouvrir l'adresse de l'app dans Safari, toucher le bouton Partager, puis « Sur l'écran d'accueil ». Une icône Boucle apparaît : elle s'ouvre en plein écran, comme une app. Autoriser la localisation au premier lancement. Depuis le Mac, le bouton en forme de téléphone (en haut de la colonne) affiche un QR code à viser avec l'appareil photo de l'iPhone.
 - **Mac (Safari)** : menu Fichier, puis « Ajouter au Dock ».
 - **Mac (Chrome)** : icône d'installation à droite de la barre d'adresse.
 
@@ -23,18 +23,19 @@ Chaque proposition affiche la distance, le dénivelé, la durée estimée, ce qu
 
 Actions :
 
-- **Enregistrer** : le parcours rejoint « Mes parcours ». La bibliothèque est enregistrée sur chaque appareil.
+- **Favori** : le parcours rejoint « Mes parcours », onglet Favoris.
+- **Fait** : ajoute la sortie du jour à l'historique.
 - **GPX** : fichier pour Garmin Connect, Coros, Suunto, Strava ou Kiprun. Sur iPhone, la feuille de partage permet de l'envoyer directement à l'app de la montre ou de l'enregistrer dans Fichiers.
 - **Partager** : un lien qui contient tout le parcours. L'ouvrir sur l'autre appareil (iPhone ou Mac), puis toucher Enregistrer. C'est ainsi qu'on passe un parcours du Mac à l'iPhone.
 - **Inverser** : même parcours dans l'autre sens.
 - **Suivre ce parcours** : position en direct sur le tracé, distance faite et restante, alerte si l'on s'écarte du tracé. L'écran reste allumé pendant le suivi.
-- **Mes parcours** permet aussi d'importer un fichier GPX.
+- **Mes parcours** : onglet **Favoris** (parcours gardés, import GPX) et onglet **Historique** (sorties faites, avec date, distance, temps, allure et le total du mois). Une sortie s'ajoute toute seule quand on termine un suivi en direct de plus de 300 m. « Modifier » permet de supprimer.
 
 ## Comment ça marche
 
 Tout se passe dans le navigateur, sans compte ni serveur à nous :
 
-- **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap). Boucle place des points de passage autour du départ, choisit les directions selon le relief, les milieux et le vent, ajuste le rayon jusqu'à tomber à quelques pour cent de la distance demandée, puis garde les trois meilleures propositions.
+- **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap). Boucle place des points de passage autour du départ, choisit les directions selon le relief, les milieux et le vent, ajuste le rayon jusqu'à tomber à quelques pour cent de la distance demandée, puis garde les trois meilleures propositions. Les petits allers-retours vers un point de passage (impasse, petite rue, jusqu'à 900 m aller et retour) sont retirés du tracé.
 - **Carte et milieux** : tuiles vectorielles [OpenFreeMap](https://openfreemap.org) (OpenMapTiles). Les forêts, l'eau, les parcs, les champs, la ville et les chemins sont lus dans ces tuiles pour orienter les parcours et calculer les répartitions.
 - **Relief** : tuiles d'altitude Terrarium (Mapzen, AWS Open Data) pour l'ombrage et la 3D ; altitudes des parcours fournies par Valhalla.
 - **Adresses** : [Photon](https://photon.komoot.io) (komoot, OpenStreetMap).
@@ -45,7 +46,7 @@ Ces services sont gratuits pour un usage raisonnable : une création de parcours
 
 ## Limites connues
 
-- La bibliothèque n'est pas synchronisée automatiquement entre l'iPhone et le Mac : utiliser **Partager**. Une synchronisation automatique demanderait un compte et un serveur.
+- Favoris et historique ne sont pas synchronisés automatiquement entre l'iPhone et le Mac : utiliser **Partager** pour un parcours. Une synchronisation automatique demanderait un compte et un serveur.
 - Le dénivelé vient d'un modèle de terrain (précision de quelques mètres) : il peut différer de celui d'une montre à baromètre.
 - Si le relief autour du départ ne permet pas le dénivelé demandé, Boucle le dit au lieu d'inventer.
 - Le suivi en direct fonctionne app ouverte ; iOS coupe la localisation des web apps en arrière-plan.

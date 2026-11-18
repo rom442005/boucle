@@ -5,6 +5,7 @@ import { costingFor, ELEV_STEP, heights, route, RoutingError, surfaceSplit, type
 import { buildEnvRaster, desirability, envShare, envSplit, meanDesirability, pullToward, trackShare, type Desirability, type EnvRaster } from './environment';
 import { drinkingWater, weather, type Weather } from './services';
 import { routeName } from './naming';
+import { removeSpurs } from './spurs';
 import { estimateDuration, SPORTS } from './sports';
 
 export interface GenerateOptions {
@@ -345,7 +346,7 @@ async function oneways(c: Ctx, B: LngLat): Promise<Candidate[]> {
   const out: Candidate[] = [];
   let direct: RouteResult[] = [];
   try {
-    direct = await route([{ coord: A }, { coord: B }], c.costing, c.signal, 2);
+    direct = (await route([{ coord: A }, { coord: B }], c.costing, c.signal, 2)).map(clean);
   } catch (e) {
     if (e instanceof RoutingError) throw new GenerateError(routingMessage(e));
     throw e;
@@ -385,16 +386,23 @@ async function oneways(c: Ctx, B: LngLat): Promise<Candidate[]> {
 
 /* ------------------------------------ Outils ------------------------------------ */
 
+/** Retire les petits allers-retours vers un point de passage (impasse, petite rue). */
+function clean(res: RouteResult): RouteResult {
+  const { coords, profile } = removeSpurs(res.coords, res.profile);
+  if (coords === res.coords) return res;
+  return { ...res, coords, profile, lengthM: lengthOf(coords) };
+}
+
 async function routeWithFallback(c: Ctx, pts: LngLat[]): Promise<RouteResult | null> {
   const through = pts.map((coord, i) => ({ coord, through: i > 0 && i < pts.length - 1 }));
   try {
-    return (await route(through, c.costing, c.signal))[0];
+    return clean((await route(through, c.costing, c.signal))[0]);
   } catch (e) {
     if (c.signal?.aborted) throw e;
     if (!(e instanceof RoutingError)) return null;
     if (e.code === 171 && pts.length === 2) throw new GenerateError(routingMessage(e));
     try {
-      return (await route(pts.map((coord) => ({ coord })), c.costing, c.signal))[0];
+      return clean((await route(pts.map((coord) => ({ coord })), c.costing, c.signal))[0]);
     } catch (e2) {
       if (c.signal?.aborted) throw e2;
       return null;

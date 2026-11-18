@@ -86,6 +86,37 @@ export function deserialize(s: SerialRoute, settings: Settings): Route {
 
 /* ---------------------------------- Bibliothèque ---------------------------------- */
 
+/** Une sortie faite : suivie en direct (mesurée) ou marquée à la main. */
+export interface HistoryEntry {
+  id: string;
+  /** début de la sortie */
+  date: number;
+  /** durée mesurée pendant le suivi, null si ajoutée à la main */
+  durationS: number | null;
+  distanceM: number;
+  complete: boolean;
+  source: 'follow' | 'manual';
+  /** copie du parcours, gardée même s'il n'est pas en favori */
+  route: SerialRoute;
+}
+
+const HIST_KEY = 'boucle.historique.v1';
+export function loadHistory(): HistoryEntry[] {
+  const list = readJSON<HistoryEntry[]>(HIST_KEY, []);
+  return Array.isArray(list) ? list.filter((x) => x && typeof x.date === 'number' && x.route?.v === 1) : [];
+}
+export function saveHistory(list: HistoryEntry[]): boolean {
+  return writeJSON(HIST_KEY, list);
+}
+
+const FLAG_KEY = 'boucle.indicateurs.v1';
+export function loadFlags(): Record<string, boolean> {
+  return readJSON<Record<string, boolean>>(FLAG_KEY, {});
+}
+export function saveFlag(name: string, value: boolean) {
+  writeJSON(FLAG_KEY, { ...loadFlags(), [name]: value });
+}
+
 const LIB_KEY = 'boucle.bibliotheque.v1';
 const SETTINGS_KEY = 'boucle.reglages.v1';
 const LAST_KEY = 'boucle.dernier.v1';

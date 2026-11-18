@@ -49,18 +49,36 @@ test('chercher un point de départ par adresse', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Départ : Parc de Procé/ }).first()).toBeVisible();
 });
 
-test('enregistrer, retrouver dans Mes parcours et exporter en GPX', async ({ page, browserName }) => {
+test('mettre en favori, retrouver dans Mes parcours et exporter en GPX', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Sur iPhone le GPX passe par la feuille de partage du système.');
   await open(page);
   await createLoop(page);
-  await page.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(page.getByRole('button', { name: 'Enregistré' })).toBeVisible();
+  const fav = page.getByRole('button', { name: 'Favori' });
+  await fav.click();
+  await expect(fav).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: /Mes parcours/ }).first().click();
-  const items = page.getByRole('list', { name: 'Parcours enregistrés' }).getByRole('button');
+  const items = page.getByRole('list', { name: 'Parcours favoris' }).getByRole('button');
   await expect(items).toHaveCount(1);
   await items.first().click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'GPX' }).click()]);
   expect(download.suggestedFilename()).toMatch(/\.gpx$/);
+});
+
+test('marquer un parcours comme fait puis le retrouver dans l’historique', async ({ page }) => {
+  await open(page);
+  await createLoop(page);
+  const done = page.getByRole('button', { name: 'Fait', exact: true });
+  await done.click();
+  await expect(page.getByText('Ajouté à l’historique')).toBeVisible();
+  await expect(done).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Retour aux réglages' }).click();
+  await page.getByRole('button', { name: /Mes parcours/ }).first().click();
+  await page.getByRole('radio', { name: /Historique/ }).click();
+  await expect(page.getByText(/^En /)).toBeVisible();
+  const rows = page.getByRole('list', { name: 'Historique des sorties' }).getByRole('button');
+  await expect(rows).toHaveCount(1);
+  await rows.first().click();
+  await expect(page.getByText(/^Fait le /)).toBeVisible();
 });
 
 test('partager un lien puis le rouvrir sur un autre appareil', async ({ page, context, browserName }) => {
@@ -87,4 +105,28 @@ test('suivre le parcours en direct', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible();
   await page.getByRole('button', { name: 'Terminer' }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible();
+});
+
+test('une sortie suivie en direct rejoint l’historique', async ({ page, context, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Lecture du GPX téléchargé sous Chromium.');
+  await open(page);
+  await createLoop(page);
+  // Coordonnées du tracé, lues dans le GPX exporté.
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'GPX' }).click()]);
+  const fs = await import('node:fs/promises');
+  const gpx = await fs.readFile((await download.path())!, 'utf8');
+  const pts = [...gpx.matchAll(/<trkpt lat="([\d.-]+)" lon="([\d.-]+)"/g)].map((m) => ({ latitude: +m[1], longitude: +m[2] }));
+  expect(pts.length).toBeGreaterThan(20);
+  await page.getByRole('button', { name: /Suivre ce parcours/ }).click();
+  await expect(page.getByText('restants')).toBeVisible({ timeout: 20_000 });
+  // On avance pas à pas jusqu'au quart du parcours (environ 2,5 km).
+  const quarter = Math.floor(pts.length / 4);
+  for (let i = 0; i <= quarter; i += Math.max(1, Math.floor(quarter / 12))) {
+    await context.setGeolocation(pts[i]);
+    await page.waitForTimeout(250);
+  }
+  await context.setGeolocation(pts[quarter]);
+  await expect(page.getByText(/faits/)).toContainText(/[1-9],\d\s?km/, { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Terminer' }).click();
+  await expect(page.getByText(/Sortie ajoutée à l’historique/)).toBeVisible();
 });
