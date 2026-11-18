@@ -6,7 +6,7 @@ Crée des parcours de course et de vélo sur mesure, sur iPhone comme sur Mac : 
 
 L'app est une web app installable : pas d'App Store, mises à jour automatiques.
 
-- **iPhone** : ouvrir l'adresse de l'app dans Safari, toucher le bouton Partager, puis « Sur l'écran d'accueil ». Une icône Boucle apparaît : elle s'ouvre en plein écran, comme une app. Autoriser la localisation au premier lancement. Depuis le Mac, le bouton en forme de téléphone (en haut de la colonne) affiche un QR code à viser avec l'appareil photo de l'iPhone.
+- **iPhone** : ouvrir l'adresse de l'app dans Safari, toucher Partager (depuis iOS 26, il est rangé dans le menu ⋯), puis « Sur l'écran d'accueil » et Ajouter. Une icône Boucle apparaît : elle s'ouvre en plein écran, comme une app. Autoriser la localisation au premier lancement. Depuis le Mac, le bandeau « Sur ton iPhone » en haut des réglages (ou, s'il a été masqué, le bouton en forme de téléphone à côté du nom Boucle) affiche un QR code à viser avec l'appareil photo de l'iPhone.
 - **Mac (Safari)** : menu Fichier, puis « Ajouter au Dock ».
 - **Mac (Chrome)** : icône d'installation à droite de la barre d'adresse.
 

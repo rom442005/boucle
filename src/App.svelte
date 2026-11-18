@@ -92,7 +92,7 @@
             <svg viewBox="0 0 1024 1024" width="30" height="30"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
           </span>
           <h1>Boucle</h1>
-          <button type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
+          <button type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
             <Icon name="phone" size={18} />
           </button>
           <nav class="tabs" aria-label="Sections">

@@ -63,12 +63,13 @@ import done from '@phosphor-icons/core/assets/regular/check-circle.svg?raw';
 import doneF from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?raw';
 import history from '@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw';
 import phone from '@phosphor-icons/core/assets/regular/device-mobile.svg?raw';
+import qr from '@phosphor-icons/core/assets/regular/qr-code.svg?raw';
 import remove from '@phosphor-icons/core/assets/fill/minus-circle-fill.svg?raw';
 
 export const ICONS = {
   run, hike, bicycle, bike, tree, waves, park, grains, buildings, search, locate, cube, bookmark, list, back, chevron,
   down, close, again, swap, share, download, link, play, stop, trash, pencil, check, approx, warning, wind, drop, bulb, road,
-  pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, remove,
+  pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, remove,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {

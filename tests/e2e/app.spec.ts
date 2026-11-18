@@ -130,3 +130,27 @@ test('une sortie suivie en direct rejoint l’historique', async ({ page, contex
   await page.getByRole('button', { name: 'Terminer' }).click();
   await expect(page.getByText(/Sortie ajoutée à l’historique/)).toBeVisible();
 });
+
+test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browserName }) => {
+  await open(page);
+  if (browserName !== 'chromium') {
+    // Dans Safari sur iPhone : le rappel d'installation, pas le QR code.
+    await expect(page.getByRole('note').filter({ hasText: 'Comme une app' })).toBeVisible();
+    await expect(page.getByRole('note').filter({ hasText: 'Sur ton iPhone' })).toHaveCount(0);
+    return;
+  }
+  const banner = page.getByRole('note').filter({ hasText: 'Sur ton iPhone' });
+  await expect(banner).toBeVisible();
+  await banner.getByRole('button', { name: 'QR code' }).click();
+  const card = page.getByRole('group', { name: 'Installer Boucle sur l’iPhone' });
+  await expect(card.locator('.qr svg')).toBeVisible();
+  await card.getByRole('button', { name: 'Fermer le QR code' }).click();
+  await banner.getByRole('button', { name: 'Masquer ce conseil' }).click();
+  await expect(banner).toBeHidden();
+  // Masqué pour de bon ; le bouton téléphone de l'en-tête garde l'accès au QR code.
+  await page.reload();
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await expect(page.getByRole('note').filter({ hasText: 'Sur ton iPhone' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Installer Boucle sur l’iPhone' }).click();
+  await expect(page.getByRole('dialog', { name: 'Installer Boucle sur l’iPhone' }).locator('.qr svg')).toBeVisible();
+});
