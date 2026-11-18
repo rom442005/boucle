@@ -248,8 +248,32 @@
     map.on('dragstart', () => {
       if (app.phase === 'follow') app.followCamera = false;
     });
+    let longPressAt = 0;
     map.on('click', (e) => {
-      if (app.pickOnMap) app.placeFromMap(app.pickOnMap, [e.lngLat.lng, e.lngLat.lat]);
+      // Ignoré : fin d'un appui long (départ déjà placé) ou clic sur un marqueur.
+      if (Date.now() - longPressAt < 800) return;
+      if ((e.originalEvent.target as HTMLElement | null)?.closest?.('.maplibregl-marker')) return;
+      const c: LngLat = [e.lngLat.lng, e.lngLat.lat];
+      // « Choisir sur la carte ».
+      if (app.pickOnMap) {
+        const kind = app.pickOnMap;
+        void app.placeFromMap(kind, c);
+        app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
+        return;
+      }
+      // Sur Mac, la recherche laisse la carte visible : un clic choisit ce point.
+      if (app.search && app.wide) {
+        const kind = app.search;
+        app.search = null;
+        void app.placeFromMap(kind, c);
+        app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
+        return;
+      }
+      // « Vers un lieu » : un clic place (ou déplace) la destination.
+      if (app.phase === 'compose' && app.params.shape === 'oneway') {
+        void app.placeFromMap('destination', c);
+        app.showToast('Destination placée ici');
+      }
     });
     map.on('click', 'alt-hit', (e) => {
       const idx = e.features?.[0]?.properties?.idx;
@@ -259,6 +283,7 @@
     map.on('mouseleave', 'alt-hit', () => (map!.getCanvas().style.cursor = ''));
     const placeStart = (ll: maplibregl.LngLat) => {
       if (app.phase !== 'compose') return;
+      longPressAt = Date.now();
       app.placeFromMap('start', [ll.lng, ll.lat]);
       app.showToast('Départ placé ici');
     };
@@ -358,8 +383,21 @@
       destMarker = null;
       return;
     }
-    if (!destMarker) destMarker = new maplibregl.Marker({ element: element('mk-dest', '<span></span>'), anchor: 'center' }).setLngLat(d.coord).addTo(map);
-    else destMarker.setLngLat(d.coord);
+    // Déplaçable pendant la composition, comme le départ.
+    const compose = app.phase === 'compose';
+    if (!destMarker) {
+      destMarker = new maplibregl.Marker({ element: element('mk-dest', '<span></span>'), draggable: compose, anchor: 'center' })
+        .setLngLat(d.coord)
+        .addTo(map);
+      destMarker.on('dragend', () => {
+        const ll = destMarker!.getLngLat();
+        app.placeFromMap('destination', [ll.lng, ll.lat]);
+      });
+    } else {
+      destMarker.setLngLat(d.coord);
+      destMarker.setDraggable(compose);
+    }
+    destMarker.getElement().classList.toggle('is-draggable', compose);
   });
 
   // Propositions : alternatives discrètes, tracé choisi coloré selon la pente, qui se dessine.
@@ -467,7 +505,13 @@
   });
 </script>
 
-<div class="map" bind:this={el} class:picking={!!app.pickOnMap} aria-label="Carte" role="region"></div>
+<div
+  class="map"
+  bind:this={el}
+  class:picking={!!app.pickOnMap || (app.wide && !!app.search) || (app.phase === 'compose' && app.params.shape === 'oneway')}
+  aria-label="Carte"
+  role="region"
+></div>
 
 <style>
   .map {
@@ -507,6 +551,9 @@
       0 0 0 2.5px #fff;
     display: grid;
     place-items: center;
+  }
+  :global(.mk-dest.is-draggable) {
+    cursor: grab;
   }
   :global(.mk-dest span) {
     width: 12px;

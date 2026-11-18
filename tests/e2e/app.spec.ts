@@ -154,3 +154,31 @@ test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browser
   await page.getByRole('button', { name: 'Installer Boucle sur l’iPhone' }).click();
   await expect(page.getByRole('dialog', { name: 'Installer Boucle sur l’iPhone' }).locator('.qr svg')).toBeVisible();
 });
+
+test('choisir la destination en touchant la carte', async ({ page, browserName }) => {
+  await open(page);
+  await page.getByRole('radio', { name: 'Vers un lieu' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Choisir la destination' });
+  await expect(dialog).toBeVisible();
+  const box = (await page.locator('.maplibregl-canvas').boundingBox())!;
+  if (browserName === 'chromium') {
+    // Sur Mac, la recherche laisse la carte cliquable à côté.
+    await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.35);
+  } else {
+    await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Touche la carte' })).toBeVisible();
+    await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
+  }
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Destination placée ici')).toBeVisible();
+  const flag = page.locator('.mk-dest');
+  await expect(flag).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Destination :/ })).not.toHaveAccessibleName(/Choisir une destination/);
+  if (browserName !== 'chromium') return;
+  // En mode « Vers un lieu », un clic ailleurs la déplace.
+  const before = (await flag.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.6);
+  await expect.poll(async () => (await flag.boundingBox())!.y - before.y).toBeGreaterThan(100);
+  await page.getByRole('button', { name: /Créer l’itinéraire/ }).click();
+  await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
+});

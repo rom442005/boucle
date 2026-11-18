@@ -207,10 +207,32 @@ class AppState {
     this.persist();
   }
 
+  /** Choisir un point sur la carte : sur iPhone, le panneau descend pour dégager la carte. */
+  startPick(kind: 'start' | 'destination') {
+    this.search = null;
+    this.pickOnMap = kind;
+    if (!this.wide && this.detent !== 'peek') {
+      this.pickPrevDetent = this.detent;
+      this.detent = 'peek';
+    }
+  }
+
+  cancelPick() {
+    this.pickOnMap = null;
+    this.restoreDetent();
+  }
+
+  private pickPrevDetent: Detent | null = null;
+  private restoreDetent() {
+    if (this.pickPrevDetent) this.detent = this.pickPrevDetent;
+    this.pickPrevDetent = null;
+  }
+
   async placeFromMap(kind: 'start' | 'destination', c: LngLat) {
     const place: Place = { name: 'Point choisi', coord: c, kind: 'map' };
     this.setPlace(kind, place);
     this.pickOnMap = null;
+    this.restoreDetent();
     const r = await reverse(c);
     const cur = kind === 'start' ? this.start : this.destination;
     if (r && cur && same(cur.coord, c)) this.setPlace(kind, { ...place, name: r.name, detail: r.detail });

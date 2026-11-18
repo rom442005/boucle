@@ -16,7 +16,7 @@ L'app est une web app installable : pas d'App Store, mises à jour automatiques.
 2. **Sport** : course, trail, vélo de route, gravel ou VTT. Chaque sport utilise un réseau différent (trottoirs et parcs, sentiers, routes goudronnées, chemins).
 3. **Distance** et **dénivelé positif** : le dénivelé reste « indifférent » tant qu'on ne touche pas son curseur. Le cercle en pointillés sur la carte montre jusqu'où la boucle peut aller.
 4. **Milieu** : forêt, bord de l'eau, parcs, campagne ou ville. Les parcours passent en priorité par ces milieux quand il y en a autour du départ.
-5. **Forme** : boucle, aller-retour, ou vers un lieu (avec une destination).
+5. **Forme** : boucle, aller-retour, ou vers un lieu. La destination se choisit par adresse, ou d'un clic (d'une touche sur iPhone) sur la carte : en mode « Vers un lieu », chaque clic sur la carte place la destination, et le drapeau se fait glisser pour l'ajuster. Sur Mac, la carte reste cliquable pendant la recherche d'adresse.
 6. **Sol** et **options** : bitume, mixte ou chemins ; éviter les grands axes ; rues éclairées pour courir de nuit ; points d'eau ; départ face au vent (vélo) ; allure ou vitesse pour estimer la durée.
 
 Chaque proposition affiche la distance, le dénivelé, la durée estimée, ce qu'elle respecte de la demande, les milieux traversés, la répartition des sols et le profil d'altitude. Le tracé est coloré selon la pente, du rose clair (plat) au grenat (montée raide), comme le profil. Glisser le doigt sur le profil déplace une loupe sur la carte.

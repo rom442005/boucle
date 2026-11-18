@@ -54,8 +54,8 @@
     await app.useMyPosition(kind);
   }
   function onMap() {
-    app.pickOnMap = kind;
-    close();
+    ctrl?.abort();
+    app.startPick(kind);
   }
   function onkey(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
@@ -83,15 +83,30 @@
     <button type="button" class="text-btn" onclick={close}>Annuler</button>
   </div>
 
-  <div class="group quick">
+  {#snippet mapRow()}
+    <button type="button" class="row" onclick={onMap}>
+      <span class="ic" class:map-ic={kind === 'destination'}><Icon name="crosshair" size={18} /></span>
+      <span class="row-label">
+        Choisir sur la carte
+        {#if app.wide}<span class="row-sub">Ou clique directement sur la carte, à droite.</span>{/if}
+      </span>
+    </button>
+  {/snippet}
+  {#snippet mineRow()}
     <button type="button" class="row" onclick={mine}>
       <span class="ic loc"><Icon name="locate" size={18} fill /></span>
       <span class="row-label">Ma position</span>
     </button>
-    <button type="button" class="row" onclick={onMap}>
-      <span class="ic"><Icon name="crosshair" size={18} /></span>
-      <span class="row-label">Choisir sur la carte</span>
-    </button>
+  {/snippet}
+  <div class="group quick">
+    <!-- Pour une destination, la carte d'abord : « Ma position » y sert rarement. -->
+    {#if kind === 'destination'}
+      {@render mapRow()}
+      {@render mineRow()}
+    {:else}
+      {@render mineRow()}
+      {@render mapRow()}
+    {/if}
   </div>
 
   <div class="results" aria-live="polite">
@@ -120,6 +135,11 @@
     inset: 0;
     z-index: 39;
     background: rgba(0, 0, 0, 0.18);
+  }
+  /* Sur Mac, seule la colonne est voilée : la carte reste cliquable pour choisir un point. */
+  .scrim.wide {
+    right: auto;
+    width: 408px;
   }
   .search {
     position: fixed;
@@ -195,6 +215,10 @@
   .ic.loc {
     background: var(--location);
     color: #fff;
+  }
+  .ic.map-ic {
+    background: var(--tint-soft);
+    color: var(--tint);
   }
   .results {
     overflow-y: auto;

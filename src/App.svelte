@@ -13,6 +13,7 @@
   import Icon from './components/Icon.svelte';
   import InstallGuide from './components/InstallGuide.svelte';
   import { app } from './lib/state.svelte';
+  import { isDesktop } from './lib/platform';
   import { SHAPES } from './lib/sports';
   import { RAMP, RAMP_LABELS } from './lib/elevation';
 
@@ -47,6 +48,8 @@
   let showInstall = $state(false);
 </script>
 
+<svelte:window onkeydown={(e) => e.key === 'Escape' && app.pickOnMap && app.cancelPick()} />
+
 {#snippet footer()}
       {#if app.phase === 'compose'}
         {#if app.error}
@@ -73,7 +76,7 @@
 <MapView />
 
 {#if app.phase !== 'follow'}
-  {#if !app.wide && app.phase === 'compose'}
+  {#if !app.wide && app.phase === 'compose' && !app.pickOnMap}
     <div class="topbar">
       <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} floating onclick={() => (app.search = 'start')} />
       <button type="button" class="round glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
@@ -158,8 +161,8 @@
 {#if app.pickOnMap}
   <div class="picker glass" role="status">
     <Icon name="crosshair" size={18} />
-    <span>Touche la carte pour placer {app.pickOnMap === 'start' ? 'le départ' : 'la destination'}</span>
-    <button type="button" class="text-btn" onclick={() => (app.pickOnMap = null)}>Annuler</button>
+    <span>{isDesktop ? 'Clique sur' : 'Touche'} la carte pour placer {app.pickOnMap === 'start' ? 'le départ' : 'la destination'}</span>
+    <button type="button" class="text-btn" onclick={() => app.cancelPick()}>Annuler</button>
   </div>
 {/if}
 
@@ -342,12 +345,19 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 4px 8px 4px 16px;
-    border-radius: 999px;
+    padding: 6px 8px 6px 16px;
+    border-radius: 24px;
     font-size: 0.9375rem;
     font-weight: 500;
-    white-space: nowrap;
+    line-height: 1.3;
+    width: max-content;
     max-width: calc(100vw - 24px);
+  }
+  .picker span {
+    text-wrap: balance;
+  }
+  .picker .text-btn {
+    flex: none;
   }
   .toast-zone {
     position: fixed;

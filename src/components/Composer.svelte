@@ -119,6 +119,13 @@
     />
     {#if p.shape === 'oneway'}
       <PlaceField kind="destination" place={app.destination} onclick={() => (app.search = 'destination')} />
+      <p class="hint">
+        {#if app.destination}
+          Pour la déplacer, {isDesktop ? 'clique ailleurs sur' : 'touche ailleurs'} la carte ou fais glisser le drapeau.
+        {:else}
+          Ou {isDesktop ? 'clique directement sur' : 'touche directement'} la carte, là où tu veux aller.
+        {/if}
+      </p>
     {/if}
   </section>
 
