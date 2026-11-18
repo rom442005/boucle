@@ -9,6 +9,13 @@ async function open(page: Page) {
 async function createLoop(page: Page) {
   await page.getByRole('button', { name: /Créer la boucle/ }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
+  // Sur iPhone, le panneau descend pour montrer tout le parcours, avec un résumé chiffré ; on le remonte pour le détail.
+  const folded = page.getByRole('button', { name: /Taille du panneau : réduit/ });
+  if (await folded.count()) {
+    await expect(page.locator('.sum-stats')).toContainText(/km/);
+    await folded.click();
+    await expect(page.getByRole('button', { name: /Taille du panneau : moyen/ })).toBeVisible();
+  }
 }
 
 test('créer une boucle, comparer les propositions, parcourir le profil', async ({ page }) => {

@@ -3,6 +3,8 @@
   import type { EnvClass } from '../lib/types';
   import type { IconName } from '../lib/icons';
   import { ENVS, ENV_ORDER } from '../lib/sports';
+  import { app } from '../lib/state.svelte';
+  import { haptic } from '../lib/haptics';
 
   let { selected, ontoggle }: { selected: EnvClass[]; ontoggle: (e: EnvClass) => void } = $props();
 
@@ -12,8 +14,11 @@
 <div class="chips" role="group" aria-label="Milieu traversé">
   {#each ENV_ORDER as e (e)}
     {@const on = selected.includes(e)}
-    <button type="button" class="chip" class:on aria-pressed={on} style:--c="var(--env-{e})" onclick={() => ontoggle(e)}>
-      <span class="ic"><Icon name={ICON[e]} size={18} fill={on} /></span>
+    <button type="button" class="chip" class:on aria-pressed={on} style:--c="var(--env-{e})" onclick={() => {
+        haptic('tap');
+        ontoggle(e);
+      }}>
+      <span class="ic"><Icon name={ICON[e]} size={app.wide ? 18 : 16} fill={on} /></span>
       {ENVS[e].label}
     </button>
   {/each}
@@ -52,5 +57,23 @@
     background: color-mix(in srgb, var(--c) 18%, transparent);
     box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 85%, transparent);
     font-weight: 600;
+    animation: chip-pop 460ms var(--spring-bouncy);
+  }
+  /* Choisi : la pastille rebondit légèrement. */
+  @keyframes chip-pop {
+    from {
+      transform: scale(0.9);
+    }
+  }
+  @media (max-width: 859px) {
+    .chips {
+      gap: 6px;
+    }
+    .chip {
+      min-height: 32px;
+      padding: 0 12px 0 9px;
+      gap: 5px;
+      font-size: 0.875rem;
+    }
   }
 </style>

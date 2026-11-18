@@ -7,6 +7,7 @@
   import InstallGuide from './InstallGuide.svelte';
   import { app } from '../lib/state.svelte';
   import { isDesktop, isIOS, isStandalone } from '../lib/platform';
+  import { asSwitch, haptic, nativeSwitch } from '../lib/haptics';
   import { elevationLevel, SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
   import { kmSetting, pace, speed } from '../lib/format';
   import type { Shape, Surface } from '../lib/types';
@@ -43,6 +44,8 @@
   function toggle(key: 'avoidBusy' | 'lit' | 'water' | 'headwind') {
     app.params[key] = !app.params[key];
     app.persist();
+    // Sur iPhone, l'interrupteur natif vibre déjà de lui-même.
+    if (!nativeSwitch) haptic('tap');
   }
 
   const isRun = $derived(!def.bike);
@@ -53,6 +56,7 @@
     if (isRun) s[paceKey] = Math.min(720, Math.max(180, s[paceKey] + dir * 10));
     else s[paceKey] = Math.min(45, Math.max(8, s[paceKey] + dir));
     app.saveSettings();
+    haptic('tick');
   }
 </script>
 
@@ -80,9 +84,11 @@
     display={kmSetting(p.distanceKm)}
     unit="km"
     valuetext="{kmSetting(p.distanceKm)} kilomètres"
+    tickEvery={def.bike ? 5 : 1}
     onchange={setDistance}
   />
 
+  <div class="fold" data-fold>
   <RangeField
     id="elevation"
     label="Dénivelé positif"
@@ -94,6 +100,7 @@
     unit="m"
     off={p.elevation == null}
     valuetext="{p.elevation ?? 0} mètres de dénivelé positif"
+    tickEvery={def.bike ? 100 : 50}
     onchange={(v) => setElevation(v)}
     onreset={() => setElevation(null)}
   >
@@ -102,6 +109,7 @@
       <span class="tabular">{Math.round(elevKm)} m par km</span>
     {/snippet}
   </RangeField>
+  </div>
 
   <section class="block" aria-labelledby="env-l">
     <h3 id="env-l" class="field-label">Milieu</h3>
@@ -148,25 +156,25 @@
       <label class="row">
         <span class="row-icon"><Icon name="road" /></span>
         <span class="row-label">Éviter les grands axes<span class="row-sub">Routes à fort trafic évitées quand c’est possible</span></span>
-        <input class="switch" type="checkbox" checked={p.avoidBusy} onchange={() => toggle('avoidBusy')} />
+        <input class="switch" type="checkbox" use:asSwitch checked={p.avoidBusy} onchange={() => toggle('avoidBusy')} />
       </label>
       {#if p.sport === 'run'}
         <label class="row">
           <span class="row-icon"><Icon name="bulb" /></span>
           <span class="row-label">Rues éclairées<span class="row-sub">Pour courir à la nuit tombée</span></span>
-          <input class="switch" type="checkbox" checked={p.lit} onchange={() => toggle('lit')} />
+          <input class="switch" type="checkbox" use:asSwitch checked={p.lit} onchange={() => toggle('lit')} />
         </label>
       {/if}
       <label class="row">
         <span class="row-icon"><Icon name="drop" /></span>
         <span class="row-label">Points d’eau<span class="row-sub">Fontaines connues sur le parcours</span></span>
-        <input class="switch" type="checkbox" checked={p.water} onchange={() => toggle('water')} />
+        <input class="switch" type="checkbox" use:asSwitch checked={p.water} onchange={() => toggle('water')} />
       </label>
       {#if def.bike && p.shape !== 'oneway'}
         <label class="row">
           <span class="row-icon"><Icon name="wind" /></span>
           <span class="row-label">Partir face au vent<span class="row-sub">Vent dans le dos pour rentrer, selon la météo du moment</span></span>
-          <input class="switch" type="checkbox" checked={p.headwind} onchange={() => toggle('headwind')} />
+          <input class="switch" type="checkbox" use:asSwitch checked={p.headwind} onchange={() => toggle('headwind')} />
         </label>
       {/if}
       <div class="row">
@@ -222,5 +230,25 @@
     text-align: center;
     font-size: 0.9375rem;
     font-weight: 600;
+  }
+  .fold {
+    display: grid;
+  }
+  @media (max-width: 859px) {
+    .composer {
+      gap: 14px;
+      padding-top: 2px;
+    }
+    .block {
+      gap: 8px;
+    }
+    .stepper button {
+      width: 32px;
+      height: 32px;
+    }
+    .stepper output {
+      min-width: 68px;
+      font-size: 0.875rem;
+    }
   }
 </style>

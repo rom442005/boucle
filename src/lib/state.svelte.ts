@@ -28,6 +28,7 @@ import { cumulative, overlapRatio } from './geo';
 import { Follower, type FollowState } from './follow';
 import { slug } from './format';
 import { ELEV_STEP, heights } from './valhalla';
+import { haptic } from './haptics';
 
 const same = (a: LngLat, b: LngLat) => a[0] === b[0] && a[1] === b[1];
 
@@ -111,6 +112,7 @@ class AppState {
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', () => this.persistNow());
     const last = loadLast();
     if (last.params && SPORTS[last.params.sport]) this.params = { ...defaultParams(last.params.sport), ...last.params };
     if (last.start) this.start = last.start;
@@ -121,12 +123,24 @@ class AppState {
     return this.routes[this.selected] ?? null;
   }
 
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Sauvegarde de la session, regroupée : un curseur qu'on fait glisser n'écrit pas à chaque pas. */
   persist() {
+    clearTimeout(this.persistTimer);
+    this.persistTimer = setTimeout(() => this.persistNow(), 300);
+  }
+  persistNow() {
+    clearTimeout(this.persistTimer);
     saveLast({
       params: $state.snapshot(this.params),
       start: this.start ? $state.snapshot(this.start) : undefined,
       destination: this.destination ? $state.snapshot(this.destination) : undefined,
     });
+  }
+
+  /** iPhone : le panneau descend pour montrer tout le parcours. */
+  private focusRoute() {
+    if (!this.wide) this.detent = 'peek';
   }
 
   /* ------------------------------ Réglages ------------------------------ */
@@ -286,10 +300,12 @@ class AppState {
       this.weather = res.weather;
       this.phase = 'results';
       this.drawTick++;
-      if (!this.wide) this.detent = 'half';
+      this.focusRoute();
+      haptic('success');
     } catch (e) {
       if (ctrl.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return;
       console.error(e);
+      haptic('warn');
       this.error = e instanceof GenerateError ? e.message : 'La création a échoué. Vérifie ta connexion, puis réessaie.';
     } finally {
       if (this.abort === ctrl) {
@@ -309,6 +325,7 @@ class AppState {
 
   select(i: number) {
     if (i === this.selected || !this.routes[i]) return;
+    haptic('tick');
     this.selected = i;
     this.scrub = null;
     this.drawTick++;
@@ -322,9 +339,11 @@ class AppState {
       this.detailFrom = null;
       this.phase = 'library';
       this.routes = [];
+      if (!this.wide) this.detent = 'half';
       return;
     }
     this.phase = 'compose';
+    if (!this.wide) this.detent = 'half';
     this.routes = [];
     this.note = null;
   }
@@ -391,6 +410,7 @@ class AppState {
     this.selected = 0;
     this.scrub = null;
     this.phase = 'detail';
+    this.focusRoute();
     this.drawTick++;
   }
 
@@ -442,6 +462,7 @@ class AppState {
     this.scrub = null;
     this.detailFrom = { kind: 'historique', id };
     this.phase = 'detail';
+    this.focusRoute();
     this.drawTick++;
   }
 
@@ -524,6 +545,7 @@ class AppState {
     this.selected = 0;
     this.detailFrom = { kind: 'gpx' };
     this.phase = 'detail';
+    this.focusRoute();
     this.drawTick++;
   }
 
@@ -534,6 +556,7 @@ class AppState {
       this.selected = 0;
       this.detailFrom = { kind: 'lien' };
       this.phase = 'detail';
+      this.focusRoute();
       this.drawTick++;
       this.showToast('Parcours reçu : enregistre-le pour le garder.');
     } catch {

@@ -3,8 +3,10 @@
   import RouteGlyph from './RouteGlyph.svelte';
   import ElevationProfile from './ElevationProfile.svelte';
   import Breakdown from './Breakdown.svelte';
+  import RollingNumber from './RollingNumber.svelte';
   import { app } from '../lib/state.svelte';
-  import { duration, km, meters, pace, percent, speed, NNBSP } from '../lib/format';
+  import { haptic } from '../lib/haptics';
+  import { duration, km, kmValue, meters, pace, percent, speed, NNBSP } from '../lib/format';
   import { ENVS, ENV_ORDER, SHAPES, SPORTS } from '../lib/sports';
   import type { EnvClass, Route } from '../lib/types';
 
@@ -173,13 +175,13 @@
     {/if}
 
     {#if !app.wide}
-      <div class="prof"><ElevationProfile route={r} height={118} readout="header" /></div>
+      <div class="prof" data-fold><ElevationProfile route={r} height={100} readout="header" /></div>
     {/if}
 
     <dl class="stats">
-      <div><dt>Distance</dt><dd class="rounded tabular">{km(r.lengthM).replace(`${NNBSP}km`, '')}<small>km</small></dd></div>
-      <div><dt>Dénivelé +</dt><dd class="rounded tabular">{Math.round(r.ascent)}<small>m</small></dd></div>
-      <div><dt>Durée estimée</dt><dd class="rounded tabular">{duration(r.durationS)}</dd></div>
+      <div><dt>Distance</dt><dd class="rounded"><RollingNumber value={kmValue(r.lengthM)} /><small>km</small></dd></div>
+      <div><dt>Dénivelé +</dt><dd class="rounded"><RollingNumber value={String(Math.round(r.ascent))} /><small>m</small></dd></div>
+      <div><dt>Durée estimée</dt><dd class="rounded"><RollingNumber value={duration(r.durationS)} /></dd></div>
     </dl>
     <p class="sub tabular">D− {meters(r.descent)} · Altitude {r.minEle} à {meters(r.maxEle)} · Pente max {Math.round(r.maxGrade)}{NNBSP}%</p>
 
@@ -192,10 +194,16 @@
     {/if}
 
     <div class="actions">
-      <button type="button" class="act" aria-pressed={app.isSaved(r)} onclick={() => app.toggleSave(r)}>
+      <button type="button" class="act" aria-pressed={app.isSaved(r)} onclick={() => {
+        haptic('tap');
+        app.toggleSave(r);
+      }}>
         <span class="act-ic"><Icon name="star" fill={app.isSaved(r)} /></span>Favori
       </button>
-      <button type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => app.markDone(r)}>
+      <button type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => {
+        haptic('tap');
+        app.markDone(r);
+      }}>
         <span class="act-ic"><Icon name="done" fill={app.isDoneToday(r)} /></span>Fait
       </button>
       <button type="button" class="act" onclick={() => app.exportGPX(r)}>
@@ -482,5 +490,54 @@
   }
   .act[aria-pressed='true'] .act-ic {
     background: var(--tint-soft);
+    animation: act-pop 480ms var(--spring-bouncy);
+  }
+  @keyframes act-pop {
+    from {
+      transform: scale(0.82);
+    }
+  }
+  dd {
+    display: flex;
+    align-items: baseline;
+  }
+  /* iPhone : détail plus dense, le parcours reste visible au-dessus. */
+  @media (max-width: 859px) {
+    .strip {
+      margin-bottom: 10px;
+    }
+    .card {
+      padding: 8px 12px 8px 8px;
+      gap: 10px;
+      border-radius: 20px;
+    }
+    .c-name {
+      font-size: 0.875rem;
+    }
+    .c-meta {
+      font-size: 0.75rem;
+    }
+    .detail {
+      gap: 12px;
+    }
+    dd {
+      font-size: 1.375rem;
+    }
+    dd small {
+      font-size: 0.75rem;
+    }
+    dt {
+      font-size: 0.6875rem;
+    }
+    .act-ic {
+      width: 42px;
+      height: 42px;
+    }
+    .act {
+      font-size: 0.6875rem;
+    }
+    h2 {
+      font-size: 1.1875rem;
+    }
   }
 </style>

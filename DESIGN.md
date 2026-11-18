@@ -192,7 +192,7 @@ The full-bleed map is the product. Everything else is a single sheet of lightly 
 
 Colour is rationed. One tint, Apple pink, carries every action and the route itself; the route then breaks that pink into a five-step slope ramp from light rose to deep garnet, so the line on the map and the elevation profile below it speak the same language. Environment colours (forest, water, park, fields, town) are borrowed from the map's own fills and deepened until they read as data, then reused in chips and breakdown bars. Location is the one other hue: system blue, reserved for "where I am".
 
-Density is native-app, not web page: 44 px minimum targets, 16 px panel gutters, grouped lists with inset hairlines, big rounded figures for distance and climb. Motion is short and physical: a 200 ms exponential ease-out for state, a spring for the sheet and presses, and one orchestrated moment, the route drawing itself along the map.
+Density is native-app, not web page: 44 px minimum targets, 16 px panel gutters, grouped lists with inset hairlines, big rounded figures for distance and climb. On iPhone the interface is deliberately compact (Romain found the first version too big): quiet 13 px labels, figures as the only large type, a medium detent that stops right under the climb slider, and the map first. Motion is short and physical: a 200 ms exponential ease-out for state, real damped springs (CSS `linear()` curves) for the sheet, thumbs, switches and chips, digits that roll like a counter when a figure changes, a light haptic tick where the platform allows it, and one orchestrated moment: when routes are found the iPhone sheet drops to a one-line summary, the base map recedes behind a veil and the route draws itself along it.
 
 **Key Characteristics:**
 - One glass surface over a full-bleed map; never a page.
@@ -239,15 +239,16 @@ A quiet, warm-neutral map and iOS system greys, with one pink tint that also bec
 **Display Font:** SF Pro Rounded via `ui-rounded` (with system sans fallback), for figures only
 **Body Font:** SF Pro via `-apple-system` (with system-ui, Helvetica Neue, Arial)
 
-**Character:** The platform's own voice. SF Pro handles all words at native sizes; SF Pro Rounded with tabular figures turns distance, climb and time into the visual anchors of every view. On iPhone the root follows Dynamic Type (`font: -apple-system-body`).
+**Character:** The platform's own voice. SF Pro handles all words at native sizes; SF Pro Rounded with tabular figures turns distance, climb and time into the visual anchors of every view. The root size is fixed at 16 px on every device (Dynamic Type made the iPhone layout too large); iPhone sizes are set in the compact overrides below 860 px.
 
 ### Hierarchy
 - **Display figure** (rounded, 700, 3rem, line-height 1, -0.035em): the remaining distance in live follow.
-- **Headline figure** (rounded, 650, 2.125rem, line-height 1): distance and climb values above their sliders in the composer; the unit sits beside it at 1rem 600 in Label 2.
+- **Headline figure** (rounded, 650, 2.125rem, line-height 1; iPhone 700, 1.625rem): distance and climb values above their sliders in the composer; the unit sits beside it at 1rem 600 in Label 2 (iPhone 0.8125rem).
+- **Summary figure** (rounded, 700, 1.25rem, line-height 1, iPhone only): the one-line route summary in the folded sheet (distance, D+, duration), units at 0.75rem 600 in Label 2.
 - **Stat figure** (rounded, 650, 1.625rem, line-height 1.1): the three-column stats of a route (Distance, Dénivelé +, Durée estimée), units in a 0.875rem 600 `small`.
 - **Headline** (700, 1.375rem, -0.02em, balanced wrap): the route name in detail and the "Boucle" brand line (750).
 - **Title** (650, 1.0625rem, -0.01em): centred navigation titles ("3 propositions"), empty-state titles, and the primary capsule label (600).
-- **Body strong** (600, 0.9375rem): field labels ("Milieu", "Forme", "Sol", "Options"), card names, place values, pills (590).
+- **Body strong** (600, 0.9375rem): field labels ("Milieu", "Forme", "Sol", "Options"), card names, place values, pills (590). On iPhone field labels drop to 0.8125rem in Label 2 so the figures carry the hierarchy.
 - **Body** (400, 1rem, line-height 1.3): default text and the search input (1.0625rem).
 - **Footnote** (400, 0.8125rem, line-height 1.35, Label 2): hints, card metadata, row subtitles, breakdown legends.
 - **Caption** (500, 0.75rem): stat labels, segmented labels under sport icons, tags, action labels, fit indicators.
@@ -261,7 +262,8 @@ A quiet, warm-neutral map and iOS system greys, with one pink tint that also bec
 
 One screen. The map is fixed full-bleed behind everything; glass floats above it.
 
-- **iPhone (below 860 px):** a top bar 8 px under the safe area with the start-point capsule ("Ma position") and a 52 px round glass library button; a vertical glass pill of map controls on the right, 12 px in; and a bottom sheet inset 8 px from the edges with a 22 px drag handle, a scrolling body (4 px 16px 16px) and a footer pinned above the home indicator holding the primary capsule. Proposals scroll horizontally as snap cards at full width minus 44 px so the next one peeks.
+- **iPhone (below 860 px):** a top bar 8 px under the safe area with the 46 px start-point capsule ("Ma position") and a 46 px round glass library button; a vertical glass pill of map controls on the right, 12 px in; and a bottom sheet inset 8 px from the edges with an 18 px drag handle, a scrolling body (4 px 16px 16px, in an inner wrapper so the sheet can fold to its header) and a footer pinned above the home indicator holding the primary capsule. Detents: folded (header and footer only, body faded out), medium (fitted to the content up to the element marked `data-fold`: the climb slider while composing, the elevation profile in results; at most 66% of the screen) and full. Proposals scroll horizontally as snap cards at full width minus 44 px so the next one peeks.
+- **Route focus (iPhone):** when proposals arrive, or a saved route opens, the sheet folds to a one-line summary (back, summary figures, dots for the proposals, regenerate) above "Suivre ce parcours", and the map fits the whole route in the space left. Tapping the summary unfolds the sheet; swiping it sideways changes proposal.
 - **Mac (860 px and up):** the same content in a floating glass column, 384 px wide, inset 12 px on top, left and bottom. Proposals stack vertically. Once a route is selected the elevation profile floats as a glass dock at the bottom of the map, from 408 px to 72 px off the right edge, max 980 px wide.
 - **Rhythm:** 4 / 8 / 12 / 16 px. 16 px panel gutters and gap between composer blocks; 10 px inside a block; 8 px between chips and capsules in a row; 12 px between icon and text in rows and cards.
 - **Targets:** 44 px minimum for every control; primary capsule and top-bar buttons 52 px; action circles 48 px.
@@ -301,11 +303,11 @@ Tactile and quiet: every press scales down on a spring.
 - **Fit chips and tags:** small capsules on Fill 2 (0.75 to 0.8125rem); a satisfied criterion gets a green check; "Meilleur accord" uses Garnet Pink on the Pink Wash.
 
 ### Segmented control
-A Fill 2 capsule with a 3 px inset and a white (dark: grey) sliding thumb that springs over 360 ms. The tall variant for sport stacks a Phosphor icon over a caption ("Course", "Trail", "Vélo", "Gravel"); the selected icon turns pink and filled while its label stays Label.
+A Fill 2 capsule with a 3 px inset and a white (dark: grey) sliding thumb on a bouncy spring (480 ms, about 5% overshoot). The tall variant for sport stacks a Phosphor icon over a caption ("Course", "Trail", "Vélo", "Gravel") on Mac and sets them side by side in a 38 px control on iPhone; the selected icon turns pink and filled while its label stays Label. iPhone segments are 30 px tall at 0.8125rem.
 
 ### Sliders and switches
-- **Slider:** 6 px track, pink fill to the value, Fill beyond; a 28 px white knob that, while dragged, grows to 1.28x and turns to clear glass with a bright inner rim. "Off" state ("Indifférent") greys the whole track.
-- **Switch:** iOS 51 x 31 px, Fill when off, pink when on, 27 px white knob on a spring.
+- **Slider:** 6 px track (iPhone 4 px), pink fill to the value, Fill beyond; a 28 px white knob (iPhone 24 px) that, while dragged, grows to 1.28x and turns to clear glass with a bright inner rim. "Off" state ("Indifférent") greys the whole track. Each step crossed (1 km, or 5 km on a bike; 50 m of climb, 100 m on a bike) plays a haptic tick, and the ends a stronger tap.
+- **Switch:** iOS 51 x 31 px, Fill when off, pink when on, 27 px white knob on a bouncy spring. On iPhone the options use the system switch itself (`<input type="checkbox" switch>`, tinted pink), which is also the only control Safari lets vibrate since iOS 26.5.
 
 ### Cards / Containers
 - **Proposal card:** 22 px radius, Group Fill, no shadow, 10 / 14 px padding, a 12 px-radius route thumbnail drawn in Label 3 (pink when selected) on the left, name (2 lines max), metadata, fit row. Selected: inset 2 px pink ring.
@@ -320,8 +322,14 @@ A Fill 2 capsule with a 3 px inset and a white (dark: grey) sliding thumb that s
 ### Navigation
 Inside the panel: on Mac a brand row (pink squircle logo, "Boucle" at 1.375rem 750) with two small transparent pills ("Créer", "Mes parcours"), the active one on Fill 2. Sub-views use a centred title between 40 px round grey buttons. On iPhone the library is reached from the round glass button in the top bar, with a pink count badge.
 
+### Rolling figures
+Every figure the user watches change (slider values, the route summary and stats, the remaining distance in live follow) is a `RollingNumber`: each digit is a 0 to 9 strip clipped to one line that springs to its new value, digits are aligned from the right so units never jump, and a new leading digit slides in. Screen readers get the plain value. Reduce Motion turns the roll into an instant change.
+
+### Haptics
+`haptic()` plays a tick (sliders, sheet snaps, proposal change), a tap (segments, chips, actions, a point placed on the map) or a double success / warning (routes found, creation failed). Android uses the Vibration API. Safari on iPhone has none: a hidden system switch toggled from code gave the tick on iOS 17.4 to 26.4, and Apple stopped it in 26.5, so on current iPhones only the real option switches vibrate.
+
 ### Elevation profile (signature)
-The line carries the relief. The selected route draws itself along the map with a cubic ease-out over 700 to 1400 ms, coloured segment by segment on the slope ramp. The profile below fills its area with the same ramp at 90% opacity under a Label-coloured edge at 55%, with dashed 2/3 grid lines and 11 px axis labels. Dragging or hovering it moves a white knob with a 3 px pink stroke and a glass tooltip capsule (km, altitude, grade) along the curve, and a matching glass lens moves along the route on the map.
+The line carries the relief. The selected route draws itself along the map with a cubic ease-out over 700 to 1400 ms, coloured segment by segment on the slope ramp, while a veil of the land colour (42% light, 34% dark, 700 ms) fades the base map behind it; kilometre markers scale from 7 to 9.5 px with the zoom. The profile below fills its area with the same ramp at 90% opacity under a Label-coloured edge at 55%, with dashed 2/3 grid lines and 11 px axis labels. Dragging or hovering it moves a white knob with a 3 px pink stroke and a glass tooltip capsule (km, altitude, grade) along the curve, and a matching glass lens moves along the route on the map.
 
 ### Live follow HUD
 A panel-glass card under the status bar (max 520 px, 28 px radius) with the remaining distance in the display figure, side stats in Label 2 with 650 values, and a 6 px progress track in pink. A glass "stop" capsule with pink text and a blue locate circle float at the bottom.

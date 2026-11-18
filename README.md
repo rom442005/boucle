@@ -19,6 +19,8 @@ L'app est une web app installable : pas d'App Store, mises à jour automatiques.
 5. **Forme** : boucle, aller-retour, ou vers un lieu. La destination se choisit par adresse, ou d'un clic (d'une touche sur iPhone) sur la carte : en mode « Vers un lieu », chaque clic sur la carte place la destination, et le drapeau se fait glisser pour l'ajuster. Sur Mac, la carte reste cliquable pendant la recherche d'adresse, et un aperçu suit la souris : le drapeau, une ligne pointillée depuis le départ et la distance à vol d'oiseau.
 6. **Sol** et **options** : bitume, mixte ou chemins ; éviter les grands axes ; rues éclairées pour courir de nuit ; points d'eau ; départ face au vent (vélo) ; allure ou vitesse pour estimer la durée.
 
+Sur iPhone, quand les propositions arrivent, le panneau descend pour montrer tout le parcours avec un résumé (distance, dénivelé, durée) : toucher le résumé pour voir le détail, le balayer de côté pour passer d'une proposition à l'autre.
+
 Chaque proposition affiche la distance, le dénivelé, la durée estimée, ce qu'elle respecte de la demande, les milieux traversés, la répartition des sols et le profil d'altitude. Le tracé est coloré selon la pente, du rose clair (plat) au grenat (montée raide), comme le profil. Glisser le doigt sur le profil déplace une loupe sur la carte.
 
 Actions :
@@ -50,6 +52,7 @@ Ces services sont gratuits pour un usage raisonnable : une création de parcours
 - Le dénivelé vient d'un modèle de terrain (précision de quelques mètres) : il peut différer de celui d'une montre à baromètre.
 - Si le relief autour du départ ne permet pas le dénivelé demandé, Boucle le dit au lieu d'inventer.
 - Le suivi en direct fonctionne app ouverte ; iOS coupe la localisation des web apps en arrière-plan.
+- Vibrations : Safari sur iPhone n'a pas d'API de vibration. Depuis iOS 26.5, seuls les vrais interrupteurs (options) vibrent ; les curseurs et les boutons vibrent sur Android et sur iOS 17.4 à 26.4.
 
 ## Développement
 

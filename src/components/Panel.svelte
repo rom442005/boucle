@@ -1,21 +1,58 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { app, type Detent } from '../lib/state.svelte';
+  import { haptic } from '../lib/haptics';
 
-  let { header, children, footer, label }: { header?: Snippet; children: Snippet; footer?: Snippet; label: string } = $props();
+  let {
+    header,
+    children,
+    footer,
+    label,
+    onswipe,
+  }: {
+    header?: Snippet;
+    children: Snippet;
+    footer?: Snippet;
+    label: string;
+    /** balayage horizontal sur l'en-tête (iPhone) : 1 vers la gauche, -1 vers la droite */
+    onswipe?: (dir: 1 | -1) => void;
+  } = $props();
 
   let vh = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
   let safeTop = $state(0);
   let headH = $state(0);
   let footH = $state(0);
   let probe: HTMLDivElement | undefined = $state();
+  let body: HTMLDivElement | undefined = $state();
   let dragH = $state<number | null>(null);
+  /** Hauteur du contenu jusqu'au repère [data-fold] : la position moyenne s'arrête juste en dessous. */
+  let foldH = $state(0);
 
   const heights = $derived({
-    peek: Math.max(150, Math.round(headH + footH + 10)),
-    half: Math.round(Math.min(vh * 0.62, 600)),
+    peek: Math.max(110, Math.round(headH + footH)),
+    half: foldH ? Math.round(Math.min(headH + foldH + footH, vh * 0.66)) : Math.round(Math.min(vh * 0.62, 600)),
     full: Math.round(vh - safeTop - 70),
   } satisfies Record<Detent, number>);
+
+  // Mesure du repère (le contenu change selon l'étape et le sport).
+  $effect(() => {
+    void app.phase;
+    const el = body;
+    if (!el || app.wide) return;
+    const measure = () => {
+      const fold = el.querySelector<HTMLElement>('[data-fold]');
+      if (!fold) {
+        foldH = 0;
+        return;
+      }
+      const top = fold.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop;
+      foldH = Math.round(top + 14);
+    };
+    const ro = new ResizeObserver(measure);
+    for (const c of el.children) ro.observe(c);
+    measure();
+    return () => ro.disconnect();
+  });
 
   const height = $derived(dragH ?? heights[app.detent]);
 
@@ -38,34 +75,57 @@
     if (app.wide) {
       app.padding = { top: 40, bottom: app.route ? 210 : 40, left: 384 + 40, right: 80 };
     } else if (dragH == null) {
-      app.padding = { top: safeTop + 128, bottom: heights[app.detent] + 24, left: 28, right: 64 };
+      // Pendant la composition, la barre du départ occupe le haut ; ensuite, la carte est libre jusqu'en haut.
+      const top = app.phase === 'compose' ? 128 : 40;
+      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24, left: 28, right: 64 };
     }
   });
 
   let startY = 0;
+  let startX = 0;
   let startH = 0;
   let moved = false;
+  /** geste horizontal (changer de proposition) plutôt que vertical (taille du panneau) */
+  let sideways = false;
   let samples: { y: number; t: number }[] = [];
+  let frame = 0;
+  let pendingH: number | null = null;
+  /** Cible du toucher : avec la capture du pointeur, la cible de pointerup devient l'en-tête entier. */
+  let downTarget: HTMLElement | null = null;
 
   function down(e: PointerEvent) {
     if (app.wide || (e.target as HTMLElement).closest('button:not(.handle), input, a, [role="slider"]')) return;
+    downTarget = e.target as HTMLElement;
     startY = e.clientY;
+    startX = e.clientX;
     startH = height;
     moved = false;
+    sideways = false;
     samples = [{ y: e.clientY, t: e.timeStamp }];
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
   function move(e: PointerEvent) {
     if (!(e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) return;
     const dy = startY - e.clientY;
-    if (!moved && Math.abs(dy) < 6) return;
-    moved = true;
+    const dx = e.clientX - startX;
+    if (!moved) {
+      if (Math.abs(dy) < 6 && Math.abs(dx) < 8) return;
+      moved = true;
+      sideways = !!onswipe && Math.abs(dx) > Math.abs(dy);
+    }
+    if (sideways) return;
     const min = heights.peek;
     const max = heights.full;
     let h = startH + dy;
     if (h > max) h = max + (h - max) * 0.25;
     if (h < min) h = min - (min - h) * 0.25;
-    dragH = h;
+    // Une mise à jour par image, pas par événement.
+    pendingH = h;
+    if (!frame)
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (pendingH != null) dragH = pendingH;
+      });
     samples.push({ y: e.clientY, t: e.timeStamp });
     if (samples.length > 6) samples.shift();
   }
@@ -73,8 +133,16 @@
     const el = e.currentTarget as HTMLElement;
     if (!el.hasPointerCapture(e.pointerId)) return;
     el.releasePointerCapture(e.pointerId);
+    cancelAnimationFrame(frame);
+    frame = 0;
+    pendingH = null;
     if (!moved) {
-      if ((e.target as HTMLElement).closest('.handle')) cycle();
+      if (downTarget?.closest('.handle, [data-toggle-sheet]')) cycle();
+      return;
+    }
+    if (sideways) {
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 36) onswipe?.(dx < 0 ? 1 : -1);
       return;
     }
     const a = samples[0];
@@ -91,11 +159,13 @@
         best = d;
       }
     }
+    if (best !== app.detent) haptic('tick');
     app.detent = best;
     dragH = null;
   }
   function cycle() {
     app.detent = app.detent === 'peek' ? 'half' : app.detent === 'half' ? 'full' : 'half';
+    haptic('tick');
   }
   function key(e: KeyboardEvent) {
     if (e.key === 'ArrowUp') {
@@ -114,6 +184,7 @@
   class="panel glass glass-panel"
   class:wide={app.wide}
   class:dragging={dragH != null}
+  class:is-peek={!app.wide && app.detent === 'peek' && dragH == null}
   style:height={app.wide ? undefined : `${height}px`}
   aria-label={label}
 >
@@ -139,8 +210,10 @@
     {/if}
     {#if header}{@render header()}{/if}
   </div>
-  <div class="body">
-    {@render children()}
+  <div class="body" bind:this={body}>
+    <div class="body-in">
+      {@render children()}
+    </div>
   </div>
   {#if footer}
     <div class="foot" bind:offsetHeight={footH}>
@@ -169,8 +242,10 @@
     flex-direction: column;
     border-radius: 30px 30px 40px 40px;
     overflow: hidden;
-    transition: height 420ms var(--sheet-ease);
+    /* Ressort : le panneau se pose avec un très léger rebond. */
+    transition: height 620ms var(--sheet-ease);
     will-change: height;
+    contain: layout paint;
   }
   .panel.dragging {
     transition: none;
@@ -197,7 +272,7 @@
     display: grid;
     place-items: center;
     width: 100%;
-    height: 22px;
+    height: 18px;
     cursor: grab;
   }
   .handle span {
@@ -212,11 +287,20 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    transition: opacity 260ms var(--ease-out);
+  }
+  /* Marges dans un conteneur interne : replié, le panneau ne garde que l'en-tête et le bouton. */
+  .body-in {
     padding: 4px 16px 16px;
+  }
+  /* Replié : le contenu s'efface pendant que le panneau descend. */
+  .is-peek .body {
+    opacity: 0;
+    pointer-events: none;
   }
   .foot {
     flex: none;
-    padding: 10px 16px max(14px, calc(var(--safe-bottom) - 6px));
+    padding: 8px 14px max(12px, calc(var(--safe-bottom) - 8px));
     border-top: 0.5px solid var(--separator);
   }
   .wide .foot {

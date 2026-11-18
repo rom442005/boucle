@@ -8,6 +8,7 @@
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
   import { km } from '../lib/format';
+  import { haptic } from '../lib/haptics';
   import type { LngLat, Route } from '../lib/types';
 
   const VIEW_KEY = 'boucle.vue.v1';
@@ -110,6 +111,16 @@
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
+    // Voile de mise au point : quand un parcours est proposé, le fond de carte s'efface un peu derrière lui.
+    m.addLayer({
+      id: 'focus-veil',
+      type: 'background',
+      paint: {
+        'background-color': theme === 'dark' ? '#1e1f21' : '#f7f6f2',
+        'background-opacity': 0,
+        'background-opacity-transition': { duration: 700, delay: 0 },
+      },
+    });
     m.addLayer({ id: 'reach-fill', type: 'fill', source: 'reach', paint: { 'fill-color': tint, 'fill-opacity': 0.035 } });
     m.addLayer({
       id: 'reach-line',
@@ -165,7 +176,8 @@
       source: 'marks',
       minzoom: 11.5,
       paint: {
-        'circle-radius': 9,
+        // Bornes kilométriques discrètes de loin, lisibles de près.
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 7, 16, 9.5] as unknown as number,
         'circle-color': theme === 'dark' ? '#1E1F21' : '#FFFFFF',
         'circle-stroke-color': tint,
         'circle-stroke-width': 1.6,
@@ -176,7 +188,13 @@
       type: 'symbol',
       source: 'marks',
       minzoom: 11.5,
-      layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true },
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 12, 8.5, 16, 10.5] as unknown as number,
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
+      },
       paint: { 'text-color': theme === 'dark' ? '#FFFFFF' : '#C8103C' },
     });
     // Zone invisible sous le marqueur de départ : les noms de lieux s'écartent au lieu d'être coupés.
@@ -300,6 +318,7 @@
     });
     let longPressAt = 0;
     const place = (kind: 'start' | 'destination', c: LngLat, pt: { x: number; y: number }) => {
+      haptic('tap');
       void app.placeFromMap(kind, c);
       app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
       landed(kind, pt);
@@ -460,6 +479,13 @@
       destMarker.setDraggable(compose);
     }
     destMarker.getElement().classList.toggle('is-draggable', compose);
+  });
+
+  // Mise au point sur le parcours proposé (résultats, parcours ouvert).
+  $effect(() => {
+    if (!ready || !map) return;
+    const on = app.phase === 'results' || app.phase === 'detail';
+    map.setPaintProperty('focus-veil', 'background-opacity', on ? (theme === 'dark' ? 0.34 : 0.42) : 0);
   });
 
   // Aperçu au survol : ligne droite du départ vers la destination visée.

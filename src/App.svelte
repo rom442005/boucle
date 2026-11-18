@@ -12,6 +12,8 @@
   import ElevationProfile from './components/ElevationProfile.svelte';
   import Icon from './components/Icon.svelte';
   import InstallGuide from './components/InstallGuide.svelte';
+  import RollingNumber from './components/RollingNumber.svelte';
+  import { duration, kmValue } from './lib/format';
   import { app } from './lib/state.svelte';
   import { isDesktop } from './lib/platform';
   import { SHAPES } from './lib/sports';
@@ -46,6 +48,13 @@
   );
   const busy = $derived(app.generating);
   let showInstall = $state(false);
+
+  /** iPhone : balayer le résumé pour passer d'une proposition à l'autre. */
+  function swipe(dir: 1 | -1) {
+    const n = app.routes.length;
+    if (n > 1) app.select((app.selected + dir + n) % n);
+  }
+  const canSwipe = $derived(!app.wide && app.phase === 'results' && app.routes.length > 1);
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && app.pickOnMap && app.cancelPick()} />
@@ -87,7 +96,7 @@
 
   <MapControls />
 
-  <Panel label={headTitle} footer={app.phase === 'library' ? undefined : footer}>
+  <Panel label={headTitle} footer={app.phase === 'library' ? undefined : footer} onswipe={canSwipe ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <div class="brand">
@@ -113,6 +122,31 @@
         {#if app.wide}
           <div class="start-wide"><PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} /></div>
         {/if}
+      {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
+        <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->
+        <div class="nav sum">
+          <button type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => app.back()}>
+            <Icon name="back" size={20} />
+          </button>
+          <div class="sum-mid" data-toggle-sheet>
+            <h2 class="visually-hidden">{headTitle}</h2>
+            <p class="sum-stats rounded">
+              <span><RollingNumber value={kmValue(app.route.lengthM)} /><small>km</small></span>
+              <span><RollingNumber value={String(Math.round(app.route.ascent))} /><small>m D+</small></span>
+              <span><RollingNumber value={duration(app.route.durationS)} /></span>
+            </p>
+            {#if app.phase === 'results' && app.routes.length > 1}
+              <span class="dots" aria-hidden="true">{#each app.routes as x, i (x.id)}<i class:on={i === app.selected}></i>{/each}</span>
+            {/if}
+          </div>
+          {#if app.phase === 'results'}
+            <button type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
+              <span class:spin={busy}><Icon name="again" size={20} /></span>
+            </button>
+          {:else}
+            <span class="navbtn-space" aria-hidden="true"></span>
+          {/if}
+        </div>
       {:else}
         <div class="nav">
           <button type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => (app.phase === 'library' ? app.closeLibrary() : app.back())}>
@@ -193,8 +227,8 @@
     flex: 1;
   }
   .topbar .round {
-    width: 52px;
-    height: 52px;
+    width: 46px;
+    height: 46px;
     position: relative;
     color: var(--label);
   }
@@ -266,6 +300,68 @@
   }
   .navbtn-space {
     width: 40px;
+  }
+  .sum {
+    padding-bottom: 4px;
+  }
+  .sum-mid {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .sum-stats {
+    margin: 0;
+    display: flex;
+    gap: 14px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .sum-stats span {
+    display: inline-flex;
+    align-items: baseline;
+  }
+  .sum-stats small {
+    font-family: var(--font);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--label-2);
+    margin-left: 3px;
+  }
+  .dots {
+    display: flex;
+    gap: 5px;
+  }
+  .dots i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--fill);
+    transition:
+      background-color 200ms var(--ease-out),
+      transform 420ms var(--spring-bouncy);
+  }
+  .dots i.on {
+    background: var(--tint);
+    transform: scale(1.3);
+  }
+  @media (max-width: 859px) {
+    .navbtn {
+      width: 36px;
+      height: 36px;
+    }
+    .navbtn-space {
+      width: 36px;
+    }
+    .nav h2 {
+      font-size: 1rem;
+    }
   }
   .spin {
     display: inline-grid;

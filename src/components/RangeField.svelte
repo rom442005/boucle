@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import RollingNumber from './RollingNumber.svelte';
+  import { haptic } from '../lib/haptics';
 
   let {
     id,
@@ -16,6 +18,7 @@
     onchange,
     onreset,
     valuetext,
+    tickEvery,
   }: {
     id: string;
     label: string;
@@ -32,9 +35,22 @@
     onchange: (v: number) => void;
     onreset?: () => void;
     valuetext: string;
+    /** un petit « tic » à chaque palier franchi (par défaut, chaque pas) */
+    tickEvery?: number;
   } = $props();
 
   const f = $derived((Math.min(max, Math.max(min, value)) - min) / (max - min || 1));
+
+  function input(e: Event) {
+    const v = Number((e.currentTarget as HTMLInputElement).value);
+    const every = tickEvery ?? step;
+    const before = Math.floor((off ? min : value) / every + 1e-9);
+    const after = Math.floor(v / every + 1e-9);
+    if (v === min || v === max) {
+      if (v !== value || off) haptic('tap');
+    } else if (after !== before) haptic('tick');
+    onchange(v);
+  }
 </script>
 
 <div class="field">
@@ -44,7 +60,7 @@
       {#if off}
         <span class="off" aria-hidden="true">{offText}</span>
       {:else}
-        <span class="num rounded tabular" aria-hidden="true">{display}</span><span class="unit" aria-hidden="true">{unit}</span>
+        <span class="num rounded" aria-hidden="true"><RollingNumber value={display} /></span><span class="unit" aria-hidden="true">{unit}</span>
         {#if onreset}
           <button type="button" class="reset" onclick={onreset} aria-label="Remettre {label.toLowerCase()} sur indifférent">
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor" opacity=".18" /><path d="M5.5 5.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -64,7 +80,7 @@
     value={off ? min : value}
     style:--f={off ? 0 : f}
     aria-valuetext={off ? offText : valuetext}
-    oninput={(e) => onchange(Number((e.currentTarget as HTMLInputElement).value))}
+    oninput={input}
   />
   {#if sub && !off}
     <div class="sub">{@render sub()}</div>
@@ -122,5 +138,31 @@
     display: flex;
     gap: 8px;
     justify-content: space-between;
+  }
+  /* iPhone : chiffre net et moins haut, libellé discret. */
+  @media (max-width: 859px) {
+    .head {
+      min-height: 28px;
+      align-items: flex-end;
+    }
+    .num {
+      font-size: 1.625rem;
+      font-weight: 700;
+    }
+    .unit {
+      font-size: 0.8125rem;
+    }
+    .off {
+      font-size: 0.9375rem;
+      line-height: 26px;
+    }
+    .reset {
+      width: 26px;
+      height: 26px;
+      margin-left: 4px;
+    }
+    .sub {
+      font-size: 0.75rem;
+    }
   }
 </style>

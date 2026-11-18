@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RollingNumber from './RollingNumber.svelte';
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
   import { duration, kmValue, km, NNBSP } from '../lib/format';
@@ -26,7 +27,7 @@
   {:else}
     <div class="main">
       <div>
-        <span class="big rounded tabular">{kmValue(left)}<small>{NNBSP}km</small></span>
+        <span class="big rounded"><RollingNumber value={kmValue(left)} /><small>{NNBSP}km</small></span>
         <span class="cap">{finished ? 'Arrivée !' : 'restants'}</span>
       </div>
       <div class="side tabular">

@@ -94,4 +94,21 @@
   .chev {
     color: var(--label-2);
   }
+  @media (max-width: 859px) {
+    .place {
+      min-height: 46px;
+      padding: 4px 12px 4px 6px;
+      gap: 8px;
+    }
+    .dot {
+      width: 34px;
+      height: 34px;
+    }
+    .t {
+      font-size: 0.6875rem;
+    }
+    .v {
+      font-size: 0.875rem;
+    }
+  }
 </style>

@@ -1,6 +1,8 @@
 <script lang="ts" generics="T extends string">
   import Icon from './Icon.svelte';
   import type { IconName } from '../lib/icons';
+  import { app } from '../lib/state.svelte';
+  import { haptic } from '../lib/haptics';
 
   interface Option {
     value: T;
@@ -18,12 +20,17 @@
 
   const index = $derived(Math.max(0, options.findIndex((o) => o.value === value)));
 
+  function choose(v: T) {
+    if (v !== value) haptic('tap');
+    onchange(v);
+  }
+
   function onkeydown(e: KeyboardEvent) {
     const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!dir) return;
     e.preventDefault();
     const next = options[(index + dir + options.length) % options.length];
-    onchange(next.value);
+    choose(next.value);
     const host = e.currentTarget as HTMLElement;
     queueMicrotask(() => (host.querySelector('[aria-checked="true"]') as HTMLElement | null)?.focus());
   }
@@ -42,10 +49,10 @@
       role="radio"
       aria-checked={o.value === value}
       tabindex={o.value === value ? 0 : -1}
-      onclick={() => onchange(o.value)}
+      onclick={() => choose(o.value)}
     >
       {#if o.icon}
-        <Icon name={o.icon} size={23} fill={o.value === value} />
+        <Icon name={o.icon} size={app.wide ? 23 : 18} fill={o.value === value} />
       {/if}
       <span class="lbl">{o.label}</span>
     </button>
@@ -71,5 +78,14 @@
   }
   .lbl {
     white-space: nowrap;
+  }
+  /* iPhone : icône et libellé sur une ligne, contrôle moins haut. */
+  @media (max-width: 859px) {
+    .seg.tall button {
+      min-height: 38px;
+      flex-direction: row;
+      gap: 5px;
+      font-size: 0.8125rem;
+    }
   }
 </style>
