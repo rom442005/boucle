@@ -114,6 +114,7 @@ class AppState {
     const last = loadLast();
     if (last.params && SPORTS[last.params.sport]) this.params = { ...defaultParams(last.params.sport), ...last.params };
     if (last.start) this.start = last.start;
+    if (last.destination) this.destination = last.destination;
   }
 
   get route(): Route | null {
@@ -121,7 +122,11 @@ class AppState {
   }
 
   persist() {
-    saveLast({ params: $state.snapshot(this.params), start: this.start ? $state.snapshot(this.start) : undefined });
+    saveLast({
+      params: $state.snapshot(this.params),
+      start: this.start ? $state.snapshot(this.start) : undefined,
+      destination: this.destination ? $state.snapshot(this.destination) : undefined,
+    });
   }
 
   /* ------------------------------ Réglages ------------------------------ */

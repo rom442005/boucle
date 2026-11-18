@@ -146,9 +146,11 @@ export function saveLibrary(list: SerialRoute[]): boolean {
   return writeJSON(LIB_KEY, list);
 }
 
+type SavedPlace = { name: string; detail?: string; coord: LngLat; kind: 'gps' | 'search' | 'map' };
 export interface LastSession {
   params?: Params;
-  start?: { name: string; detail?: string; coord: LngLat; kind: 'gps' | 'search' | 'map' };
+  start?: SavedPlace;
+  destination?: SavedPlace;
   view?: { center: LngLat; zoom: number };
 }
 export function loadLast(): LastSession {

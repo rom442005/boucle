@@ -162,7 +162,9 @@ test('choisir la destination en touchant la carte', async ({ page, browserName }
   await expect(dialog).toBeVisible();
   const box = (await page.locator('.maplibregl-canvas').boundingBox())!;
   if (browserName === 'chromium') {
-    // Sur Mac, la recherche laisse la carte cliquable à côté.
+    // Sur Mac, la recherche laisse la carte cliquable à côté ; au survol, un aperçu montre où le point sera posé.
+    await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35, { steps: 4 });
+    await expect(page.locator('.aim-label')).toHaveText(/^à \d+,\d\s?km du départ$/);
     await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.35);
   } else {
     await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();

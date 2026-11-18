@@ -6,7 +6,8 @@
   import { app } from '../lib/state.svelte';
   import { buildStyle, ROUTE_CASING, type Theme } from '../lib/mapstyle';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceRoute, slopeSegments } from '../lib/routegeo';
-  import { bbox, cumulative, pointAt } from '../lib/geo';
+  import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
+  import { km } from '../lib/format';
   import type { LngLat, Route } from '../lib/types';
 
   const VIEW_KEY = 'boucle.vue.v1';
@@ -32,6 +33,47 @@
     if (!c) cumCache.set(r, (c = cumulative(r.coords)));
     return c;
   };
+
+  /** Ce qu'un clic sur la carte place, selon le moment (null : le clic ne place rien). */
+  function clickKind(): 'start' | 'destination' | null {
+    if (app.pickOnMap) return app.pickOnMap;
+    if (app.search && app.wide) return app.search;
+    if (app.phase === 'compose' && app.params.shape === 'oneway') return 'destination';
+    return null;
+  }
+  const placing = $derived(clickKind());
+
+  // Aperçu au survol (souris) : le point se prépare sous le curseur avant le clic.
+  const hoverable = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const aimKind = $derived(hoverable && ready ? placing : null);
+  let aim = $state<{ x: number; y: number; ll: LngLat } | null>(null);
+  /** Juste après un clic : aperçu masqué jusqu'au prochain mouvement. */
+  let aimHold: { x: number; y: number } | null = null;
+  let dragging = false;
+  const aimLabel = $derived.by(() => {
+    if (!aim || !aimKind) return '';
+    if (aimKind === 'start') return 'Départ ici';
+    const s = app.start?.coord;
+    return s ? `à ${km(haversine(s, aim.ll))} du départ` : 'Destination ici';
+  });
+  let ripple = $state<{ x: number; y: number; id: number } | null>(null);
+  let rippleId = 0;
+
+  /** Retour visuel d'un point posé : onde à l'endroit du clic, puis le marqueur se pose. */
+  function landed(kind: 'start' | 'destination', pt: { x: number; y: number }) {
+    aim = null;
+    aimHold = { x: pt.x, y: pt.y };
+    if (reduce) return;
+    ripple = { x: pt.x, y: pt.y, id: ++rippleId };
+    requestAnimationFrame(() => {
+      const mk = (kind === 'start' ? startMarker : destMarker)?.getElement();
+      if (!mk) return;
+      mk.classList.remove('is-dropping');
+      void mk.offsetWidth;
+      mk.classList.add('is-dropping');
+      mk.addEventListener('animationend', () => mk.classList.remove('is-dropping'), { once: true });
+    });
+  }
 
   const tintOf = () => (theme === 'dark' ? '#FF375F' : '#FF2D55');
   const zw = (a: number, b: number) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b] as unknown as number;
@@ -64,7 +106,7 @@
     const casing = ROUTE_CASING[theme];
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
-    for (const id of ['reach', 'alt', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt']) {
+    for (const id of ['reach', 'aim', 'alt', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -74,6 +116,14 @@
       type: 'line',
       source: 'reach',
       paint: { 'line-color': tint, 'line-opacity': 0.5, 'line-width': 1.5, 'line-dasharray': [2, 2.5] },
+    });
+    // Aperçu au survol : ligne droite du départ vers le point visé.
+    m.addLayer({
+      id: 'aim-line',
+      type: 'line',
+      source: 'aim',
+      layout: round,
+      paint: { 'line-color': theme === 'dark' ? '#FFFFFF' : '#1C1C1E', 'line-opacity': 0.5, 'line-width': 1.75, 'line-dasharray': [0.1, 2.2] },
     });
     m.addLayer({ id: 'alt-casing', type: 'line', source: 'alt', layout: round, paint: { 'line-color': casing, 'line-width': zw(5, 9), 'line-opacity': 0.75 } });
     m.addLayer({ id: 'alt-line', type: 'line', source: 'alt', layout: round, paint: { 'line-color': theme === 'dark' ? '#98989D' : '#8E8E93', 'line-opacity': theme === 'dark' ? 0.7 : 0.62, 'line-width': zw(3, 5.5) } });
@@ -249,31 +299,44 @@
       if (app.phase === 'follow') app.followCamera = false;
     });
     let longPressAt = 0;
+    const place = (kind: 'start' | 'destination', c: LngLat, pt: { x: number; y: number }) => {
+      void app.placeFromMap(kind, c);
+      app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
+      landed(kind, pt);
+    };
+    // Un clic place un point : « Choisir sur la carte », recherche ouverte sur Mac (la carte reste visible),
+    // ou mode « Vers un lieu » (place ou déplace la destination).
     map.on('click', (e) => {
       // Ignoré : fin d'un appui long (départ déjà placé) ou clic sur un marqueur.
       if (Date.now() - longPressAt < 800) return;
       if ((e.originalEvent.target as HTMLElement | null)?.closest?.('.maplibregl-marker')) return;
-      const c: LngLat = [e.lngLat.lng, e.lngLat.lat];
-      // « Choisir sur la carte ».
-      if (app.pickOnMap) {
-        const kind = app.pickOnMap;
-        void app.placeFromMap(kind, c);
-        app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
+      const kind = clickKind();
+      if (!kind) return;
+      if (app.search) app.search = null;
+      place(kind, [e.lngLat.lng, e.lngLat.lat], e.point);
+    });
+    map.on('mousemove', (e) => {
+      if (!aimKind || dragging || (e.originalEvent.target as HTMLElement | null)?.closest?.('.maplibregl-marker')) {
+        if (aim) aim = null;
         return;
       }
-      // Sur Mac, la recherche laisse la carte visible : un clic choisit ce point.
-      if (app.search && app.wide) {
-        const kind = app.search;
-        app.search = null;
-        void app.placeFromMap(kind, c);
-        app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
-        return;
+      if (aimHold) {
+        if (Math.hypot(e.point.x - aimHold.x, e.point.y - aimHold.y) < 8) return;
+        aimHold = null;
       }
-      // « Vers un lieu » : un clic place (ou déplace) la destination.
-      if (app.phase === 'compose' && app.params.shape === 'oneway') {
-        void app.placeFromMap('destination', c);
-        app.showToast('Destination placée ici');
-      }
+      aim = { x: e.point.x, y: e.point.y, ll: [e.lngLat.lng, e.lngLat.lat] };
+    });
+    map.on('mouseout', () => (aim = null));
+    map.on('dragstart', () => {
+      dragging = true;
+      aim = null;
+    });
+    map.on('dragend', () => (dragging = false));
+    // Zoom à la molette : le point visé change sous le curseur immobile.
+    map.on('move', () => {
+      if (!aim || !map) return;
+      const ll = map.unproject([aim.x, aim.y]);
+      aim = { ...aim, ll: [ll.lng, ll.lat] };
     });
     map.on('click', 'alt-hit', (e) => {
       const idx = e.features?.[0]?.properties?.idx;
@@ -284,8 +347,7 @@
     const placeStart = (ll: maplibregl.LngLat) => {
       if (app.phase !== 'compose') return;
       longPressAt = Date.now();
-      app.placeFromMap('start', [ll.lng, ll.lat]);
-      app.showToast('Départ placé ici');
+      place('start', [ll.lng, ll.lat], map!.project(ll));
     };
     map.on('contextmenu', (e) => placeStart(e.lngLat));
     // Appui long sur écran tactile : place le départ.
@@ -400,6 +462,13 @@
     destMarker.getElement().classList.toggle('is-draggable', compose);
   });
 
+  // Aperçu au survol : ligne droite du départ vers la destination visée.
+  $effect(() => {
+    if (!ready) return;
+    const s = app.start?.coord;
+    setData('aim', aim && aimKind === 'destination' && s ? lineFeature([s, aim.ll]) : EMPTY);
+  });
+
   // Propositions : alternatives discrètes, tracé choisi coloré selon la pente, qui se dessine.
   $effect(() => {
     if (!ready) return;
@@ -505,13 +574,23 @@
   });
 </script>
 
-<div
-  class="map"
-  bind:this={el}
-  class:picking={!!app.pickOnMap || (app.wide && !!app.search) || (app.phase === 'compose' && app.params.shape === 'oneway')}
-  aria-label="Carte"
-  role="region"
-></div>
+<div class="map" bind:this={el} class:picking={!!placing} aria-label="Carte" role="region"></div>
+
+{#if aimKind && aim}
+  <!-- Aperçu sous le curseur : le marqueur flotte au-dessus du point, prêt à s'y poser au clic. -->
+  <div class="aim" style:transform="translate({aim.x}px, {aim.y}px)" aria-hidden="true">
+    <span class="aim-pulse"></span>
+    <span class="aim-shadow"></span>
+    <span class="aim-pin" class:start={aimKind === 'start'}><span></span></span>
+    <span class="aim-label">{aimLabel}</span>
+  </div>
+{/if}
+
+{#if ripple}
+  {#key ripple.id}
+    <div class="ripple" style:transform="translate({ripple.x}px, {ripple.y}px)" aria-hidden="true" onanimationend={() => (ripple = null)}><span></span></div>
+  {/key}
+{/if}
 
 <style>
   .map {
@@ -554,6 +633,159 @@
   }
   :global(.mk-dest.is-draggable) {
     cursor: grab;
+  }
+  /* Le marqueur se pose (translate s'ajoute au transform de positionnement de MapLibre). */
+  :global(.mk-start.is-dropping),
+  :global(.mk-dest.is-dropping) {
+    animation: mk-drop 440ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes -global-mk-drop {
+    from {
+      translate: 0 -18px;
+      opacity: 0.6;
+    }
+    60% {
+      translate: 0 2px;
+      opacity: 1;
+    }
+    to {
+      translate: 0 0;
+    }
+  }
+
+  .aim,
+  .ripple {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .aim {
+    will-change: transform;
+  }
+  .aim > span,
+  .ripple > span {
+    position: absolute;
+  }
+  .aim-pulse {
+    left: -18px;
+    top: -18px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--tint);
+    opacity: 0;
+    animation: aim-pulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .aim-shadow {
+    left: -6px;
+    top: -3px;
+    width: 12px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.32);
+    filter: blur(1px);
+  }
+  .aim-pin {
+    left: -13px;
+    top: -33px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #1c1c1e;
+    box-shadow:
+      0 8px 16px rgba(0, 0, 0, 0.26),
+      0 0 0 2.5px #fff;
+    opacity: 0.94;
+    animation:
+      aim-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both,
+      aim-float 1.6s ease-in-out 200ms infinite;
+  }
+  .aim-pin span {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: conic-gradient(#fff 0 25%, #1c1c1e 0 50%, #fff 0 75%, #1c1c1e 0) 0 0 / 5px 5px;
+  }
+  .aim-pin.start {
+    background: #fff;
+    box-shadow:
+      0 8px 16px rgba(0, 0, 0, 0.26),
+      0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  }
+  .aim-pin.start span {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--tint);
+  }
+  .aim-label {
+    top: 12px;
+    left: 0;
+    transform: translateX(-50%);
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--label);
+    background: var(--glass-ctl);
+    -webkit-backdrop-filter: blur(12px) saturate(1.6);
+    backdrop-filter: blur(12px) saturate(1.6);
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.14),
+      0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  }
+  .ripple span {
+    left: -22px;
+    top: -22px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--tint);
+    animation: ripple 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  @keyframes aim-pulse {
+    from {
+      transform: scale(0.45);
+      opacity: 0.7;
+    }
+    to {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+  @keyframes aim-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.8);
+    }
+  }
+  @keyframes aim-float {
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+  @keyframes ripple {
+    from {
+      transform: scale(0.3);
+      opacity: 0.9;
+    }
+    to {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .aim-pulse {
+      display: none;
+    }
+    .aim-pin {
+      animation: none;
+    }
   }
   :global(.mk-dest span) {
     width: 12px;
