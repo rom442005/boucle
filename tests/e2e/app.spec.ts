@@ -232,3 +232,24 @@ test('la 3D met la ville en volume, avec sa légende', async ({ page }) => {
   await expect(btn).toHaveText('3D');
   await expect(page.getByRole('note', { name: /Bâtiments en volume/ })).toHaveCount(0);
 });
+
+test('côtes et descentes : liste, carte et profil', async ({ page }) => {
+  await open(page);
+  await createLoop(page);
+  await expect(page.getByRole('heading', { name: 'Côtes et descentes' })).toBeAttached();
+  await expect(page.getByRole('img', { name: /Couleur de la pente/ }).first()).toBeAttached();
+  const list = page.getByRole('list', { name: 'Côtes et descentes du parcours' });
+  if (await list.count()) {
+    // Toucher une côte la met en avant : pastille sur la carte, bande sur le profil.
+    const first = list.getByRole('button').first();
+    await first.scrollIntoViewIfNeeded();
+    await first.click();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.mk-climb.on')).toHaveCount(1);
+    await expect(page.locator('.profile rect.focus').first()).toBeAttached();
+    await first.click();
+    await expect(first).toHaveAttribute('aria-pressed', 'false');
+  } else {
+    await expect(page.getByText('Pas de côte notable')).toBeVisible();
+  }
+});

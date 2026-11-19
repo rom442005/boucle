@@ -5,9 +5,11 @@
   import type { FeatureCollection, GeoJSON, Polygon } from 'geojson';
   import { app, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, ROUTE_CASING, type Theme } from '../lib/mapstyle';
-  import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceRoute, slopeSegments } from '../lib/routegeo';
+  import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
+  import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
+  import { ICONS } from '../lib/icons';
   import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
-  import { km } from '../lib/format';
+  import { km, kmValue } from '../lib/format';
   import { haptic } from '../lib/haptics';
   import type { LngLat, Route } from '../lib/types';
 
@@ -109,7 +111,7 @@
     const casing = ROUTE_CASING[theme];
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
-    for (const id of ['reach', 'aim', 'alt', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt']) {
+    for (const id of ['reach', 'aim', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -146,6 +148,14 @@
     m.addLayer({ id: 'alt-casing', type: 'line', source: 'alt', layout: round, paint: { 'line-color': casing, 'line-width': zw(5, 9), 'line-opacity': 0.75 } });
     m.addLayer({ id: 'alt-line', type: 'line', source: 'alt', layout: round, paint: { 'line-color': theme === 'dark' ? '#98989D' : '#8E8E93', 'line-opacity': theme === 'dark' ? 0.7 : 0.62, 'line-width': zw(3, 5.5) } });
     m.addLayer({ id: 'alt-hit', type: 'line', source: 'alt', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 24 } });
+    // Côte ou descente mise en avant : un halo de sa couleur sous le tracé.
+    m.addLayer({
+      id: 'climb-hl',
+      type: 'line',
+      source: 'climb-hl',
+      layout: round,
+      paint: { 'line-color': ['get', 'color'], 'line-width': zw(16, 26), 'line-opacity': 0.34, 'line-blur': 3 },
+    });
     m.addLayer({ id: 'sel-casing', type: 'line', source: 'sel-line', layout: round, paint: { 'line-color': casing, 'line-width': zw(7.5, 12.5) } });
     m.addLayer({ id: 'sel-line', type: 'line', source: 'sel', layout: round, paint: { 'line-color': ['get', 'color'], 'line-width': zw(4.5, 8) } });
     m.addLayer({
@@ -219,11 +229,21 @@
     ready = true;
   }
 
+  /** Relief accentué selon le terrain : une ville plate a besoin de plus d'exagération pour que ses côtes se voient. */
+  function exaggeration(): number {
+    const r = app.route;
+    const range = r ? r.maxEle - r.minEle : null;
+    if (range == null) return 1.9;
+    return range < 40 ? 2.4 : range < 120 ? 1.9 : range < 400 ? 1.5 : 1.3;
+  }
+
   let b3dTimer: ReturnType<typeof setTimeout> | undefined;
   function apply3D(on: boolean, animate: boolean) {
     if (!map) return;
     try {
-      map.setTerrain(on ? { source: 'dem-3d', exaggeration: 1.4 } : null);
+      map.setTerrain(on ? { source: 'dem-3d', exaggeration: exaggeration() } : null);
+      // Ombrage du relief plus marqué en 3D : les collines se lisent.
+      map.setPaintProperty('hillshade', 'hillshade-exaggeration', on ? (theme === 'dark' ? 0.55 : 0.5) : theme === 'dark' ? 0.35 : 0.28);
     } catch {
       /* style pas encore prêt */
     }
@@ -609,6 +629,70 @@
     if (fresh) requestAnimationFrame(() => fitCoords(r.coords));
   });
 
+  // Côtes et descentes du parcours sélectionné : une pastille au milieu de chacune, à toucher pour la mettre en avant.
+  let climbMarkers: Marker[] = [];
+  $effect(() => {
+    if (!ready || !map) return;
+    const r = app.phase === 'results' || app.phase === 'detail' ? app.route : null;
+    void app.drawTick;
+    for (const mk of climbMarkers) mk.remove();
+    climbMarkers = [];
+    untrack(() => (app.focusClimb = null));
+    if (!r) return;
+    const cum = cumOf(r);
+    climbsOf(r).forEach((c, i) => {
+      const mid = pointAt(r.coords, cum, (c.from + c.to) / 2).coord;
+      const word = `${c.up ? 'Montée' : 'Descente'} ${SLOPE_WORDS[Math.abs(c.cls)]}`;
+      const label = `${c.up ? '+' : '−'}${c.gain} m · ${c.avg.toLocaleString('fr-FR')} %`;
+      const el = element(`mk-climb ${c.up ? 'up' : 'down'}`, `<span class="ic" style="background:${slopeColor(c.cls)}">${c.up ? ICONS.rise : ICONS.fall}</span><span class="tx">${label}</span>`);
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.setAttribute('aria-label', `${word} au kilomètre ${kmValue(c.from)} : ${km(c.to - c.from)} à ${c.avg} %, ${label}`);
+      const toggle = (e: Event) => {
+        e.stopPropagation();
+        haptic('tap');
+        app.focusClimb = app.focusClimb === i ? null : i;
+      };
+      el.addEventListener('click', toggle);
+      el.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && toggle(e));
+      climbMarkers.push(new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat(mid).addTo(map!));
+    });
+  });
+
+  // Mise en avant : halo sur le tronçon, caméra sur la côte, puis retour au parcours entier.
+  let hadFocus = false;
+  $effect(() => {
+    if (!ready || !map) return;
+    const f = app.focusClimb;
+    const r = app.route;
+    climbMarkers.forEach((mk, i) => mk.getElement().classList.toggle('on', i === f));
+    const c = r && f != null ? climbsOf(r)[f] : null;
+    if (!r || !c) {
+      setData('climb-hl', EMPTY);
+      if (hadFocus && r) untrack(() => fitCoords(r.coords));
+      hadFocus = false;
+      return;
+    }
+    const part = sliceBetween(r.coords, c.from, c.to);
+    setData('climb-hl', lineFeature(part, { color: slopeColor(c.cls) }));
+    // À l'image suivante : le panneau a pu changer de hauteur (marges à jour).
+    requestAnimationFrame(() => fitCoords(part));
+    hadFocus = true;
+  });
+
+  // En 3D, l'exagération du relief suit le parcours affiché.
+  $effect(() => {
+    void app.route;
+    if (!ready || !map || !untrack(() => app.terrain3d)) return;
+    untrack(() => {
+      try {
+        map!.setTerrain({ source: 'dem-3d', exaggeration: exaggeration() });
+      } catch {
+        /* style pas encore prêt */
+      }
+    });
+  });
+
   // Loupe de verre qui suit le profil d'altitude.
   $effect(() => {
     if (!map) return;
@@ -777,6 +861,52 @@
     }
     to {
       translate: 0 0;
+    }
+  }
+
+:global(.mk-climb) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px 0 3px;
+    border-radius: 999px;
+    background: var(--glass-ctl);
+    -webkit-backdrop-filter: blur(12px) saturate(1.7);
+    backdrop-filter: blur(12px) saturate(1.7);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.18),
+      0 0 0 0.5px rgba(0, 0, 0, 0.08);
+    font: 600 11px/1 var(--font-rounded);
+    color: var(--label);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    white-space: nowrap;
+    animation: climb-in 380ms var(--spring-bouncy) 900ms both;
+    transition: box-shadow 200ms var(--ease-out);
+  }
+  :global(.mk-climb .ic) {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+  }
+  :global(.mk-climb .ic svg) {
+    width: 11px;
+    height: 11px;
+  }
+  :global(.mk-climb.on) {
+    z-index: 2;
+    box-shadow:
+      0 6px 16px rgba(0, 0, 0, 0.24),
+      0 0 0 2px var(--label);
+  }
+  @keyframes -global-climb-in {
+    from {
+      opacity: 0;
+      translate: 0 6px;
     }
   }
 

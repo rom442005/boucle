@@ -1,7 +1,7 @@
 import type { Feature, FeatureCollection, LineString, Point } from 'geojson';
 import type { LngLat, Route } from './types';
 import { cumulative, destination, pointAt } from './geo';
-import { gradeClass, grades, RAMP, reverseProfile } from './elevation';
+import { grades, reverseProfile, slopeClass, slopeColor } from './elevation';
 import { SPORTS } from './sports';
 
 export const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -15,7 +15,7 @@ export interface Seg {
 }
 
 export interface SlopeRun {
-  /** classe de pente (indice dans RAMP) */
+  /** classe de pente signée : 0 plat, 1 à 4 en montée, −1 à −4 en descente */
   c: number;
   a: number;
   b: number;
@@ -31,7 +31,7 @@ export function slopeRuns(r: Pick<Route, 'profile' | 'lengthM'>): SlopeRun[] {
   const n = g.length;
   const runs: SlopeRun[] = [];
   for (let k = 0; k < n; k++) {
-    const c = gradeClass(Math.max(0, g[k]));
+    const c = slopeClass(g[k]);
     const last = runs[runs.length - 1];
     if (last && last.c === c) last.b = (k + 1) * step;
     else runs.push({ c, a: k * step, b: (k + 1) * step });
@@ -76,7 +76,7 @@ export function slopeSegments(r: Route): Seg[] {
     let j = i;
     while (j < r.coords.length && cum[j] < rr.b) pts.push(r.coords[j++]);
     pts.push(pointAt(r.coords, cum, Math.min(rr.b, total)).coord);
-    if (pts.length >= 2) segs.push({ coords: pts, color: RAMP[rr.c], from: rr.a, to: Math.min(rr.b, total) });
+    if (pts.length >= 2) segs.push({ coords: pts, color: slopeColor(rr.c), from: rr.a, to: Math.min(rr.b, total) });
   }
   return segs;
 }
@@ -108,6 +108,14 @@ export function sliceRoute(coords: LngLat[], upTo: number): LngLat[] {
   if (upTo <= 0) return [];
   const end = pointAt(coords, cum, upTo);
   return [...coords.slice(0, end.index + 1), end.coord];
+}
+
+/** Partie du tracé entre `from` et `to` m. */
+export function sliceBetween(coords: LngLat[], from: number, to: number): LngLat[] {
+  const cum = cumulative(coords);
+  const a = pointAt(coords, cum, Math.max(0, from));
+  const b = pointAt(coords, cum, Math.max(from, to));
+  return [a.coord, ...coords.slice(a.index + 1, b.index + 1), b.coord];
 }
 
 /** Repères kilométriques. */

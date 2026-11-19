@@ -4,6 +4,7 @@ import { generate } from '../../src/lib/generator';
 import { defaultParams, DEFAULT_SETTINGS } from '../../src/lib/sports';
 import type { Params, Place, Route } from '../../src/lib/types';
 import { cumulative, nearestOnRoute } from '../../src/lib/geo';
+import { climbsOf } from '../../src/lib/elevation';
 
 declare const process: { env: Record<string, string | undefined> };
 const live = process.env.LIVE === '1';
@@ -19,6 +20,10 @@ async function run(p: Partial<Params>, destination?: Place, via?: Place) {
       .map((r) => `${(r.lengthM / 1000).toFixed(2)} km +${r.ascent} m ov ${(r.overlap * 100).toFixed(0)}% surf ${r.surface ? Math.round(r.surface.paved * 100) + '% bitume' : '?'} « ${r.name} » [${r.tags?.join(', ')}]`)
       .join(' | ')} (${ms} ms)${res.note ? ' — ' + res.note : ''}`,
   );
+  for (const r of res.routes.slice(0, 1)) {
+    const cs = climbsOf(r);
+    console.log(`   côtes (${cs.length}) : ` + cs.map((c) => `${c.up ? '↗' : '↘'} km ${(c.from / 1000).toFixed(1)} ${Math.round(c.to - c.from)} m ${c.gain} m ${c.avg} % (max ${c.max})`).join(' · '));
+  }
   return res;
 }
 

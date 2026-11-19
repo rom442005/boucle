@@ -19,7 +19,7 @@
   import { app } from './lib/state.svelte';
   import { isDesktop } from './lib/platform';
   import { SHAPES } from './lib/sports';
-  import { RAMP, RAMP_LABELS } from './lib/elevation';
+  import SlopeLegend from './components/SlopeLegend.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -189,11 +189,7 @@
     <section class="dock glass glass-panel" aria-label="Profil d’altitude">
       <div class="dock-head">
         <h3>Profil</h3>
-        <ul class="legend" aria-label="Pentes">
-          {#each RAMP as c, i (c)}
-            <li><span style:background={c}></span>{RAMP_LABELS[i]}</li>
-          {/each}
-        </ul>
+        <div class="dock-legend"><SlopeLegend /></div>
       </div>
       <ElevationProfile route={app.route} height={122} />
     </section>
@@ -424,25 +420,8 @@
     font-size: 0.9375rem;
     font-weight: 650;
   }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    font-size: 0.75rem;
-    color: var(--label-2);
-  }
-  .legend li {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .legend span {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
+  .dock-legend {
+    width: 300px;
   }
   .picker {
     position: fixed;

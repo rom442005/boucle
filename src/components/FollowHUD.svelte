@@ -3,6 +3,7 @@
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
   import { duration, kmValue, km, NNBSP } from '../lib/format';
+  import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
 
   let now = $state(Date.now());
   $effect(() => {
@@ -17,6 +18,17 @@
   const ratio = $derived(r ? Math.min(1, done / r.lengthM) : 0);
   const off = $derived(f?.offset != null && f.offset > 45 ? f.offset : null);
   const finished = $derived(!!r && left < 40 && done > r.lengthM * 0.9);
+
+  /** La côte (ou descente) en cours, sinon la prochaine à moins de 1,5 km. */
+  const ahead = $derived.by(() => {
+    if (!r || !f?.position) return null;
+    const cs = climbsOf(r);
+    const cur = cs.find((c) => done >= c.from && done < c.to);
+    if (cur) return { c: cur, now: true, dist: cur.to - done };
+    const next = cs.find((c) => c.from > done && c.from - done <= 1500);
+    return next ? { c: next, now: false, dist: next.from - done } : null;
+  });
+  const meters = (d: number) => (d < 1000 ? `${Math.max(10, Math.round(d / 10) * 10)}${NNBSP}m` : km(d));
 </script>
 
 <div class="hud glass glass-panel" role="status" aria-live="polite">
@@ -36,6 +48,19 @@
       </div>
     </div>
     <div class="track" aria-hidden="true"><span style:transform="scaleX({ratio})"></span></div>
+    {#if ahead && !off}
+      {@const c = ahead.c}
+      <p class="ahead">
+        <span class="a-ic" style:background={slopeColor(c.cls)}><Icon name={c.up ? 'rise' : 'fall'} size={13} /></span>
+        <span>
+          {#if ahead.now}
+            {c.up ? 'Montée' : 'Descente'} {SLOPE_WORDS[Math.abs(c.cls)]} : encore <b>{meters(ahead.dist)}</b>
+          {:else}
+            {c.up ? 'Montée' : 'Descente'} dans <b>{meters(ahead.dist)}</b> : {km(c.to - c.from)} à {c.avg.toLocaleString('fr-FR')}{NNBSP}%
+          {/if}
+        </span>
+      </p>
+    {/if}
     {#if off}
       <p class="off"><Icon name="warning" size={16} />Hors parcours · à {Math.round(off)}{NNBSP}m du tracé</p>
     {/if}
@@ -162,5 +187,22 @@
     width: 52px;
     height: 52px;
     color: var(--location);
+  }
+  .ahead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 0;
+    font-size: 0.875rem;
+    color: var(--label);
+  }
+  .a-ic {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
   }
 </style>

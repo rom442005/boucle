@@ -80,6 +80,8 @@ class AppState {
   toast = $state<{ text: string; id: number } | null>(null);
 
   detent = $state<Detent>('half');
+  /** côte ou descente mise en avant (indice dans climbsOf(route)), null sinon */
+  focusClimb = $state<number | null>(null);
   /** zoom de la carte (mis à jour à la fin de chaque mouvement) */
   zoom = $state(12);
   wide = $state(false);

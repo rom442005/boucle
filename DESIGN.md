@@ -216,7 +216,8 @@ A quiet, warm-neutral map and iOS system greys, with one pink tint that also bec
 - **Location Blue** (`location-blue`): the locate button glyph and the "Ma position" search result disc. Never used for actions.
 
 ### Tertiary
-- **Slope Ramp** (`slope-flat` to `slope-severe`): five classes labelled "Moins de 2 %", "2 à 5 %", "5 à 8 %", "8 à 12 %", "Plus de 12 %". Used for the selected route line on the map, the elevation profile fill, and its legend. Single hue, value carries steepness.
+- **Slope Ramp** (`slope-flat` to `slope-severe`): flat (under 2 %) in light rose, then climbs from 2, 5, 8 and 12 % in pink to deep garnet. Used for the selected route line on the map, the elevation profile fill, the climb markers and their legend. Value carries steepness.
+- **Descent Ramp** (`#9F9CF5`, `#7B77EA`, `#5A55D8`, `#3C37B4`): descents from 2, 5, 8 and 12 % in lavender to indigo, so D− reads apart from D+ at a glance (before, descents were drawn as flat). Indigo stays clear of the water blue and the location blue.
 - **Environment series** (`env-forest`, `env-water`, `env-park`, `env-fields`, `env-urban`): the hue of the matching map fill, deepened to at least 3:1 against the panel (WCAG 1.4.11). Forest is darker than park so the two stay distinct. Used for chip icons, selected chip wash and ring, breakdown bars and dots. Dark mode has its own lighter set.
 - **Surface series** (`surf-paved`, `surf-compacted`, `surf-dirt`): the ground-type breakdown ("Bitume", "Stabilisé", "Terre, sentier").
 - **Status** (`ok-green`, `warn-amber`): green for a satisfied criterion check mark; amber for the off-route warning in live follow.
@@ -230,7 +231,7 @@ A quiet, warm-neutral map and iOS system greys, with one pink tint that also bec
 - **Map Land / Wood / Park / Fields / Water** (`map-*`): the quiet basemap palette; a matching dark set lives in the map style.
 
 ### Named Rules
-**The One Tint Rule.** Pink means "act" or "the route". If an element is neither, it is grey. Location blue and the data series are the only other hues, and they never style a button background.
+**The One Tint Rule.** Pink means "act" or "the route". If an element is neither, it is grey. Location blue, the descent indigo and the data series are the only other hues, and they never style a button background.
 
 **The Map Supplies the Data Colours Rule.** A data series colour must be the hue of its map fill, deepened in value until it reaches 3:1 against the panel. Do not invent a palette for charts.
 
@@ -264,7 +265,7 @@ One screen. The map is fixed full-bleed behind everything; glass floats above it
 
 - **iPhone (below 860 px):** a top bar 8 px under the safe area with the 46 px start-point capsule ("Ma position") and a 46 px round glass library button; a vertical glass pill of map controls on the right, 12 px in; and a bottom sheet inset 8 px from the edges with an 18 px drag handle, a scrolling body (4 px 16px 16px, in an inner wrapper so the sheet can fold to its header) and a footer pinned above the home indicator holding the primary capsule. Detents: folded (header and footer only, body faded out), medium (fitted to the content up to the element marked `data-fold`: the climb slider while composing, the elevation profile in results; at most 66% of the screen) and full. Proposals scroll horizontally as snap cards at full width minus 44 px so the next one peeks.
 - **Route focus (iPhone):** when proposals arrive, or a saved route opens, the sheet folds to a one-line summary (back, summary figures, dots for the proposals, regenerate) above "Suivre ce parcours", and the map fits the whole route in the space left. Tapping the summary unfolds the sheet; swiping it sideways changes proposal.
-- **Mac (860 px and up):** the same content in a floating glass column, 384 px wide, inset 12 px on top, left and bottom. Proposals stack vertically. Once a route is selected the elevation profile floats as a glass dock at the bottom of the map, from 408 px to 72 px off the right edge, max 980 px wide.
+- **Mac (860 px and up):** the same content in a floating glass column, 384 px wide, inset 12 px on top, left and bottom. Proposals stack vertically. Once a route is selected the elevation profile floats as a glass dock at the bottom of the map, from 408 px to 72 px off the right edge, max 980 px wide, with the slope legend (a nine-step bar from steep descent to steep climb) in its header.
 - **Rhythm:** 4 / 8 / 12 / 16 px. 16 px panel gutters and gap between composer blocks; 10 px inside a block; 8 px between chips and capsules in a row; 12 px between icon and text in rows and cards.
 - **Targets:** 44 px minimum for every control; primary capsule and top-bar buttons 52 px; action circles 48 px.
 - **Safe areas:** top and bottom insets come from `env(safe-area-inset-*)`; the sheet footer pads to the home indicator.
@@ -331,6 +332,9 @@ Every figure the user watches change (slider values, the route summary and stats
 
 ### Haptics
 `haptic()` plays a tick (sliders, sheet snaps, proposal change), a tap (segments, chips, actions, a point placed on the map) or a double success / warning (routes found, creation failed). Android uses the Vibration API. Safari on iPhone has none: a hidden system switch toggled from code gave the tick on iOS 17.4 to 26.4, and Apple stopped it in 26.5, so on current iPhones only the real option switches vibrate.
+
+### Climbs and descents
+Notable climbs and descents ("Côtes et descentes") are found on the profile: high and low points with a 4 m hysteresis, flat ends trimmed, kept from 12 m of gain, 120 m of length and a 2 % average, at most eight, in route order. Each one is a small glass capsule on the map at its midpoint (a 18 px disc in its slope colour with a trend arrow, then "+28 m · 4 %" in rounded 11 px tabular figures), a row in the results ("Montée raide", "km 0,3 · 0,7 km à 4 % · max 7,8 %", "+28 m"), and, once touched, a halo of its colour under the route, a camera fit on it, a tinted band with its gain over the profile and a dark ring on its capsule. During live follow, the HUD announces the current or next one within 1.5 km ("Descente dans 170 m : 0,5 km à 3 %"). In 3D the terrain exaggeration follows the route's relief (2.4x under 40 m of range down to 1.3x in mountains) and the hillshade strengthens, so the hills of a flat city still read.
 
 ### Elevation profile (signature)
 The line carries the relief. The selected route draws itself along the map with a cubic ease-out over 700 to 1400 ms, coloured segment by segment on the slope ramp, while a veil of the land colour (42% light, 34% dark, 700 ms) fades the base map behind it; kilometre markers scale from 7 to 9.5 px with the zoom. The profile below fills its area with the same ramp at 90% opacity under a Label-coloured edge at 55%, with dashed 2/3 grid lines and 11 px axis labels. Dragging or hovering it moves a white knob with a 3 px pink stroke and a glass tooltip capsule (km, altitude, grade) along the curve, and a matching glass lens moves along the route on the map.

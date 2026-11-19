@@ -77,7 +77,9 @@
     } else if (dragH == null) {
       // Pendant la composition, la barre du départ occupe le haut ; ensuite, la carte est libre jusqu'en haut.
       const top = app.phase === 'compose' ? 128 : 40;
-      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24, left: 28, right: 64 };
+      // Parcours affiché : marges latérales plus larges pour que les pastilles des côtes tiennent à l'écran.
+      const side = app.phase === 'results' || app.phase === 'detail' ? 64 : 28;
+      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24, left: side, right: 64 };
     }
   });
 

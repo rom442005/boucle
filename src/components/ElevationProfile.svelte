@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Route } from '../lib/types';
   import { app } from '../lib/state.svelte';
-  import { eleAt, grades, RAMP } from '../lib/elevation';
+  import { climbsOf, eleAt, grades, slopeColor } from '../lib/elevation';
   import { slopeRuns } from '../lib/routegeo';
   import { grade as fmtGrade, kmValue, NNBSP } from '../lib/format';
 
@@ -44,9 +44,16 @@
       for (const [s, e] of samples) if (s > r.a && s < r.b) pts.push([s, e]);
       pts.push([r.b, eleAt(route.profile, r.b)]);
       const d = `M${x(r.a).toFixed(1)},${base} ` + pts.map(([s, e]) => `L${x(s).toFixed(1)},${y(e).toFixed(1)}`).join(' ') + ` L${x(r.b).toFixed(1)},${base} Z`;
-      return { d, color: RAMP[r.c] };
+      return { d, color: slopeColor(r.c), x1: x(r.a), x2: x(r.b) };
     }),
   );
+  /** Côte ou descente mise en avant : bande de sa couleur et son dénivelé au-dessus. */
+  const focus = $derived.by(() => {
+    const f = app.focusClimb;
+    const c = f != null ? climbsOf(route)[f] : null;
+    if (!c) return null;
+    return { x1: x(c.from), x2: x(c.to), color: slopeColor(c.cls), label: `${c.up ? '+' : '−'}${c.gain}${NNBSP}m` };
+  });
   const line = $derived(samples.map(([s, e], i) => `${i ? 'L' : 'M'}${x(s).toFixed(1)},${y(e).toFixed(1)}`).join(' '));
 
   function nice(span: number, target: number) {
@@ -147,9 +154,15 @@
       <line class="grid" x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} />
       <text class="ylab tabular" x={padL - 8} y={y(t) + 4} text-anchor="end">{Math.round(t)}{NNBSP}m</text>
     {/each}
+    {#if focus}
+      <rect class="focus" x={focus.x1} y={padT - 2} width={Math.max(2, focus.x2 - focus.x1)} height={innerH + 2} rx="4" fill={focus.color} />
+    {/if}
     {#each areas as a, i (i)}
-      <path d={a.d} fill={a.color} />
+      <path d={a.d} fill={a.color} opacity={focus && (a.x2 < focus.x1 || a.x1 > focus.x2) ? 0.45 : 1} />
     {/each}
+    {#if focus}
+      <text class="flab tabular" x={(focus.x1 + focus.x2) / 2} y={padT - 3} text-anchor="middle">{focus.label}</text>
+    {/if}
     <path class="edge" d={line} />
     {#each xTicks as t, i (t)}
       <text class="xlab tabular" x={x(t * 1000)} y={height - 6} text-anchor={i === 0 ? 'start' : 'middle'}>
@@ -259,5 +272,18 @@
     width: 1px;
     height: 12px;
     background: var(--separator);
+  }
+  .focus {
+    opacity: 0.16;
+    animation: focus-in 320ms var(--ease-out);
+  }
+  .flab {
+    font: 700 10px var(--font-rounded);
+    fill: var(--label);
+  }
+  @keyframes focus-in {
+    from {
+      opacity: 0;
+    }
   }
 </style>

@@ -4,6 +4,8 @@
   import ElevationProfile from './ElevationProfile.svelte';
   import Breakdown from './Breakdown.svelte';
   import RollingNumber from './RollingNumber.svelte';
+  import SlopeLegend from './SlopeLegend.svelte';
+  import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { app } from '../lib/state.svelte';
   import { haptic } from '../lib/haptics';
   import { duration, km, kmValue, meters, pace, percent, speed, NNBSP } from '../lib/format';
@@ -70,6 +72,15 @@
     return out;
   }
   const fits = $derived(r ? fitsOf(r) : []);
+  /** Côtes et descentes notables du parcours sélectionné. */
+  const cl = $derived(r ? climbsOf(r) : []);
+  const pct = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}${NNBSP}%`;
+  function focus(i: number) {
+    haptic('tap');
+    app.focusClimb = app.focusClimb === i ? null : i;
+    // Sur iPhone, le panneau agrandi cache la carte : il redescend pour montrer la côte.
+    if (!app.wide && app.focusClimb != null && app.detent === 'full') app.detent = 'half';
+  }
 
   /** Sortie de l'historique affichée en détail. */
   const done = $derived(app.detailFrom?.kind === 'historique' ? app.history.find((h) => h.id === app.detailFrom?.id) ?? null : null);
@@ -182,7 +193,10 @@
     {/if}
 
     {#if !app.wide}
-      <div class="prof" data-fold><ElevationProfile route={r} height={100} readout="header" /></div>
+      <div class="prof" data-fold>
+        <ElevationProfile route={r} height={100} readout="header" />
+        <SlopeLegend />
+      </div>
     {/if}
 
     <dl class="stats">
@@ -223,6 +237,32 @@
         <span class="act-ic"><Icon name="swap" /></span>Inverser
       </button>
     </div>
+
+    <section class="climbs" aria-labelledby="climbs-h">
+      <div class="climbs-head">
+        <h3 id="climbs-h" class="field-label">Côtes et descentes</h3>
+        <span class="tot tabular">+{r.ascent}{NNBSP}m · −{r.descent}{NNBSP}m</span>
+      </div>
+      {#if cl.length}
+        <ul class="climb-list" aria-label="Côtes et descentes du parcours">
+          {#each cl as c, i (i)}
+            <li>
+              <button type="button" class="climb" class:on={app.focusClimb === i} aria-pressed={app.focusClimb === i} onclick={() => focus(i)}>
+                <span class="c-ic" style:background={slopeColor(c.cls)}><Icon name={c.up ? 'rise' : 'fall'} size={14} /></span>
+                <span class="c-txt">
+                  <span class="c-title">{c.up ? 'Montée' : 'Descente'} {SLOPE_WORDS[Math.abs(c.cls)]}</span>
+                  <span class="c-sub tabular">km {kmValue(c.from)} · {km(c.to - c.from)} à {pct(c.avg)} · max {pct(c.max)}</span>
+                </span>
+                <span class="c-gain rounded tabular">{c.up ? '+' : '−'}{c.gain}<small>m</small></span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+        <p class="hint">Touche une côte pour la voir sur la carte et sur le profil.</p>
+      {:else}
+        <p class="hint">Pas de côte notable : un parcours plutôt plat.</p>
+      {/if}
+    </section>
 
     {#if Object.keys(r.env).length}
       <Breakdown title="Milieux traversés" items={envItems(r)} />
@@ -494,6 +534,91 @@
     place-items: center;
     background: var(--fill-2);
     color: var(--tint);
+  }
+  .climbs {
+    display: grid;
+    gap: 8px;
+  }
+  .climbs-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .climbs-head h3 {
+    margin: 0;
+  }
+  .tot {
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .climb-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 18px;
+    background: var(--fill-group);
+    overflow: hidden;
+  }
+  .climb-list li + li {
+    border-top: 0.5px solid var(--separator);
+  }
+  .climb {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px 9px 10px;
+    text-align: left;
+    transition: background-color 200ms var(--ease-out);
+  }
+  .climb:active {
+    background: var(--fill-2);
+  }
+  .climb.on {
+    background: var(--fill-2);
+  }
+  .c-ic {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+  }
+  .c-txt {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+  }
+  .c-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  .c-title::first-letter {
+    text-transform: uppercase;
+  }
+  .c-sub {
+    font-size: 0.75rem;
+    color: var(--label-2);
+  }
+  .c-gain {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+  .c-gain small {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--label-2);
+    margin-left: 1px;
+  }
+  .prof {
+    display: grid;
+    gap: 6px;
   }
   .act[aria-pressed='true'] .act-ic {
     background: var(--tint-soft);
