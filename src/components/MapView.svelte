@@ -248,7 +248,15 @@
       } else {
         // Assez près pour que la ville se lève (les volumes montent avec le zoom jusqu'à 13,8).
         const z = map.getZoom();
-        map.easeTo({ pitch: on ? 60 : 0, zoom: on ? Math.max(z, 14.8) : z, duration: reduce ? 0 : 1200, easing: (t) => 1 - Math.pow(1 - t, 3) });
+        // Centré sur le départ, dans la partie de carte que le panneau laisse visible.
+        map.easeTo({
+          center: on && app.start ? app.start.coord : undefined,
+          padding: untrack(() => app.padding),
+          pitch: on ? 60 : 0,
+          zoom: on ? Math.max(z, 14.8) : z,
+          duration: reduce ? 0 : 1200,
+          easing: (t) => 1 - Math.pow(1 - t, 3),
+        });
       }
     }
   }
