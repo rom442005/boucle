@@ -3,14 +3,15 @@
   import maplibregl from 'maplibre-gl';
   import type { GeoJSONSource, Map as MLMap, Marker } from 'maplibre-gl';
   import type { FeatureCollection, GeoJSON, Polygon } from 'geojson';
-  import { app, type PlaceKind } from '../lib/state.svelte';
-  import { buildStyle, ROUTE_CASING, type Theme } from '../lib/mapstyle';
+  import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
+  import { buildStyle, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { ICONS } from '../lib/icons';
   import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
-  import { km, kmValue } from '../lib/format';
+  import { km, kmValue, NNBSP } from '../lib/format';
   import { haptic } from '../lib/haptics';
+  import Icon from './Icon.svelte';
   import type { LngLat, Route } from '../lib/types';
 
   const VIEW_KEY = 'boucle.vue.v1';
@@ -18,10 +19,32 @@
   const dark = matchMedia('(prefers-color-scheme: dark)');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  /** Ciel étoilé autour du globe : deux motifs de tailles différentes, pour que la répétition ne se voie pas. */
+  function starTile(size: number, count: number, seed: number): string {
+    let s = seed;
+    const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+    let dots = '';
+    for (let i = 0; i < count; i++) {
+      const r = 0.3 + Math.pow(rnd(), 3) * 0.95;
+      const o = 0.22 + rnd() * 0.6;
+      const hue = rnd();
+      const fill = hue < 0.12 ? '#cfe0ff' : hue > 0.92 ? '#fff1d6' : '#ffffff';
+      dots += `<circle cx='${(rnd() * size).toFixed(1)}' cy='${(rnd() * size).toFixed(1)}' r='${r.toFixed(2)}' fill='${fill}' fill-opacity='${o.toFixed(2)}'/>`;
+    }
+    return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'>${dots}</svg>`)}")`;
+  }
+  const STARS = `${starTile(389, 34, 7)}, ${starTile(557, 58, 4241)}`;
+
   let el: HTMLDivElement;
   let map: MLMap | null = null;
   let ready = $state(false);
+  /** Vue de loin : l'espace autour du globe est visible. */
+  let space = $state(false);
+  /** Assez loin pour que les pastilles des côtes se chevauchent : elles s'effacent. */
+  let far = $state(false);
   let theme: Theme = dark.matches ? 'dark' : 'light';
+  /** Style d'origine du thème : on y relit les valeurs du plan en quittant le mode Satellite. */
+  let planStyle = buildStyle(theme);
   let anim = 0;
   let lastTick = -1;
   let lastStartKey = '';
@@ -225,8 +248,40 @@
 
   function onStyleLoad() {
     addLayers();
+    applyMapType();
     apply3D(app.terrain3d, false);
     ready = true;
+  }
+
+  /** Plan ou Satellite : les photos et les noms en blanc s'appliquent sur le style en place, sans le recharger. */
+  function applyMapType() {
+    const m = map;
+    if (!m) return;
+    const sat = app.mapType === 'satellite';
+    for (const o of satelliteOverrides()) {
+      if (!m.getLayer(o.id)) continue;
+      const v = sat ? o.value : planValue(planStyle, o);
+      try {
+        if (o.kind === 'paint') m.setPaintProperty(o.id, o.prop, v);
+        else m.setLayoutProperty(o.id, o.prop, v);
+      } catch {
+        /* propriété refusée : le plan reste lisible */
+      }
+    }
+    applyVeil();
+    if (app.terrain3d && m.getLayer('building-3d')) {
+      m.setPaintProperty('building-3d', 'fill-extrusion-opacity', sat ? 0.62 : theme === 'dark' ? 0.88 : 0.94);
+    }
+  }
+
+  /** Voile de mise au point : couleur du sol sur le plan, ombre légère sur les photos. */
+  function applyVeil() {
+    const m = map;
+    if (!m?.getLayer('focus-veil')) return;
+    const on = app.phase === 'results' || app.phase === 'detail';
+    const sat = app.mapType === 'satellite';
+    m.setPaintProperty('focus-veil', 'background-color', sat ? '#0b0d10' : theme === 'dark' ? '#1e1f21' : '#f7f6f2');
+    m.setPaintProperty('focus-veil', 'background-opacity', on ? (sat ? 0.3 : theme === 'dark' ? 0.34 : 0.42) : 0);
   }
 
   /** Relief accentué selon le terrain : une ville plate a besoin de plus d'exagération pour que ses côtes se voient. */
@@ -252,7 +307,8 @@
     if (map.getLayer('building-3d')) {
       if (on) {
         map.setLayoutProperty('building-3d', 'visibility', 'visible');
-        map.setPaintProperty('building-3d', 'fill-extrusion-opacity', theme === 'dark' ? 0.88 : 0.94);
+        // Sur les photos, les volumes restent translucides : les toits photographiés se voient au travers.
+        map.setPaintProperty('building-3d', 'fill-extrusion-opacity', app.mapType === 'satellite' ? 0.62 : theme === 'dark' ? 0.88 : 0.94);
       } else {
         map.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0);
         b3dTimer = setTimeout(() => {
@@ -288,18 +344,51 @@
     return d;
   }
 
-  /** Cadre des coordonnées ; en 3D, avec une inclinaison douce qui embrasse tout le parcours. */
+  /**
+   * Cadre des coordonnées dans la partie visible de la carte (la marge du panneau est déjà celle de la carte) ;
+   * en 3D, avec une inclinaison douce qui embrasse tout le parcours. Un lieu lointain se rejoint en survolant
+   * le globe, comme dans Plans : on s'élève, on traverse, on redescend.
+   */
+  const NO_PAD: Padding = { top: 0, bottom: 0, left: 0, right: 0 };
   function fitCoords(coords: LngLat[], animate = true, pitch = app.terrain3d ? 52 : 0) {
     if (!map || coords.length < 2) return;
     const [w, s, e, n] = bbox(coords);
-    const pad = untrack(() => app.padding);
-    map.fitBounds(
+    // En projection globe, MapLibre cadre d'après la seule marge passée ici : la marge propre de la carte
+    // (celle qui centre le globe vu de loin) est mise à zéro le temps du calcul, puis rejointe pendant le mouvement.
+    const tr = map.transform;
+    const kept = { ...tr.padding };
+    tr.setPadding(NO_PAD);
+    const cam = map.cameraForBounds(
       [
         [w, s],
         [e, n],
       ],
-      { padding: pad, maxZoom: 16, duration: animate && !reduce ? 850 : 0, pitch },
+      { padding: untrack(() => app.padding), maxZoom: 16 },
     );
+    tr.setPadding(kept);
+    if (!cam) return;
+    const c = map.getCenter();
+    const far = haversine([c.lng, c.lat], [(w + e) / 2, (s + n) / 2]) > 40000 || map.getZoom() < 8;
+    const motion = !animate || reduce ? { duration: 0 } : far ? { curve: 1.55, speed: 1.25, maxDuration: 3600 } : { duration: 850 };
+    map.flyTo({ ...cam, pitch, padding: NO_PAD, ...motion });
+  }
+
+  /**
+   * Vu de l'espace, le globe se place au milieu de la partie visible de la carte (hors panneau et barres) :
+   * il y glisse quand le panneau change de taille ou quand on finit de dézoomer.
+   */
+  let pendingPad: Padding | null = null;
+  function syncPadding(p: Padding) {
+    if (!map || map.getZoom() >= SPACE_ZOOM) return;
+    // Pendant un cadrage ou un geste, on attend la fin du mouvement : un saut l'interromprait.
+    if (map.isMoving()) {
+      pendingPad = p;
+      return;
+    }
+    pendingPad = null;
+    const cur = map.getPadding();
+    if (cur.top === p.top && cur.bottom === p.bottom && cur.left === p.left && cur.right === p.right) return;
+    map.easeTo({ padding: p, duration: reduce ? 0 : 520, easing: (t) => 1 - Math.pow(1 - t, 3) });
   }
 
   function draw(r: Route, animate: boolean) {
@@ -324,6 +413,94 @@
     setData('sel', EMPTY);
     setData('sel-line', EMPTY);
     anim = requestAnimationFrame(step);
+  }
+
+  /* ---------- Échelle : elle apparaît pendant qu'on zoome, puis s'efface (comme dans Plans) ---------- */
+  let scale = $state<{ w: number; label: string } | null>(null);
+  let scaleOn = $state(false);
+  let scaleTimer: ReturnType<typeof setTimeout> | undefined;
+  function updateScale() {
+    const m = map;
+    if (!m || m.getZoom() < 4.5) {
+      scale = null;
+      return;
+    }
+    // Mesurée au centre de la partie visible, sur 100 px.
+    const box = m.getContainer();
+    const p = app.padding;
+    const x = p.left + (box.clientWidth - p.left - p.right) / 2;
+    const y = p.top + (box.clientHeight - p.top - p.bottom) / 2;
+    const a = m.unproject([x - 50, y]);
+    const b = m.unproject([x + 50, y]);
+    const per100 = haversine([a.lng, a.lat], [b.lng, b.lat]);
+    if (!(per100 > 0)) {
+      scale = null;
+      return;
+    }
+    const maxM = (per100 * (app.wide ? 120 : 96)) / 100;
+    const pow = Math.pow(10, Math.floor(Math.log10(maxM)));
+    let nice = pow;
+    for (const k of [2, 5]) if (k * pow <= maxM) nice = k * pow;
+    scale = {
+      w: Math.round((nice / per100) * 100),
+      label: nice >= 1000 ? `${(nice / 1000).toLocaleString('fr-FR')}${NNBSP}km` : `${nice}${NNBSP}m`,
+    };
+  }
+
+  /* ---------- « Revenir au départ / au parcours » quand on s'en est éloigné ---------- */
+  let lost = $state<'start' | 'route' | null>(null);
+  function shownRoute(): Route | null {
+    return app.phase === 'results' || app.phase === 'detail' ? app.route : null;
+  }
+  /** Ce qu'il faut voir pendant la composition : la zone du départ, la destination et le point de passage. */
+  function composeFrame(): LngLat[] {
+    const s = app.start;
+    if (!s) return [];
+    const D = app.params.distanceKm * 1000;
+    const ring = circlePolygon(s.coord, app.params.shape === 'outback' ? D / 2.56 : D / 3.7);
+    const pts = [...((ring.features[0].geometry as Polygon).coordinates[0] as LngLat[])];
+    if (app.params.shape === 'oneway' && app.destination) pts.push(app.destination.coord);
+    if (app.via) pts.push(app.via.coord);
+    return pts;
+  }
+  function checkLost() {
+    const m = map;
+    if (!m || !ready || app.phase === 'follow') {
+      lost = null;
+      return;
+    }
+    const r = shownRoute();
+    const s = app.phase === 'compose' ? app.start : null;
+    if (!r && !s) {
+      lost = null;
+      return;
+    }
+    const box = m.getContainer();
+    const p = app.padding;
+    const step = r ? Math.max(1, Math.floor(r.coords.length / 80)) : 1;
+    const pts = r ? r.coords.filter((_, i) => i % step === 0) : [s!.coord];
+    const inView = pts.some((c) => {
+      const q = m.project(c);
+      return q.x >= p.left - 24 && q.x <= box.clientWidth - p.right + 24 && q.y >= p.top - 24 && q.y <= box.clientHeight - p.bottom + 24;
+    });
+    lost = !inView || m.getZoom() < (r ? 8.5 : 9.5) ? (r ? 'route' : 'start') : null;
+  }
+  function recenter() {
+    haptic('tap');
+    const r = shownRoute();
+    fitCoords(r ? r.coords : composeFrame());
+  }
+
+  /**
+   * Dézoom maximal : le globe entier tient dans la partie visible, aux deux tiers environ du petit côté,
+   * comme dans Plans. Réglé sur mesure (la perspective de la caméra rapetisse le globe vu de loin) :
+   * zoom 0,9 sur un iPhone, 2 sur un écran de Mac.
+   */
+  function fitMinZoom() {
+    if (!map) return;
+    const c = map.getContainer();
+    const side = Math.max(200, Math.min(c.clientWidth - (app.wide ? 408 : 0), c.clientHeight));
+    map.setMinZoom(Math.round(Math.log2(side / 210) * 100) / 100);
   }
 
   function placeAttribution() {
@@ -359,9 +536,34 @@
     });
     map.touchZoomRotate.enableRotation();
     placeAttribution();
+    fitMinZoom();
+    map.on('resize', fitMinZoom);
+    space = map.getZoom() < SPACE_ZOOM;
     map.on('style.load', onStyleLoad);
     map.on('rotate', () => (app.bearing = map!.getBearing()));
-    map.on('zoomend', () => (app.zoom = map!.getZoom()));
+    far = map.getZoom() < 11;
+    map.on('zoom', (e) => {
+      const z = map!.getZoom();
+      if (z < SPACE_ZOOM !== space) space = z < SPACE_ZOOM;
+      if (z < 11 !== far) far = z < 11;
+      // L'échelle ne répond qu'aux gestes (pincement, molette), pas aux cadrages automatiques.
+      if (e.originalEvent) {
+        updateScale();
+        scaleOn = true;
+        clearTimeout(scaleTimer);
+      }
+    });
+    map.on('zoomend', () => {
+      app.zoom = map!.getZoom();
+      // Fin d'un dézoom vers l'espace : le globe vient au milieu de la partie visible.
+      if (app.zoom < SPACE_ZOOM && app.phase !== 'follow') syncPadding(app.padding);
+      clearTimeout(scaleTimer);
+      scaleTimer = setTimeout(() => (scaleOn = false), 1500);
+    });
+    map.on('moveend', () => {
+      if (pendingPad) syncPadding(pendingPad);
+      checkLost();
+    });
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     map.on('moveend', () => {
       clearTimeout(saveTimer);
@@ -449,6 +651,7 @@
     const onTheme = () => {
       theme = dark.matches ? 'dark' : 'light';
       ready = false;
+      planStyle = buildStyle(theme);
       map?.setStyle(buildStyle(theme), { diff: false });
     };
     dark.addEventListener('change', onTheme);
@@ -465,6 +668,16 @@
   $effect(() => {
     void app.wide;
     if (ready) untrack(placeAttribution);
+  });
+
+  // Zone visible de la carte (le suivi en direct règle la sienne). Avant les cadrages ci-dessous.
+  $effect(() => {
+    const p = app.padding;
+    if (!ready || !map || app.phase === 'follow') return;
+    untrack(() => {
+      syncPadding(p);
+      fitMinZoom();
+    });
   });
 
   // Aperçu de la zone couverte pendant la composition.
@@ -562,9 +775,20 @@
 
   // Mise au point sur le parcours proposé (résultats, parcours ouvert).
   $effect(() => {
-    if (!ready || !map) return;
-    const on = app.phase === 'results' || app.phase === 'detail';
-    map.setPaintProperty('focus-veil', 'background-opacity', on ? (theme === 'dark' ? 0.34 : 0.42) : 0);
+    void app.phase;
+    if (ready) untrack(applyVeil);
+  });
+
+  // Plan ou Satellite.
+  $effect(() => {
+    void app.mapType;
+    if (ready) untrack(applyMapType);
+  });
+
+  // Le départ ou le parcours est-il encore à l'écran ?
+  $effect(() => {
+    void [app.phase, app.route, app.start, app.padding];
+    if (ready) untrack(checkLost);
   });
 
   // Point de passage imposé : losange, déplaçable pendant la composition.
@@ -738,11 +962,18 @@
     if (app.northTick && map) map.easeTo({ bearing: 0, duration: reduce ? 0 : 500 });
   });
 
-  // Demandes de déplacement.
+  // Demandes de déplacement : un saut lointain survole le globe (durée calculée), un pas voisin glisse.
   $effect(() => {
     const cam = app.camera;
     if (!map || !cam) return;
-    map.flyTo({ center: cam.center, zoom: cam.zoom ?? Math.max(map.getZoom(), 13), padding: untrack(() => app.padding), duration: reduce ? 0 : 900 });
+    const c = map.getCenter();
+    const far = haversine([c.lng, c.lat], cam.center) > 40000 || map.getZoom() < 8;
+    map.flyTo({
+      center: cam.center,
+      zoom: cam.zoom ?? Math.max(map.getZoom(), 13),
+      padding: untrack(() => app.padding),
+      ...(reduce ? { duration: 0 } : far ? { curve: 1.55, speed: 1.25, maxDuration: 3600 } : { duration: 900 }),
+    });
   });
 
   // Suivi en direct : partie faite en gris, carte centrée sur la position.
@@ -766,7 +997,38 @@
   });
 </script>
 
-<div class="map" bind:this={el} class:picking={!!placing} aria-label="Carte" role="region"></div>
+<div class="map" bind:this={el} class:picking={!!placing} class:space class:far style:--stars={STARS} aria-label="Carte" role="region"></div>
+
+{#if scale}
+  <!-- Échelle : 0, une barre de deux tons, une longueur ronde. -->
+  <div
+    class="scale"
+    class:on={scaleOn}
+    class:wide={app.wide}
+    class:low={app.wide && app.terrain3d && app.zoom >= 13.2}
+    class:night={space || app.mapType === 'satellite'}
+    style:--w="{scale.w}px"
+    aria-hidden="true"
+  >
+    <span class="scale-nums"><span class="n0">0</span><span class="nv">{scale.label}</span></span>
+    <span class="scale-bar"></span>
+  </div>
+{/if}
+
+{#if lost && !app.pickOnMap && app.phase !== 'follow'}
+  <button
+    type="button"
+    class="back-to glass"
+    class:wide={app.wide}
+    class:dock={app.wide && lost === 'route'}
+    class:legend={!app.wide && app.terrain3d && app.zoom >= 13.2}
+    style:--sheet="{app.padding.bottom}px"
+    onclick={recenter}
+  >
+    {#if lost === 'start'}<span class="dot" aria-hidden="true"></span>{:else}<Icon name="path" size={16} />{/if}
+    {lost === 'start' ? 'Revenir au départ' : 'Revenir au parcours'}
+  </button>
+{/if}
 
 {#if aimKind && aim}
   <!-- Aperçu sous le curseur : le marqueur flotte au-dessus du point, prêt à s'y poser au clic. -->
@@ -789,6 +1051,136 @@
     position: fixed;
     inset: 0;
     z-index: 0;
+  }
+  /* L'espace autour du globe : nuit profonde et étoiles discrètes, dans les deux apparences, comme Plans. */
+  .map.space {
+    background:
+      var(--stars),
+      radial-gradient(120% 95% at 50% 46%, #121c31 0%, #0a1122 34%, #05080f 68%, #020306 100%);
+    background-color: #05080f;
+  }
+  /* De loin, les pastilles des côtes s'empileraient sur un point : elles attendent qu'on s'approche. */
+  .map.far :global(.mk-climb) {
+    visibility: hidden;
+  }
+
+  .scale {
+    position: fixed;
+    z-index: 12;
+    left: 18px;
+    top: calc(var(--safe-top) + 68px);
+    display: grid;
+    gap: 3px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 420ms var(--ease-out);
+    --ink: var(--label);
+    --halo: rgba(255, 255, 255, 0.92);
+  }
+  @media (prefers-color-scheme: dark) {
+    .scale {
+      --halo: rgba(0, 0, 0, 0.75);
+    }
+  }
+  .scale.night {
+    --ink: #fff;
+    --halo: rgba(0, 0, 0, 0.7);
+  }
+  .scale.on {
+    opacity: 1;
+    transition-duration: 120ms;
+  }
+  .scale.wide {
+    left: 424px;
+    top: 20px;
+  }
+  .scale.wide.low {
+    top: 64px;
+  }
+  .scale-nums {
+    position: relative;
+    height: 13px;
+    width: var(--w);
+    font: 600 11px/13px var(--font-rounded);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    text-shadow:
+      0 0 2px var(--halo),
+      0 0 2px var(--halo),
+      0 0 4px var(--halo);
+    transition: width 180ms var(--ease-out);
+  }
+  .scale-nums span {
+    position: absolute;
+    top: 0;
+    white-space: nowrap;
+  }
+  .n0 {
+    left: 0;
+    transform: translateX(-35%);
+  }
+  .nv {
+    left: 100%;
+    transform: translateX(-50%);
+  }
+  .scale-bar {
+    width: var(--w);
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #1c1c1e 0 50%, #fff 50% 100%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.85),
+      0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: width 180ms var(--ease-out);
+  }
+
+  /* Revenir au départ ou au parcours : une capsule de verre au-dessus du panneau. */
+  .back-to {
+    position: fixed;
+    z-index: 13;
+    left: 50%;
+    bottom: calc(var(--sheet) - 12px);
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 16px 0 12px;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--tint);
+    white-space: nowrap;
+    animation: back-in 420ms var(--spring-bouncy);
+    transition: transform 240ms var(--spring);
+  }
+  .back-to:active {
+    transform: translateX(-50%) scale(0.95);
+  }
+  .back-to.legend {
+    bottom: calc(var(--sheet) + 34px);
+  }
+  .back-to.wide {
+    left: calc(408px + (100vw - 408px) / 2);
+    bottom: 22px;
+  }
+  .back-to.wide.dock {
+    bottom: 236px;
+  }
+  .back-to .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--tint);
+    box-shadow:
+      0 0 0 3px #fff,
+      0 1px 4px 2px rgba(0, 0, 0, 0.2);
+  }
+  @keyframes back-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(10px) scale(0.92);
+    }
   }
   .map.picking :global(canvas) {
     cursor: crosshair;

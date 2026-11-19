@@ -11,6 +11,7 @@
   import { duration, km, kmValue, meters, pace, percent, speed, NNBSP } from '../lib/format';
   import { ENVS, ENV_ORDER, SHAPES, SPORTS } from '../lib/sports';
   import { cumulative, nearestOnRoute } from '../lib/geo';
+  import { daylightLine, weatherLine, type Line } from '../lib/conditions';
   import type { EnvClass, Route } from '../lib/types';
 
   const r = $derived(app.route);
@@ -81,6 +82,21 @@
     // Sur iPhone, le panneau agrandi cache la carte : il redescend pour montrer la côte.
     if (!app.wide && app.focusClimb != null && app.detent === 'full') app.detent = 'half';
   }
+
+  /** Si l'on part maintenant : météo au départ et lumière du jour au retour (pas pour une sortie déjà faite). */
+  let now = $state(Date.now());
+  $effect(() => {
+    const t = setInterval(() => (now = Date.now()), 60000);
+    return () => clearInterval(t);
+  });
+  const conds = $derived.by((): Line[] => {
+    if (!r || app.detailFrom?.kind === 'historique') return [];
+    const out: Line[] = [];
+    if (app.weather) out.push(weatherLine(app.weather));
+    const d = daylightLine(now, r.coords[0][1], r.coords[0][0], r.durationS);
+    if (d) out.push(d);
+    return out;
+  });
 
   /** Sortie de l'historique affichée en détail. */
   const done = $derived(app.detailFrom?.kind === 'historique' ? app.history.find((h) => h.id === app.detailFrom?.id) ?? null : null);
@@ -212,6 +228,20 @@
           <li class:ok={f.ok}><span class="mark" aria-hidden="true"><Icon name={f.ok ? 'check' : 'approx'} size={12} /></span>{f.text}</li>
         {/each}
       </ul>
+    {/if}
+
+    {#if conds.length}
+      <section class="conds" aria-labelledby="conds-h">
+        <h3 id="conds-h" class="field-label">Si tu pars maintenant</h3>
+        <div class="group">
+          {#each conds as c, i (i)}
+            <div class="row">
+              <span class="row-icon" class:warn={c.warn}><Icon name={c.icon} size={20} /></span>
+              <span class="row-label">{c.title}<span class="row-sub">{c.sub}</span></span>
+            </div>
+          {/each}
+        </div>
+      </section>
     {/if}
 
     <div class="actions">
@@ -494,6 +524,25 @@
   }
   .prof {
     margin-top: 2px;
+  }
+  .conds {
+    display: grid;
+    gap: 8px;
+  }
+  .conds h3 {
+    margin: 0;
+  }
+  .conds .row-label {
+    font-size: 0.9375rem;
+    font-weight: 500;
+  }
+  .conds .row-icon {
+    display: grid;
+    color: var(--label-2);
+  }
+  /* Départ ou retour dans le noir : l'icône passe à l'ambre des avertissements. */
+  .conds .row-icon.warn {
+    color: var(--warn);
   }
   .actions {
     display: grid;

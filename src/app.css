@@ -650,15 +650,11 @@ textarea {
     --glass-ctl: rgba(44, 44, 48, 0.97);
   }
 }
-/* Attribution des données : petit bouton de verre centré sous les boutons de la carte */
+/* Attribution des données : petit bouton de verre centré sous la pilule des boutons de la carte
+   (MapControls publie le bas de la pilule dans --ctrls-bottom). */
 .maplibregl-ctrl-top-right {
-  top: calc(var(--safe-top) + 222px);
+  top: calc(var(--ctrls-bottom, calc(var(--safe-top) + 252px)) + 12px);
   right: 0;
-}
-@media (min-width: 860px) {
-  .maplibregl-ctrl-top-right {
-    top: 162px;
-  }
 }
 .maplibregl-ctrl-top-right .maplibregl-ctrl.maplibregl-ctrl-attrib {
   margin: 0 20px 0 0;

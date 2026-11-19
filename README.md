@@ -24,6 +24,8 @@ Sur iPhone, quand les propositions arrivent, le panneau descend pour montrer tou
 
 Chaque proposition affiche la distance, le dénivelé, la durée estimée, ce qu'elle respecte de la demande, les milieux traversés, la répartition des sols et le profil d'altitude. Le bouton **3D** incline la carte et met en volume le relief et les bâtiments, à leur hauteur réelle : maisons en sable, immeubles en gris, tours en ardoise (légende sur la carte). Il affiche « 2D » pour revenir à plat. Le tracé est coloré selon la pente, comme le profil : les montées du rose au grenat, les descentes de la lavande à l'indigo, le plat en rose clair. Les côtes et descentes notables sont signalées sur la carte par une pastille (« +28 m · 4 % ») et listées dans le détail : toucher l'une d'elles zoome dessus et la surligne sur le profil. Pendant le suivi en direct, l'app annonce la prochaine (« Montée dans 200 m : 0,7 km à 4 % »). En 3D, le relief est accentué selon le terrain pour que les collines se voient même en ville plate. Glisser le doigt sur le profil déplace une loupe sur la carte.
 
+Le détail d'un parcours dit aussi **ce qui t'attend si tu pars maintenant** : la météo au départ (température, ciel, vent) et l'heure de retour par rapport au coucher du soleil (« Retour vers 17 h 52, au crépuscule »). L'icône passe à l'ambre quand le départ ou le retour se fait de nuit. Pendant la composition, l'option « Rues éclairées » indique l'heure de la nuit ce soir.
+
 Actions :
 
 - **Favori** : le parcours rejoint « Mes parcours », onglet Favoris.
@@ -34,6 +36,13 @@ Actions :
 - **Suivre ce parcours** : position en direct sur le tracé, distance faite et restante, alerte si l'on s'écarte du tracé. L'écran reste allumé pendant le suivi.
 - **Mes parcours** : onglet **Favoris** (parcours gardés, import GPX) et onglet **Historique** (sorties faites, avec date, distance, temps, allure et le total du mois). Une sortie s'ajoute toute seule quand on termine un suivi en direct de plus de 300 m. « Modifier » permet de supprimer.
 
+### La carte
+
+- **Globe** : en dézoomant, la carte devient la Terre vue de l'espace, ronde comme dans Plans, avec son atmosphère et un ciel étoilé. Le globe se place au milieu de la partie visible (au-dessus du panneau sur iPhone, à droite de la colonne sur Mac). En mode clair, c'est la Terre de jour (relief et fonds marins) ; en mode sombre, la Terre de nuit et les lumières des villes. En approchant, les images s'effacent devant le plan. Un lieu lointain (une adresse à l'autre bout de la France, par exemple) se rejoint en survolant le globe.
+- **Plan ou Satellite** : le bouton du haut de la pilule de droite ouvre le choix du fond de carte. Satellite affiche les photos aériennes de l'IGN en France (jusqu'à 20 cm par pixel), avec les noms de lieux en blanc et les sentiers en clair ; il se combine avec la 3D (photos posées sur le relief, bâtiments translucides). Le choix est gardé d'une fois sur l'autre.
+- **Échelle** : elle apparaît pendant qu'on zoome (pincement, molette), puis s'efface.
+- **Revenir au départ / au parcours** : quand on s'est éloigné du départ ou du parcours affiché (ou qu'on regarde le globe), une capsule permet d'y revenir d'une touche.
+
 ## Comment ça marche
 
 Tout se passe dans le navigateur, sans compte ni serveur à nous :
@@ -41,8 +50,10 @@ Tout se passe dans le navigateur, sans compte ni serveur à nous :
 - **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap). Boucle place des points de passage autour du départ, choisit les directions selon le relief, les milieux et le vent, ajuste le rayon jusqu'à tomber à quelques pour cent de la distance demandée, puis garde les trois meilleures propositions. Les petits allers-retours vers un point de passage (impasse, petite rue, jusqu'à 900 m aller et retour) sont retirés du tracé, sauf celui qui mène au lieu imposé. Avec un lieu imposé, les boucles suivent deux cercles passant par le départ et ce lieu (un de chaque côté) et deux triangles, ajustés à la distance.
 - **Carte et milieux** : tuiles vectorielles [OpenFreeMap](https://openfreemap.org) (OpenMapTiles). Les forêts, l'eau, les parcs, les champs, la ville et les chemins sont lus dans ces tuiles pour orienter les parcours et calculer les répartitions.
 - **Relief** : tuiles d'altitude Terrarium (Mapzen, AWS Open Data) pour l'ombrage et la 3D ; altitudes des parcours fournies par Valhalla.
+- **Globe et satellite** : images de la Terre de la NASA ([GIBS](https://earthdata.nasa.gov/gibs), Blue Marble et Black Marble, domaine public) jusqu'au zoom 8 ; photos aériennes de l'[IGN](https://geoservices.ign.fr) (Géoplateforme, licence ouverte Etalab) en France.
+- **Lumière du jour** : lever, coucher du soleil et crépuscule calculés sur l'appareil, sans service en ligne.
 - **Adresses** : [Photon](https://photon.komoot.io) (komoot, OpenStreetMap).
-- **Vent** : [Open-Meteo](https://open-meteo.com).
+- **Météo et vent** : [Open-Meteo](https://open-meteo.com).
 - **Points d'eau** : Overpass API (OpenStreetMap).
 
 Ces services sont gratuits pour un usage raisonnable : une création de parcours envoie une dizaine de requêtes.
@@ -53,6 +64,8 @@ Ces services sont gratuits pour un usage raisonnable : une création de parcours
 - Le dénivelé vient d'un modèle de terrain (précision de quelques mètres) : il peut différer de celui d'une montre à baromètre.
 - Si le relief autour du départ ne permet pas le dénivelé demandé, Boucle le dit au lieu d'inventer.
 - Le suivi en direct fonctionne app ouverte ; iOS coupe la localisation des web apps en arrière-plan.
+- Satellite : les photos détaillées couvrent la France métropolitaine (IGN). Ailleurs, on voit les images de la Terre de loin, puis le plan en s'approchant.
+- « Si tu pars maintenant » suppose un départ immédiat : pour une sortie plus tard dans la journée, l'heure de retour se décale d'autant.
 - Vibrations : Safari sur iPhone n'a pas d'API de vibration. Depuis iOS 26.5, seuls les vrais interrupteurs (options) vibrent ; les curseurs et les boutons vibrent sur Android et sur iOS 17.4 à 26.4.
 
 ## Développement

@@ -7,6 +7,24 @@ import type { StyleSpecification, ExpressionSpecification, LayerSpecification } 
  */
 
 export type Theme = 'light' | 'dark';
+/** Fond de carte : le plan maison, ou les photos aériennes (avec les noms de lieux par-dessus). */
+export type MapType = 'plan' | 'satellite';
+
+/*
+ * Vu de loin, la carte est un globe (comme dans Plans) : la Terre vue de l'espace, avec son atmosphère.
+ * Images NASA (GIBS, domaine public) jusqu'au zoom 8 : Blue Marble, relief et fonds marins, de jour ;
+ * Black Marble, les lumières des villes, en mode sombre. Elles s'effacent devant le plan en approchant.
+ */
+const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best';
+const EARTH_DAY = `${GIBS}/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`;
+const EARTH_NIGHT = `${GIBS}/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`;
+/** Photos aériennes de l'IGN (Géoplateforme, licence ouverte Etalab) : jusqu'à 20 cm par pixel en France. */
+export const ORTHO_TILES =
+  'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/jpeg&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
+/** Emprise des photos IGN (métropole) : aucune demande de tuile en dehors. */
+const ORTHO_BOUNDS: [number, number, number, number] = [-5.8, 41.2, 9.9, 51.3];
+/** Zoom au-dessous duquel on voit l'espace autour du globe. */
+export const SPACE_ZOOM = 7;
 
 interface Palette {
   bg: string;
@@ -247,6 +265,35 @@ export function buildStyle(theme: Theme): StyleSpecification {
         ],
       },
     },
+    // La Terre vue de loin : les images s'effacent devant le plan entre les zooms 4,2 et 5,4 (un fondu court, sans entre-deux terne).
+    {
+      id: 'earth',
+      type: 'raster',
+      source: theme === 'dark' ? 'earth-night' : 'earth-day',
+      maxzoom: 5.6,
+      paint: {
+        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 4.2, 1, 5.4, 0],
+        'raster-fade-duration': 250,
+        'raster-resampling': 'linear',
+        // De nuit, plus de contraste : les continents se détachent de l'océan noir, les villes brillent.
+        'raster-saturation': theme === 'dark' ? 0.1 : -0.12,
+        'raster-contrast': theme === 'dark' ? 0.28 : 0.04,
+        'raster-brightness-min': theme === 'dark' ? 0.03 : 0,
+      },
+    },
+    // Satellite : la Terre de jour sert de fond partout où les photos IGN n'arrivent pas.
+    {
+      id: 'earth-sat',
+      type: 'raster',
+      source: 'earth-day',
+      maxzoom: 12,
+      layout: { visibility: 'none' },
+      paint: {
+        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 9, 1, 11.5, 0],
+        'raster-fade-duration': 250,
+        'raster-resampling': 'linear',
+      },
+    },
     {
       id: 'building',
       type: 'fill',
@@ -254,6 +301,15 @@ export function buildStyle(theme: Theme): StyleSpecification {
       'source-layer': 'building',
       minzoom: 14,
       paint: { 'fill-color': c.building, 'fill-outline-color': c.buildingLine, 'fill-opacity': zw([[14, 0], [15, 1]], 1) },
+    },
+    // Photos aériennes (mode Satellite) : au-dessus des aplats du plan, sous les chemins et les noms.
+    {
+      id: 'ortho',
+      type: 'raster',
+      source: 'ortho',
+      minzoom: 6,
+      layout: { visibility: 'none' },
+      paint: { 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0, 7.5, 1], 'raster-fade-duration': 200 },
     },
     {
       id: 'track',
@@ -352,6 +408,21 @@ export function buildStyle(theme: Theme): StyleSpecification {
       filter: ['all', roadClass(['rail', 'transit']), ['!=', ['get', 'brunnel'], 'tunnel']],
       paint: { 'line-color': c.rail, 'line-width': zw([[11, 0.6], [16, 1.6]]) },
     },
+    // Frontières des pays : blanches sur la Terre vue de loin, grises sur le plan.
+    {
+      id: 'boundary',
+      type: 'line',
+      source: 'omt',
+      'source-layer': 'boundary',
+      minzoom: 1,
+      filter: ['all', ['==', ['get', 'admin_level'], 2], ['!=', ['get', 'maritime'], 1]],
+      layout: { 'line-join': 'round' },
+      paint: {
+        'line-color': ['interpolate', ['linear'], ['zoom'], 4.6, 'rgba(255,255,255,0.55)', 5.6, c.labelSoft],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 8, 0.4],
+        'line-width': zw([[2, 0.5], [8, 1.1], [14, 1.8]], 1),
+      },
+    },
     {
       id: 'waterway-label',
       type: 'symbol',
@@ -449,6 +520,29 @@ export function buildStyle(theme: Theme): StyleSpecification {
       },
       paint: { 'text-color': c.label, 'text-halo-color': c.halo, 'text-halo-width': 1.6 },
     },
+    // Noms des pays sur le globe : en blanc sur les images de la Terre, puis aux couleurs du plan.
+    {
+      id: 'place-country',
+      type: 'symbol',
+      source: 'omt',
+      'source-layer': 'place',
+      minzoom: 1.5,
+      maxzoom: 7.5,
+      filter: ['==', ['get', 'class'], 'country'],
+      layout: {
+        'text-field': NAME,
+        'text-font': REG,
+        'text-size': zw([[2, 10], [4, 12], [6, 14]], 1),
+        'text-max-width': 7,
+        'symbol-sort-key': ['get', 'rank'],
+      },
+      paint: {
+        'text-color': ['interpolate', ['linear'], ['zoom'], 4.6, 'rgba(255,255,255,0.94)', 5.4, c.labelSoft],
+        'text-halo-color': ['interpolate', ['linear'], ['zoom'], 4.6, 'rgba(0,0,0,0.42)', 5.4, c.halo],
+        'text-halo-width': 1.2,
+        'text-halo-blur': 0.6,
+      },
+    },
   ];
 
   // Bâtiments en volume (mode 3D) : hauteur réelle (étages), couleur selon la classe, sous les noms de lieux.
@@ -478,9 +572,11 @@ export function buildStyle(theme: Theme): StyleSpecification {
   return {
     version: 8,
     glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    // Globe vu de loin, carte à plat dès le zoom 12 (préréglage MapLibre).
+    projection: { type: 'globe' },
     // Lumière douce venue du sud-ouest : les façades se distinguent des toits.
     light: { anchor: 'viewport', color: '#ffffff', intensity: theme === 'dark' ? 0.32 : 0.42, position: [1.3, 210, 35] },
-    // Ciel et brume à l'horizon quand la carte est inclinée.
+    // Ciel et brume à l'horizon quand la carte est inclinée ; atmosphère autour du globe vu de loin.
     sky: {
       'sky-color': c.sky,
       'horizon-color': c.horizon,
@@ -488,10 +584,36 @@ export function buildStyle(theme: Theme): StyleSpecification {
       'sky-horizon-blend': 0.55,
       'horizon-fog-blend': 0.7,
       'fog-ground-blend': 0.72,
-      'atmosphere-blend': 0,
+      'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, SPACE_ZOOM, 0],
     },
     sources: {
       omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+      'earth-day': {
+        type: 'raster',
+        tiles: [EARTH_DAY],
+        tileSize: 256,
+        maxzoom: 8,
+        attribution: '<a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">Terre NASA GIBS</a>',
+      },
+      ...(theme === 'dark'
+        ? {
+            'earth-night': {
+              type: 'raster' as const,
+              tiles: [EARTH_NIGHT],
+              tileSize: 256,
+              maxzoom: 8,
+              attribution: '<a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">Terre NASA GIBS</a>',
+            },
+          }
+        : {}),
+      ortho: {
+        type: 'raster',
+        tiles: [ORTHO_TILES],
+        tileSize: 256,
+        maxzoom: 19,
+        bounds: ORTHO_BOUNDS,
+        attribution: '<a href="https://geoservices.ign.fr" target="_blank" rel="noopener">Photos aériennes © IGN</a>',
+      },
       'dem-hs': {
         type: 'raster-dem',
         tiles: [DEM_TILES],
@@ -504,4 +626,46 @@ export function buildStyle(theme: Theme): StyleSpecification {
     },
     layers,
   };
+}
+
+/** Une propriété de couche que le mode Satellite remplace. */
+export interface StyleOverride {
+  id: string;
+  kind: 'paint' | 'layout';
+  prop: string;
+  value: unknown;
+}
+
+/**
+ * Ce que le mode Satellite change sur le plan : les photos apparaissent, les routes s'effacent (elles sont
+ * sur les photos), les chemins et sentiers restent en clair, et les noms passent en blanc cerné de noir.
+ */
+export function satelliteOverrides(): StyleOverride[] {
+  const vis = (id: string, v: 'visible' | 'none'): StyleOverride => ({ id, kind: 'layout', prop: 'visibility', value: v });
+  const paint = (id: string, prop: string, value: unknown): StyleOverride => ({ id, kind: 'paint', prop, value });
+  return [
+    vis('earth', 'none'),
+    vis('earth-sat', 'visible'),
+    vis('ortho', 'visible'),
+    vis('road-casing', 'none'),
+    vis('motorway-casing', 'none'),
+    vis('rail', 'none'),
+    paint('road', 'line-opacity', 0.38),
+    paint('motorway', 'line-opacity', 0.45),
+    paint('path', 'line-color', 'rgba(255,255,255,0.82)'),
+    paint('track', 'line-color', 'rgba(255,238,206,0.82)'),
+    paint('boundary', 'line-color', 'rgba(255,255,255,0.6)'),
+    ...['waterway-label', 'water-label', 'road-label', 'peak', 'place-minor', 'place', 'place-country'].flatMap((id) => [
+      paint(id, 'text-color', '#FFFFFF'),
+      paint(id, 'text-halo-color', 'rgba(0,0,0,0.62)'),
+    ]),
+  ];
+}
+
+/** Valeur d'origine (plan) d'une propriété remplacée, lue dans le style construit. */
+export function planValue(style: StyleSpecification, o: StyleOverride): unknown {
+  const layer = style.layers.find((l) => l.id === o.id) as { paint?: Record<string, unknown>; layout?: Record<string, unknown> } | undefined;
+  const v = layer?.[o.kind]?.[o.prop];
+  if (v !== undefined) return v;
+  return o.prop === 'visibility' ? 'visible' : null;
 }

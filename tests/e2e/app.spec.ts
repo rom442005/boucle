@@ -253,3 +253,43 @@ test('côtes et descentes : liste, carte et profil', async ({ page }) => {
     await expect(page.getByText('Pas de côte notable')).toBeVisible();
   }
 });
+
+test('fond de carte Plan ou Satellite, gardé au prochain lancement', async ({ page }) => {
+  await open(page);
+  const type = page.getByRole('button', { name: /^Type de carte/ });
+  await expect(type).toHaveAccessibleName('Type de carte : Plan');
+  await type.click();
+  await expect(page.getByRole('group', { name: 'Type de carte' })).toBeVisible();
+  // Les photos aériennes de l'IGN se chargent dès que l'on passe en Satellite.
+  const ortho = page.waitForRequest(/data\.geopf\.fr\/wmts/, { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Satellite' }).click();
+  await ortho;
+  await expect(type).toHaveAccessibleName('Type de carte : Satellite');
+  await expect(page.getByRole('group', { name: 'Type de carte' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Type de carte : Satellite' })).toBeVisible();
+});
+
+test('vu de loin, la Terre est un globe, et on revient au départ', async ({ page }) => {
+  await open(page);
+  await expect(page.getByRole('button', { name: /^Départ : / }).first()).toBeVisible({ timeout: 20_000 });
+  // Dézoom au clavier jusqu'à voir la planète entière, dans l'espace.
+  await page.locator('.maplibregl-canvas').focus();
+  for (let i = 0; i < 13; i++) {
+    await page.keyboard.press('Minus');
+    await page.waitForTimeout(260);
+  }
+  await expect(page.locator('.map.space')).toBeAttached({ timeout: 10_000 });
+  const back = page.getByRole('button', { name: 'Revenir au départ' });
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(back).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('.map.space')).toHaveCount(0);
+});
+
+test('si tu pars maintenant : lumière du jour au retour', async ({ page }) => {
+  await open(page);
+  await createLoop(page);
+  await expect(page.getByRole('heading', { name: 'Si tu pars maintenant' })).toBeAttached();
+  await expect(page.locator('.conds').getByText(/^(Retour vers .+, (de jour|au crépuscule|de nuit)|Départ de nuit)/)).toBeAttached();
+});

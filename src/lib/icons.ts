@@ -69,11 +69,24 @@ import rise from '@phosphor-icons/core/assets/bold/trend-up-bold.svg?raw';
 import fall from '@phosphor-icons/core/assets/bold/trend-down-bold.svg?raw';
 import diamondF from '@phosphor-icons/core/assets/fill/diamond-fill.svg?raw';
 import remove from '@phosphor-icons/core/assets/fill/minus-circle-fill.svg?raw';
+import mapIc from '@phosphor-icons/core/assets/regular/map-trifold.svg?raw';
+import globe from '@phosphor-icons/core/assets/regular/globe-hemisphere-west.svg?raw';
+import sun from '@phosphor-icons/core/assets/regular/sun.svg?raw';
+import moon from '@phosphor-icons/core/assets/regular/moon.svg?raw';
+import sunHorizon from '@phosphor-icons/core/assets/regular/sun-horizon.svg?raw';
+import cloud from '@phosphor-icons/core/assets/regular/cloud.svg?raw';
+import cloudSun from '@phosphor-icons/core/assets/regular/cloud-sun.svg?raw';
+import cloudMoon from '@phosphor-icons/core/assets/regular/cloud-moon.svg?raw';
+import rain from '@phosphor-icons/core/assets/regular/cloud-rain.svg?raw';
+import snow from '@phosphor-icons/core/assets/regular/cloud-snow.svg?raw';
+import fog from '@phosphor-icons/core/assets/regular/cloud-fog.svg?raw';
+import storm from '@phosphor-icons/core/assets/regular/cloud-lightning.svg?raw';
 
 export const ICONS = {
   run, hike, bicycle, bike, tree, waves, park, grains, buildings, search, locate, cube, bookmark, list, back, chevron,
   down, close, again, swap, share, download, link, play, stop, trash, pencil, check, approx, warning, wind, drop, bulb, road,
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
+  map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {

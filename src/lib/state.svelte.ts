@@ -21,7 +21,8 @@ import {
   type SerialRoute,
 } from './persist';
 import { generate, GenerateError } from './generator';
-import { reverse, type Weather } from './services';
+import { reverse, weather, type Weather } from './services';
+import type { MapType } from './mapstyle';
 import { reverseRoute } from './routegeo';
 import { elevationStats } from './elevation';
 import { cumulative, overlapRatio } from './geo';
@@ -90,6 +91,8 @@ class AppState {
   userPos = $state<LngLat | null>(null);
   locating = $state(false);
   terrain3d = $state(false);
+  /** fond de carte : plan ou photos aériennes (mémorisé) */
+  mapType = $state<MapType>(loadFlags().satellite ? 'satellite' : 'plan');
   bearing = $state(0);
   follow = $state.raw<FollowState | null>(null);
   /** la carte suit la position pendant le suivi (désactivé dès que l'on déplace la carte) */
@@ -101,6 +104,23 @@ class AppState {
 
   flyTo(center: LngLat, zoom?: number) {
     this.camera = { center, zoom, id: Date.now() };
+  }
+
+  setMapType(t: MapType) {
+    if (t === this.mapType) return;
+    this.mapType = t;
+    this.setFlag('satellite', t === 'satellite');
+  }
+
+  private weatherAt: { coord: LngLat; at: number } | null = null;
+  /** Météo du moment au départ (pour « Si tu pars maintenant »), gardée un quart d'heure au même endroit. */
+  refreshWeather(c: LngLat) {
+    const w = this.weatherAt;
+    if (this.weather && w && Date.now() - w.at < 15 * 60000 && Math.abs(w.coord[0] - c[0]) + Math.abs(w.coord[1] - c[1]) < 0.05) return;
+    this.weatherAt = { coord: c, at: Date.now() };
+    void weather(c).then((x) => {
+      if (x && this.weatherAt?.coord === c) this.weather = x;
+    });
   }
 
   /** Bouton de localisation : recentre, et pendant la composition place aussi le départ. */
@@ -320,7 +340,10 @@ class AppState {
       this.selected = 0;
       this.scrub = null;
       this.note = res.note;
-      this.weather = res.weather;
+      if (res.weather) {
+        this.weather = res.weather;
+        this.weatherAt = { coord: this.start!.coord, at: Date.now() };
+      } else this.refreshWeather(this.start!.coord);
       this.phase = 'results';
       this.drawTick++;
       this.focusRoute();
@@ -430,6 +453,7 @@ class AppState {
     if (!s) return;
     this.detailFrom = { kind: 'favori', id };
     this.routes = [deserialize(s, this.settings)];
+    this.refreshWeather(this.routes[0].coords[0]);
     this.selected = 0;
     this.scrub = null;
     this.phase = 'detail';
@@ -565,6 +589,7 @@ class AppState {
       createdAt: Date.now(),
     };
     this.routes = [r];
+    this.refreshWeather(r.coords[0]);
     this.selected = 0;
     this.detailFrom = { kind: 'gpx' };
     this.phase = 'detail';
@@ -576,6 +601,7 @@ class AppState {
     try {
       const r = await unpackRoute(hash, this.settings);
       this.routes = [r];
+      this.refreshWeather(r.coords[0]);
       this.selected = 0;
       this.detailFrom = { kind: 'lien' };
       this.phase = 'detail';

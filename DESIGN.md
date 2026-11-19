@@ -30,6 +30,8 @@ colors:
   map-park: "#d5ebc6"
   map-fields: "#f0ebdb"
   map-water: "#a9d2f0"
+  space: "#05080f"
+  space-glow: "#121c31"
   env-forest: "#3f7a33"
   env-water: "#3990d0"
   env-park: "#5c9933"
@@ -214,6 +216,7 @@ A quiet, warm-neutral map and iOS system greys, with one pink tint that also bec
 
 ### Secondary
 - **Location Blue** (`location-blue`): the locate button glyph and the "Ma position" search result disc. Never used for actions.
+- **Space** (`space`, `space-glow`): the night around the globe seen from afar, in both appearances.
 
 ### Tertiary
 - **Slope Ramp** (`slope-flat` to `slope-severe`): flat (under 2 %) in light rose, then climbs from 2, 5, 8 and 12 % in pink to deep garnet. Used for the selected route line on the map, the elevation profile fill, the climb markers and their legend. Value carries steepness.
@@ -265,6 +268,7 @@ One screen. The map is fixed full-bleed behind everything; glass floats above it
 
 - **iPhone (below 860 px):** a top bar 8 px under the safe area with the 46 px start-point capsule ("Ma position") and a 46 px round glass library button; a vertical glass pill of map controls on the right, 12 px in; and a bottom sheet inset 8 px from the edges with an 18 px drag handle, a scrolling body (4 px 16px 16px, in an inner wrapper so the sheet can fold to its header) and a footer pinned above the home indicator holding the primary capsule. Detents: folded (header and footer only, body faded out), medium (fitted to the content up to the element marked `data-fold`: the climb slider while composing, the elevation profile in results; at most 66% of the screen) and full. Proposals scroll horizontally as snap cards at full width minus 44 px so the next one peeks.
 - **Route focus (iPhone):** when proposals arrive, or a saved route opens, the sheet folds to a one-line summary (back, summary figures, dots for the proposals, regenerate) above "Suivre ce parcours", and the map fits the whole route in the space left. Tapping the summary unfolds the sheet; swiping it sideways changes proposal.
+- **Map controls:** one vertical control-glass pill on the right (12 px in; 72 px under the safe area on iPhone, 12 px from the top on Mac): map type, locate, 3D, then the compass when the map is rotated. The data attribution "i" sits 12 px under the pill, whatever its height (the pill publishes its bottom edge in `--ctrls-bottom`). The map type opens a panel-glass card to the left of the pill, 24 px radius, with two 96 x 64 thumbnails (14 px radius): "Plan" drawn in the map palette with a pink loop, "Satellite" a real IGN tile around the start. The selected one gets an inset 2.5 px pink ring and a pink label; a 0.6875rem footnote under them says where the photos come from.
 - **Mac (860 px and up):** the same content in a floating glass column, 384 px wide, inset 12 px on top, left and bottom. Proposals stack vertically. Once a route is selected the elevation profile floats as a glass dock at the bottom of the map, from 408 px to 72 px off the right edge, max 980 px wide, with the slope legend (a nine-step bar from steep descent to steep climb) in its header.
 - **Rhythm:** 4 / 8 / 12 / 16 px. 16 px panel gutters and gap between composer blocks; 10 px inside a block; 8 px between chips and capsules in a row; 12 px between icon and text in rows and cards.
 - **Targets:** 44 px minimum for every control; primary capsule and top-bar buttons 52 px; action circles 48 px.
@@ -282,6 +286,8 @@ Depth is material, not stacking. There are two planes: the map, and glass over i
 
 ### Named Rules
 **The Two Planes Rule.** Only surfaces that float directly over the map are glass. Nothing inside a glass panel gets its own glass or shadow; it uses fills.
+
+**The Space Is Night Rule.** Around the globe, space is always dark, in light mode too, like Plans. The glass over it simply picks up the dark through its blur.
 
 ## Shapes
 
@@ -327,6 +333,19 @@ Inside the panel: on Mac a brand row (pink squircle logo, "Boucle" at 1.375rem 7
 ### 3D city
 The "3D" map button (it reads "2D" while active, as in Apple Plans, and flips on a spring) raises the terrain (1.4x) and the buildings. Buildings are `fill-extrusion` volumes from the OpenMapTiles building layer at their real height (OSM levels), coloured in three material tones by height, never in pink: houses under 10 m in warm sand (`#E4D6BD`, dark `#423D35`), apartment buildings from 10 to 30 m in warm grey (`#D2CEC7`, dark `#4B4C53`), towers from 30 m in slate (`#AFB8C9`, dark `#5C6782`; at night taller is lighter). Volumes grow with the zoom between 13 and 13.8 so the city rises as the camera tilts (60° and at least zoom 14.8 while composing; a whole-route refit at 52° when a route is shown), and fade in over 650 ms. A soft south-west light shades the façades, and a sky with horizon fog fills the top of a tilted map. A glass legend capsule ("Maison · Immeuble · Tour") appears only while volumes are visible: above the sheet on iPhone, at the top-left of the map on Mac.
 
+### Globe
+Zoomed out, the map is the Earth seen from space, as in Apple Plans (MapLibre globe projection, flat from zoom 12). The planet always sits in the middle of the visible part of the map (above the sheet on iPhone, right of the column on Mac): when the sheet changes height or a zoom-out ends, it glides there in 520 ms. Around it, space is always night in both appearances: a radial gradient from `space-glow` to `space` with two tiles of faint stars (389 and 557 px, so the repeat never shows), and MapLibre's atmosphere glow until zoom 7. The planet itself is NASA imagery up to zoom 8, calmed a little: Blue Marble with relief and sea floors by day (light mode), Black Marble with city lights by night (dark mode, more contrast so continents separate from the black ocean). It fades into the quiet basemap between zoom 4.2 and 5.4, a short crossfade so there is no muddy in-between. Country names and borders are white on the imagery and turn to the basemap greys as it fades. Maximum zoom-out keeps the whole globe on screen (about two thirds of the short side). A far jump (a place more than 40 km away, or anything from the globe) flies over the planet with a computed duration up to 3.6 s; near moves keep their 850 to 900 ms glide.
+
+### Plan and Satellite
+Satellite lays IGN aerial photos (France, up to 20 cm per pixel) over the plan's fills and under its paths and names; NASA day imagery covers the rest of the world from afar. Roads drop to 38% so the photos carry them, paths and tracks turn white and cream so trails stay readable under trees, every place name becomes white with a 62% black halo, and the focus veil becomes a 30% shadow instead of a land-coloured wash. In 3D the photos drape over the relief and the building volumes drop to 62% opacity so the photographed roofs show through. The choice is remembered.
+
+### Scale and way back
+- **Scale:** appears top-left of the map while a gesture zooms (pinch, wheel, keys), never during automatic camera moves, and fades 1.5 s after: "0" and a round length ("200 m", "2 km") in 11 px rounded tabular figures over a 4 px bar in two halves (near-black and white) with a white rim. Measured at the centre of the visible area; hidden on the globe, where one scale would lie. White figures on a dark halo over photos and space.
+- **Way back:** when the start (composing) or the shown route (results) has left the visible area, or the camera is too far out to read it, a control-glass capsule appears just above the sheet (Mac: bottom centre of the map, above the profile dock): pink 600 label "Revenir au départ" with a start-dot glyph, or "Revenir au parcours" with the path icon. It springs in and frames the start's area or the whole route again.
+
+### Conditions
+"Si tu pars maintenant" in the route detail: a grouped list of two rows, weather at the start (Open-Meteo: "13 °C · Bruine", "Vent d’ouest à 24 km/h") and daylight at the estimated return ("Retour vers 17 h 52, au crépuscule", "Coucher du soleil à 17 h 27"). Sun times are computed on the device. The leading icon is Label 2, and turns warning amber when the run starts or ends in the dark. Not shown for a run already done (history). While composing, the "Rues éclairées" option reads "Nuit à 18 h 02 ce soir" or "Il fait nuit en ce moment".
+
 ### Rolling figures
 Every figure the user watches change (slider values, the route summary and stats, the remaining distance in live follow) is a `RollingNumber`: each digit is a 0 to 9 strip clipped to one line that springs to its new value, digits are aligned from the right so units never jump, and a new leading digit slides in. Screen readers get the plain value. Reduce Motion turns the roll into an instant change.
 
@@ -360,4 +379,4 @@ A panel-glass card under the status bar (max 520 px, 28 px radius) with the rema
 - **Don't** introduce uppercase or letter-spaced labels in the interface; tracked capitals belong only to the basemap's neighbourhood names.
 - **Don't** use sharp corners or rectangular buttons; concentric radii only.
 - **Don't** colour the route or the profile outside the five-step slope ramp.
-- **Don't** let the map style grow louder: land stays warm grey, fills stay pale, so the route remains the only saturated line.
+- **Don't** let the map style grow louder: land stays warm grey, fills stay pale, so the route remains the only saturated line. The NASA imagery of the globe is the one exception, and it has faded out (zoom 5.4) long before a route can be read.

@@ -10,6 +10,7 @@
   import { asSwitch, haptic, nativeSwitch } from '../lib/haptics';
   import { elevationLevel, SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
   import { kmSetting, pace, speed } from '../lib/format';
+  import { nightfall } from '../lib/conditions';
   import type { Shape, Surface } from '../lib/types';
   import type { IconName } from '../lib/icons';
 
@@ -49,6 +50,8 @@
   }
 
   const isRun = $derived(!def.bike);
+  /** « Nuit à 17 h 49 ce soir » sous l'option des rues éclairées, d'après le départ. */
+  const night = $derived(app.start ? nightfall(Date.now(), app.start.coord[1], app.start.coord[0]) : null);
   const paceKey = $derived(p.sport === 'run' ? 'paceRun' : p.sport === 'trail' ? 'paceTrail' : p.sport === 'road' ? 'speedRoad' : 'speedGravel');
   const paceValue = $derived(app.settings[paceKey]);
   function stepPace(dir: 1 | -1) {
@@ -155,7 +158,7 @@
       {#if p.sport === 'run'}
         <label class="row">
           <span class="row-icon"><Icon name="bulb" /></span>
-          <span class="row-label">Rues éclairées<span class="row-sub">Pour courir à la nuit tombée</span></span>
+          <span class="row-label">Rues éclairées<span class="row-sub">{night ?? 'Pour courir à la nuit tombée'}</span></span>
           <input class="switch" type="checkbox" use:asSwitch checked={p.lit} onchange={() => toggle('lit')} />
         </label>
       {/if}
