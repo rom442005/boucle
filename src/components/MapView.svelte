@@ -5,6 +5,7 @@
   import type { FeatureCollection, GeoJSON, Polygon } from 'geojson';
   import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
+  import { cityDot, globeLabels, registerEarth } from '../lib/earth';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { ICONS } from '../lib/icons';
@@ -40,6 +41,8 @@
   let ready = $state(false);
   /** Vue de loin : l'espace autour du globe est visible. */
   let space = $state(false);
+  /** La Terre entière, au dézoom maximal. */
+  let orbit = $state(false);
   /** Assez loin pour que les pastilles des côtes se chevauchent : elles s'effacent. */
   let far = $state(false);
   let theme: Theme = dark.matches ? 'dark' : 'light';
@@ -134,6 +137,7 @@
     const casing = ROUTE_CASING[theme];
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
+    addCityDots();
     for (const id of ['reach', 'aim', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
@@ -246,11 +250,21 @@
     });
   }
 
+  /** Anneaux des villes du globe : aux couleurs du thème, et blanc sur les photos. */
+  function addCityDots() {
+    const m = map;
+    if (!m) return;
+    if (!m.hasImage('city-dot')) m.addImage('city-dot', cityDot(theme), { pixelRatio: 2 });
+    if (!m.hasImage('city-dot-night')) m.addImage('city-dot-night', cityDot('dark'), { pixelRatio: 2 });
+  }
+
   function onStyleLoad() {
     addLayers();
     applyMapType();
     apply3D(app.terrain3d, false);
     ready = true;
+    limbFaded = false;
+    fadeLimb();
   }
 
   /** Plan ou Satellite : les photos et les noms en blanc s'appliquent sur le style en place, sans le recharger. */
@@ -388,7 +402,9 @@
     pendingPad = null;
     const cur = map.getPadding();
     if (cur.top === p.top && cur.bottom === p.bottom && cur.left === p.left && cur.right === p.right) return;
-    map.easeTo({ padding: p, duration: reduce ? 0 : 520, easing: (t) => 1 - Math.pow(1 - t, 3) });
+    // Vue de la Terre entière : elle garde sa taille par rapport à la nouvelle partie visible.
+    const zoom = orbit ? { zoom: orbitZoom(map.getCenter().lat, p) } : {};
+    map.easeTo({ padding: p, ...zoom, duration: reduce ? 0 : 520, easing: (t) => 1 - Math.pow(1 - t, 3) });
   }
 
   function draw(r: Route, animate: boolean) {
@@ -413,6 +429,98 @@
     setData('sel', EMPTY);
     setData('sel-line', EMPTY);
     anim = requestAnimationFrame(step);
+  }
+
+  /*
+   * Vers la Terre : un dézoom qui quitte le plan (la Terre dessinée a pris le relais) s'achève tout seul,
+   * en douceur, sur la planète entière, nord en haut, au milieu de la partie visible. Comme si l'élan du
+   * geste nous emportait dans l'espace, puis ralentissait jusqu'à l'arrêt.
+   */
+  const ORBIT_FROM = 4.2;
+  let zoomingOut = false;
+  let lastZoom = 0;
+  /** Distance caméra-centre de MapLibre, en hauteurs de carte (champ de 36,87°). */
+  const CAM = 0.5 / Math.tan(0.6435011087932844 / 2);
+  /** Part du petit côté de la partie visible occupée par la Terre entière. */
+  const ORBIT_FILL = 0.9;
+  /**
+   * Zoom de la Terre entière. Vu de loin, MapLibre grossit le globe quand le centre monte en latitude
+   * (l'échelle au centre reste celle du plan) : on compense, perspective comprise, pour que la planète
+   * garde la même taille, entière, au milieu de la partie visible, au-dessus de Nantes comme de l'équateur.
+   */
+  function orbitZoom(lat = map!.getCenter().lat, p: Padding = untrack(() => app.padding)): number {
+    const box = map!.getContainer();
+    const side = Math.max(160, Math.min(box.clientWidth - p.left - p.right, box.clientHeight - p.top - p.bottom));
+    const r = (ORBIT_FILL * side) / 2;
+    const cd = CAM * box.clientHeight;
+    const R = (r * r) / cd + Math.sqrt(r ** 4 / (cd * cd) + r * r);
+    const cos = Math.cos((Math.min(84, Math.abs(lat)) * Math.PI) / 180);
+    return Math.log2((2 * Math.PI * R * cos) / 512);
+  }
+  /** Glissement vers la Terre entière (après un dézoom), ou retour en place après l'avoir dépassée (ressort). */
+  function toOrbit(spring = false) {
+    const m = map;
+    if (!m) return;
+    const target = orbitZoom();
+    const span = Math.abs(m.getZoom() - target);
+    const p = untrack(() => app.padding);
+    const cur = m.getPadding();
+    const placed = cur.top === p.top && cur.bottom === p.bottom && cur.left === p.left && cur.right === p.right;
+    if (span < 0.01 && Math.abs(m.getPitch()) < 0.5 && placed) return;
+    m.easeTo({
+      zoom: target,
+      pitch: 0,
+      ...(spring ? {} : { bearing: 0 }),
+      padding: p,
+      duration: reduce ? 0 : spring ? 480 : Math.min(1900, 900 + span * 380),
+      easing: (t) => 1 - Math.pow(1 - t, 3.2),
+    });
+  }
+  /**
+   * Comme dans Plans, les noms du globe (continents, océans, grandes villes) s'effacent en approchant du bord
+   * de la Terre, au lieu de déborder dans l'espace. Le bord visible dépend de la perspective : on le calcule.
+   */
+  const LABEL_PTS = globeLabels().features.map((f) => {
+    // Les longs noms (continents, océans sur trois lignes) s'effacent plus tôt que les villes.
+    const kind = f.properties?.kind as string;
+    const fade = kind === 'continent' ? [0.45, 0.27] : kind === 'ocean' ? [0.55, 0.25] : [0.66, 0.24];
+    return { id: f.id as number, c: f.geometry.coordinates as LngLat, from: fade[0], span: fade[1] };
+  });
+  let limbFaded = false;
+  function fadeLimb() {
+    const m = map;
+    if (!m || !ready || !m.getSource('globe-labels')) return;
+    const z = m.getZoom();
+    if (z > 4) {
+      if (limbFaded) for (const p of LABEL_PTS) m.setFeatureState({ source: 'globe-labels', id: p.id }, { vis: 1 });
+      limbFaded = false;
+      return;
+    }
+    limbFaded = true;
+    const c = m.getCenter();
+    const R = (512 * 2 ** z) / (2 * Math.PI) / Math.cos((c.lat * Math.PI) / 180);
+    const cd = CAM * m.getContainer().clientHeight;
+    const horizon = (Math.acos(R / (cd + R)) * 180) / Math.PI;
+    for (const p of LABEL_PTS) {
+      const x = haversine([c.lng, c.lat], p.c) / 111195 / horizon;
+      const t = Math.min(1, Math.max(0, (x - p.from) / p.span));
+      m.setFeatureState({ source: 'globe-labels', id: p.id }, { vis: 1 - t * t * (3 - 2 * t) });
+    }
+  }
+  /**
+   * Lancé à l'image suivante : une fin de zoom survient aussi quand un nouveau mouvement en interrompt un autre
+   * (touches + et −, double-clic). Si un mouvement a repris entre-temps, on attend sa propre fin.
+   */
+  function queueOrbit(spring: boolean) {
+    requestAnimationFrame(() => {
+      if (map && !map.isMoving()) toOrbit(spring);
+    });
+  }
+  function updateOrbit() {
+    const m = map;
+    if (!m) return;
+    const o = Math.abs(m.getZoom() - orbitZoom()) < 0.06;
+    if (o !== orbit) orbit = o;
   }
 
   /* ---------- Échelle : elle apparaît pendant qu'on zoome, puis s'efface (comme dans Plans) ---------- */
@@ -492,15 +600,12 @@
   }
 
   /**
-   * Dézoom maximal : le globe entier tient dans la partie visible, aux deux tiers environ du petit côté,
-   * comme dans Plans. Réglé sur mesure (la perspective de la caméra rapetisse le globe vu de loin) :
-   * zoom 0,9 sur un iPhone, 2 sur un écran de Mac.
+   * Dézoom permis : un peu au-delà de la Terre entière, le temps qu'elle revienne en place comme un ressort.
+   * Jamais au-dessus du zoom actuel : après avoir tourné le globe, il se recale en glissant, pas d'un bond.
    */
   function fitMinZoom() {
     if (!map) return;
-    const c = map.getContainer();
-    const side = Math.max(200, Math.min(c.clientWidth - (app.wide ? 408 : 0), c.clientHeight));
-    map.setMinZoom(Math.round(Math.log2(side / 210) * 100) / 100);
+    map.setMinZoom(Math.floor(Math.min(orbitZoom() - 0.3, map.getZoom()) * 100) / 100);
   }
 
   function placeAttribution() {
@@ -523,6 +628,8 @@
     } catch {
       view = null;
     }
+    // Tuiles du globe dessiné (terre://), avant le premier style.
+    registerEarth((name, load) => maplibregl.addProtocol(name, load));
     map = new maplibregl.Map({
       container: el,
       style: buildStyle(theme),
@@ -537,8 +644,19 @@
     map.touchZoomRotate.enableRotation();
     placeAttribution();
     fitMinZoom();
-    map.on('resize', fitMinZoom);
+    map.on('resize', () => {
+      const was = orbit;
+      fitMinZoom();
+      if (was) toOrbit(true);
+      updateOrbit();
+    });
+    // Une couche demande l'anneau des villes avant la fin du chargement du style : on le fournit tout de suite.
+    map.on('styleimagemissing', (e) => {
+      if (e.id === 'city-dot' || e.id === 'city-dot-night') addCityDots();
+    });
     space = map.getZoom() < SPACE_ZOOM;
+    lastZoom = map.getZoom();
+    updateOrbit();
     map.on('style.load', onStyleLoad);
     map.on('rotate', () => (app.bearing = map!.getBearing()));
     far = map.getZoom() < 11;
@@ -546,22 +664,37 @@
       const z = map!.getZoom();
       if (z < SPACE_ZOOM !== space) space = z < SPACE_ZOOM;
       if (z < 11 !== far) far = z < 11;
+      updateOrbit();
       // L'échelle ne répond qu'aux gestes (pincement, molette), pas aux cadrages automatiques.
       if (e.originalEvent) {
+        // Sens du geste : vers l'espace ou vers le sol.
+        if (z < lastZoom - 1e-4) zoomingOut = true;
+        else if (z > lastZoom + 1e-4) zoomingOut = false;
         updateScale();
         scaleOn = true;
         clearTimeout(scaleTimer);
       }
+      lastZoom = z;
     });
     map.on('zoomend', () => {
       app.zoom = map!.getZoom();
-      // Fin d'un dézoom vers l'espace : le globe vient au milieu de la partie visible.
-      if (app.zoom < SPACE_ZOOM && app.phase !== 'follow') syncPadding(app.padding);
+      const out = zoomingOut;
+      zoomingOut = false;
+      if (app.phase !== 'follow') {
+        // Un dézoom qui a quitté le plan file jusqu'à la Terre entière ; au-delà, elle revient en place.
+        if (out && app.zoom < ORBIT_FROM) queueOrbit(false);
+        else if (app.zoom < orbitZoom() - 0.01) queueOrbit(true);
+        // Fin d'un dézoom vers l'espace : le globe vient au milieu de la partie visible.
+        else if (app.zoom < SPACE_ZOOM) syncPadding(app.padding);
+      }
       clearTimeout(scaleTimer);
       scaleTimer = setTimeout(() => (scaleOn = false), 1500);
     });
     map.on('moveend', () => {
       if (pendingPad) syncPadding(pendingPad);
+      // Le globe a pu tourner vers le nord ou le sud : la limite de dézoom suit la latitude du centre.
+      fitMinZoom();
+      updateOrbit();
       checkLost();
     });
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -614,6 +747,7 @@
       aim = null;
     });
     map.on('dragend', () => (dragging = false));
+    map.on('move', fadeLimb);
     // Zoom à la molette : le point visé change sous le curseur immobile.
     map.on('move', () => {
       if (!aim || !map) return;
@@ -997,7 +1131,21 @@
   });
 </script>
 
-<div class="map" bind:this={el} class:picking={!!placing} class:space class:far style:--stars={STARS} aria-label="Carte" role="region"></div>
+<div
+  class="map"
+  bind:this={el}
+  class:picking={!!placing}
+  class:space
+  class:orbit
+  class:far
+  style:--stars={STARS}
+  style:--pl="{app.padding.left}px"
+  style:--pr="{app.padding.right}px"
+  style:--pt="{app.padding.top}px"
+  style:--pb="{app.padding.bottom}px"
+  aria-label="Carte"
+  role="region"
+></div>
 
 {#if scale}
   <!-- Échelle : 0, une barre de deux tons, une longueur ronde. -->
@@ -1052,12 +1200,20 @@
     inset: 0;
     z-index: 0;
   }
-  /* L'espace autour du globe : nuit profonde et étoiles discrètes, dans les deux apparences, comme Plans. */
+  /*
+   * L'espace autour du globe : noir et étoiles discrètes, dans les deux apparences, comme Plans. Une lueur
+   * à peine bleutée entoure la Terre, au milieu de la partie visible (hors panneau).
+   */
   .map.space {
     background:
       var(--stars),
-      radial-gradient(120% 95% at 50% 46%, #121c31 0%, #0a1122 34%, #05080f 68%, #020306 100%);
-    background-color: #05080f;
+      radial-gradient(
+        closest-side circle at calc(var(--pl) + (100% - var(--pl) - var(--pr)) / 2) calc(var(--pt) + (100% - var(--pt) - var(--pb)) / 2),
+        #0b1324 0%,
+        #060a14 62%,
+        #000 100%
+      );
+    background-color: #000;
   }
   /* De loin, les pastilles des côtes s'empileraient sur un point : elles attendent qu'on s'approche. */
   .map.far :global(.mk-climb) {

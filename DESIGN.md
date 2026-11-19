@@ -30,8 +30,13 @@ colors:
   map-park: "#d5ebc6"
   map-fields: "#f0ebdb"
   map-water: "#a9d2f0"
-  space: "#05080f"
-  space-glow: "#121c31"
+  space: "#000000"
+  space-glow: "#0b1324"
+  globe-ocean-dark: "#000f2d"
+  globe-land-dark: "#287365"
+  globe-ice-dark: "#6c80a2"
+  globe-ocean-light: "#4a82ce"
+  globe-land-light: "#9bcda1"
   env-forest: "#3f7a33"
   env-water: "#3990d0"
   env-park: "#5c9933"
@@ -216,7 +221,8 @@ A quiet, warm-neutral map and iOS system greys, with one pink tint that also bec
 
 ### Secondary
 - **Location Blue** (`location-blue`): the locate button glyph and the "Ma position" search result disc. Never used for actions.
-- **Space** (`space`, `space-glow`): the night around the globe seen from afar, in both appearances.
+- **Space** (`space`, `space-glow`): the black around the globe seen from afar, in both appearances, with a faint blue glow behind the planet.
+- **Globe** (`globe-*`): the drawn Earth, sampled from Apple Plans in dark mode: navy oceans, teal-green land, olive deserts, blue-grey ice; a brighter atlas palette in light mode.
 
 ### Tertiary
 - **Slope Ramp** (`slope-flat` to `slope-severe`): flat (under 2 %) in light rose, then climbs from 2, 5, 8 and 12 % in pink to deep garnet. Used for the selected route line on the map, the elevation profile fill, the climb markers and their legend. Value carries steepness.
@@ -334,10 +340,12 @@ Inside the panel: on Mac a brand row (pink squircle logo, "Boucle" at 1.375rem 7
 The "3D" map button (it reads "2D" while active, as in Apple Plans, and flips on a spring) raises the terrain (1.4x) and the buildings. Buildings are `fill-extrusion` volumes from the OpenMapTiles building layer at their real height (OSM levels), coloured in three material tones by height, never in pink: houses under 10 m in warm sand (`#E4D6BD`, dark `#423D35`), apartment buildings from 10 to 30 m in warm grey (`#D2CEC7`, dark `#4B4C53`), towers from 30 m in slate (`#AFB8C9`, dark `#5C6782`; at night taller is lighter). Volumes grow with the zoom between 13 and 13.8 so the city rises as the camera tilts (60° and at least zoom 14.8 while composing; a whole-route refit at 52° when a route is shown), and fade in over 650 ms. A soft south-west light shades the façades, and a sky with horizon fog fills the top of a tilted map. A glass legend capsule ("Maison · Immeuble · Tour") appears only while volumes are visible: above the sheet on iPhone, at the top-left of the map on Mac.
 
 ### Globe
-Zoomed out, the map is the Earth seen from space, as in Apple Plans (MapLibre globe projection, flat from zoom 12). The planet always sits in the middle of the visible part of the map (above the sheet on iPhone, right of the column on Mac): when the sheet changes height or a zoom-out ends, it glides there in 520 ms. Around it, space is always night in both appearances: a radial gradient from `space-glow` to `space` with two tiles of faint stars (389 and 557 px, so the repeat never shows), and MapLibre's atmosphere glow until zoom 7. The planet itself is NASA imagery up to zoom 8, calmed a little: Blue Marble with relief and sea floors by day (light mode), Black Marble with city lights by night (dark mode, more contrast so continents separate from the black ocean). It fades into the quiet basemap between zoom 4.2 and 5.4, a short crossfade so there is no muddy in-between. Country names and borders are white on the imagery and turn to the basemap greys as it fades. Maximum zoom-out keeps the whole globe on screen (about two thirds of the short side). A far jump (a place more than 40 km away, or anything from the globe) flies over the planet with a computed duration up to 3.6 s; near moves keep their 850 to 900 ms glide.
+Zoomed out, the map is the Earth seen from space, drawn like Apple Plans (MapLibre globe projection, flat from zoom 12). The planet is NASA Blue Marble (relief and sea floors) recoloured pixel by pixel in the browser (`src/lib/earth.ts`, a `terre://` tile protocol): water follows depth from abyss to shelf, land follows its brightness from dense forest to desert, ice its whiteness, in the `globe-*` palettes. The last rows of the polar tiles fade to one colour, so the pole caps MapLibre stretches beyond 85° stay smooth instead of fanning out. On it, as in Plans: continents in letter-spaced grey capitals, oceans in blue italic on three lines, the biggest cities with a small ring (a curated list for the whole planet, tile data from zoom 3), seas from zoom 2.6, country names from zoom 2.6 as the continents fade, and the equator (thin line), tropics and polar circles (dotted) with italic names. Names fade before they reach the edge of the globe (the visible horizon is computed from the camera perspective), so nothing spills into space. MapLibre's atmosphere draws an even rim, the sun placed behind the viewer from afar. It all fades into the quiet basemap between zoom 4.2 and 5.4.
+
+The whole planet always has the same size, about 90% of the short side of the visible part of the map, centred in it (above the sheet on iPhone, right of the column on Mac). MapLibre enlarges the globe as the centre moves towards a pole, so this zoom is computed from the centre latitude and the camera perspective. Arriving at the Earth is one gesture: a zoom-out that ends past the basemap (below zoom 4.2) carries on by itself to the whole planet, north up and flat, decelerating over 0.9 to 1.9 s, as if the gesture's momentum carried the camera into space. Zooming further out overshoots a little (0.3 zoom) and springs back in 480 ms. Around the planet, space is black in both appearances, with a faint `space-glow` behind it and two tiles of faint stars (389 and 557 px, so the repeat never shows). A far jump (a place more than 40 km away, or anything from the globe) flies over the planet with a computed duration up to 3.6 s; near moves keep their 850 to 900 ms glide.
 
 ### Plan and Satellite
-Satellite lays IGN aerial photos (France, up to 20 cm per pixel) over the plan's fills and under its paths and names; NASA day imagery covers the rest of the world from afar. Roads drop to 38% so the photos carry them, paths and tracks turn white and cream so trails stay readable under trees, every place name becomes white with a 62% black halo, and the focus veil becomes a 30% shadow instead of a land-coloured wash. In 3D the photos drape over the relief and the building volumes drop to 62% opacity so the photographed roofs show through. The choice is remembered.
+Satellite lays IGN aerial photos (France, up to 20 cm per pixel) over the plan's fills and under its paths and names; the NASA photo of the Earth, untouched apart from its smoothed pole caps, covers the rest of the world from afar. Roads drop to 38% so the photos carry them, paths and tracks turn white and cream so trails stay readable under trees, every place name becomes white with a 62% black halo, and the focus veil becomes a 30% shadow instead of a land-coloured wash. In 3D the photos drape over the relief and the building volumes drop to 62% opacity so the photographed roofs show through. The choice is remembered.
 
 ### Scale and way back
 - **Scale:** appears top-left of the map while a gesture zooms (pinch, wheel, keys), never during automatic camera moves, and fades 1.5 s after: "0" and a round length ("200 m", "2 km") in 11 px rounded tabular figures over a 4 px bar in two halves (near-black and white) with a white rim. Measured at the centre of the visible area; hidden on the globe, where one scale would lie. White figures on a dark halo over photos and space.
@@ -379,4 +387,4 @@ A panel-glass card under the status bar (max 520 px, 28 px radius) with the rema
 - **Don't** introduce uppercase or letter-spaced labels in the interface; tracked capitals belong only to the basemap's neighbourhood names.
 - **Don't** use sharp corners or rectangular buttons; concentric radii only.
 - **Don't** colour the route or the profile outside the five-step slope ramp.
-- **Don't** let the map style grow louder: land stays warm grey, fills stay pale, so the route remains the only saturated line. The NASA imagery of the globe is the one exception, and it has faded out (zoom 5.4) long before a route can be read.
+- **Don't** let the map style grow louder: land stays warm grey, fills stay pale, so the route remains the only saturated line. The drawn globe is the one exception, and it has faded out (zoom 5.4) long before a route can be read.

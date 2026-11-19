@@ -52,6 +52,16 @@ export default defineConfig(({ command, isPreview }) => ({
             options: { cacheName: 'carte-index', networkTimeoutSeconds: 4 },
           },
           {
+            // Images NASA de la Terre (globe) : elles ne changent jamais ; gardées, la Terre s'affiche tout de suite.
+            urlPattern: /^https:\/\/gibs\.earthdata\.nasa\.gov\/wmts\/.+/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'terre',
+              expiration: { maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/s3\.amazonaws\.com\/elevation-tiles-prod\/.+/,
             handler: 'CacheFirst',
             options: {

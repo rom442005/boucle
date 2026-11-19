@@ -273,13 +273,14 @@ test('fond de carte Plan ou Satellite, gardé au prochain lancement', async ({ p
 test('vu de loin, la Terre est un globe, et on revient au départ', async ({ page }) => {
   await open(page);
   await expect(page.getByRole('button', { name: /^Départ : / }).first()).toBeVisible({ timeout: 20_000 });
-  // Dézoom au clavier jusqu'à voir la planète entière, dans l'espace.
+  // Dézoom au clavier jusqu'à quitter le plan : la carte file seule jusqu'à la planète entière.
   await page.locator('.maplibregl-canvas').focus();
-  for (let i = 0; i < 13; i++) {
+  for (let i = 0; i < 9; i++) {
     await page.keyboard.press('Minus');
     await page.waitForTimeout(260);
   }
   await expect(page.locator('.map.space')).toBeAttached({ timeout: 10_000 });
+  await expect(page.locator('.map.orbit')).toBeAttached({ timeout: 10_000 });
   const back = page.getByRole('button', { name: 'Revenir au départ' });
   await expect(back).toBeVisible();
   await back.click();

@@ -1,4 +1,5 @@
-import type { StyleSpecification, ExpressionSpecification, LayerSpecification } from 'maplibre-gl';
+import type { StyleSpecification, ExpressionSpecification, LayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
+import { earthTiles, globeLabels, graticule } from './earth';
 
 /*
  * Fond de carte maison, volontairement calme : terres gris chaud, forêts sauge, eau bleu pâle,
@@ -12,12 +13,10 @@ export type MapType = 'plan' | 'satellite';
 
 /*
  * Vu de loin, la carte est un globe (comme dans Plans) : la Terre vue de l'espace, avec son atmosphère.
- * Images NASA (GIBS, domaine public) jusqu'au zoom 8 : Blue Marble, relief et fonds marins, de jour ;
- * Black Marble, les lumières des villes, en mode sombre. Elles s'effacent devant le plan en approchant.
+ * En Plan, la Terre est dessinée (images NASA recolorées, voir earth.ts) avec continents, océans, grandes
+ * villes, équateur et tropiques ; en Satellite, c'est la photo Blue Marble. Le plan prend le relais en approchant.
  */
-const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best';
-const EARTH_DAY = `${GIBS}/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`;
-const EARTH_NIGHT = `${GIBS}/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`;
+const NASA = '<a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">Terre NASA GIBS</a>';
 /** Photos aériennes de l'IGN (Géoplateforme, licence ouverte Etalab) : jusqu'à 20 cm par pixel en France. */
 export const ORTHO_TILES =
   'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&FORMAT=image/jpeg&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
@@ -131,6 +130,49 @@ const DARK: Palette = {
   horizon: '#25272C',
 };
 
+/** Écritures du globe, comme dans Plans : continents espacés en capitales, océans en italique bleu, villes en blanc. */
+interface GlobeInk {
+  continent: string;
+  ocean: string;
+  sea: string;
+  waterHalo: string;
+  city: string;
+  cityHalo: string;
+  country: string;
+  countryHalo: string;
+  border: string;
+  grat: string;
+  gratLabel: string;
+}
+const GLOBE: Record<Theme, GlobeInk> = {
+  dark: {
+    continent: 'rgba(235,235,245,0.62)',
+    ocean: '#7E9BE2',
+    sea: '#6F8BCF',
+    waterHalo: 'rgba(0,8,30,0.5)',
+    city: '#FFFFFF',
+    cityHalo: 'rgba(0,0,0,0.55)',
+    country: 'rgba(255,255,255,0.86)',
+    countryHalo: 'rgba(0,0,0,0.45)',
+    border: 'rgba(255,255,255,0.3)',
+    grat: 'rgba(255,255,255,0.32)',
+    gratLabel: 'rgba(255,255,255,0.55)',
+  },
+  light: {
+    continent: 'rgba(28,32,40,0.72)',
+    ocean: '#103A78',
+    sea: '#174788',
+    waterHalo: 'rgba(255,255,255,0.5)',
+    city: '#1C1C1E',
+    cityHalo: 'rgba(255,255,255,0.85)',
+    country: '#45443F',
+    countryHalo: 'rgba(255,255,255,0.6)',
+    border: 'rgba(60,60,72,0.32)',
+    grat: 'rgba(28,44,80,0.32)',
+    gratLabel: 'rgba(28,44,80,0.6)',
+  },
+};
+
 /** Seuils de hauteur (m) des classes de bâtiments : en dessous de 10 m, une maison (1 à 2 étages) ; à partir de 30 m, une tour. */
 export const BUILDING_STEPS = [10, 30] as const;
 export const BUILDING_COLORS: Record<Theme, [string, string, string]> = { light: LIGHT.b3d, dark: DARK.b3d };
@@ -149,6 +191,22 @@ export const DEM_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrariu
 
 export function buildStyle(theme: Theme): StyleSpecification {
   const c = theme === 'dark' ? DARK : LIGHT;
+  const g = GLOBE[theme];
+  const globeCity: Pick<SymbolLayerSpecification, 'type' | 'layout' | 'paint'> = {
+    type: 'symbol',
+    layout: {
+      'icon-image': 'city-dot',
+      'text-field': NAME,
+      'text-font': BOLD,
+      'text-size': zw([[1.2, 10], [3, 11.5], [5, 12.5]], 1),
+      'text-variable-anchor': ['left', 'right', 'top', 'bottom'],
+      'text-radial-offset': 0.62,
+      'text-justify': 'auto',
+      'text-max-width': 8,
+      'symbol-sort-key': ['get', 'rank'],
+    },
+    paint: { 'text-color': g.city, 'text-halo-color': g.cityHalo, 'text-halo-width': 1.1, 'text-halo-blur': 0.4 },
+  };
   const roadClass = (classes: string[]): ExpressionSpecification => ['in', ['get', 'class'], ['literal', classes]];
 
   const layers: LayerSpecification[] = [
@@ -265,20 +323,16 @@ export function buildStyle(theme: Theme): StyleSpecification {
         ],
       },
     },
-    // La Terre vue de loin : les images s'effacent devant le plan entre les zooms 4,2 et 5,4 (un fondu court, sans entre-deux terne).
+    // La Terre vue de loin, dessinée comme dans Plans : elle s'efface devant le plan entre les zooms 4,2 et 5,4.
     {
       id: 'earth',
       type: 'raster',
-      source: theme === 'dark' ? 'earth-night' : 'earth-day',
+      source: 'earth-plan',
       maxzoom: 5.6,
       paint: {
         'raster-opacity': ['interpolate', ['linear'], ['zoom'], 4.2, 1, 5.4, 0],
         'raster-fade-duration': 250,
         'raster-resampling': 'linear',
-        // De nuit, plus de contraste : les continents se détachent de l'océan noir, les villes brillent.
-        'raster-saturation': theme === 'dark' ? 0.1 : -0.12,
-        'raster-contrast': theme === 'dark' ? 0.28 : 0.04,
-        'raster-brightness-min': theme === 'dark' ? 0.03 : 0,
       },
     },
     // Satellite : la Terre de jour sert de fond partout où les photos IGN n'arrivent pas.
@@ -408,7 +462,7 @@ export function buildStyle(theme: Theme): StyleSpecification {
       filter: ['all', roadClass(['rail', 'transit']), ['!=', ['get', 'brunnel'], 'tunnel']],
       paint: { 'line-color': c.rail, 'line-width': zw([[11, 0.6], [16, 1.6]]) },
     },
-    // Frontières des pays : blanches sur la Terre vue de loin, grises sur le plan.
+    // Frontières des pays : discrètes sur le globe, grises sur le plan.
     {
       id: 'boundary',
       type: 'line',
@@ -418,9 +472,43 @@ export function buildStyle(theme: Theme): StyleSpecification {
       filter: ['all', ['==', ['get', 'admin_level'], 2], ['!=', ['get', 'maritime'], 1]],
       layout: { 'line-join': 'round' },
       paint: {
-        'line-color': ['interpolate', ['linear'], ['zoom'], 4.6, 'rgba(255,255,255,0.55)', 5.6, c.labelSoft],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.7, 8, 0.4],
+        'line-color': ['interpolate', ['linear'], ['zoom'], 4.6, g.border, 5.6, c.labelSoft],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, 0.8, 8, 0.4],
         'line-width': zw([[2, 0.5], [8, 1.1], [14, 1.8]], 1),
+      },
+    },
+    // Équateur, tropiques et cercles polaires, comme dans Plans : ils s'effacent en approchant.
+    {
+      id: 'graticule',
+      type: 'line',
+      source: 'globe-lines',
+      maxzoom: 5.6,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': g.grat,
+        'line-width': ['match', ['get', 'kind'], 'equator', 0.9, 1.15],
+        'line-dasharray': ['match', ['get', 'kind'], 'equator', ['literal', [1, 0]], ['literal', [0.1, 3.2]]],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 4.2, 1, 5.4, 0],
+      },
+    },
+    {
+      id: 'graticule-label',
+      type: 'symbol',
+      source: 'globe-lines',
+      minzoom: 1.2,
+      maxzoom: 5.6,
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 520,
+        'text-field': ['get', 'name'],
+        'text-font': ITAL,
+        'text-size': zw([[1.2, 9], [3, 10.5], [5, 11.5]], 1),
+        'text-letter-spacing': 0.03,
+        'text-offset': [0, -0.65],
+      },
+      paint: {
+        'text-color': g.gratLabel,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 4.2, 1, 5.2, 0],
       },
     },
     {
@@ -447,6 +535,29 @@ export function buildStyle(theme: Theme): StyleSpecification {
       minzoom: 10,
       layout: { 'text-field': NAME, 'text-font': ITAL, 'text-size': 12, 'text-max-width': 8 },
       paint: { 'text-color': c.waterLabel, 'text-halo-color': c.halo, 'text-halo-width': 1.2 },
+    },
+    // Mers, golfes et baies (noms des tuiles) ; les océans viennent de la couche globe-ocean.
+    {
+      id: 'globe-sea',
+      type: 'symbol',
+      source: 'omt',
+      'source-layer': 'water_name',
+      minzoom: 2.6,
+      maxzoom: 8,
+      filter: ['all', ['in', ['get', 'class'], ['literal', ['sea', 'bay', 'strait']]], ['!', ['in', 'Océan', NAME]]],
+      layout: {
+        'text-field': NAME,
+        'text-font': ITAL,
+        'text-size': zw([[2.6, 10], [4, 11.5], [7, 13]], 1),
+        'text-max-width': 6,
+        'text-letter-spacing': 0.04,
+        'text-line-height': 1.1,
+      },
+      paint: {
+        'text-color': ['interpolate', ['linear'], ['zoom'], 4.6, g.sea, 5.4, c.waterLabel],
+        'text-halo-color': ['interpolate', ['linear'], ['zoom'], 4.6, g.waterHalo, 5.4, c.halo],
+        'text-halo-width': 1,
+      },
     },
     {
       id: 'road-label',
@@ -501,7 +612,7 @@ export function buildStyle(theme: Theme): StyleSpecification {
       type: 'symbol',
       source: 'omt',
       'source-layer': 'place',
-      minzoom: 5,
+      minzoom: 5.4,
       filter: roadClass(['city', 'town', 'village']),
       layout: {
         'text-field': NAME,
@@ -520,27 +631,94 @@ export function buildStyle(theme: Theme): StyleSpecification {
       },
       paint: { 'text-color': c.label, 'text-halo-color': c.halo, 'text-halo-width': 1.6 },
     },
-    // Noms des pays sur le globe : en blanc sur les images de la Terre, puis aux couleurs du plan.
+    // Noms des pays : ils prennent le relais des continents en approchant, puis passent aux couleurs du plan.
     {
       id: 'place-country',
       type: 'symbol',
       source: 'omt',
       'source-layer': 'place',
-      minzoom: 1.5,
+      minzoom: 2.6,
       maxzoom: 7.5,
       filter: ['==', ['get', 'class'], 'country'],
       layout: {
         'text-field': NAME,
         'text-font': REG,
-        'text-size': zw([[2, 10], [4, 12], [6, 14]], 1),
+        'text-size': zw([[2.6, 10.5], [4, 12], [6, 14]], 1),
         'text-max-width': 7,
         'symbol-sort-key': ['get', 'rank'],
       },
       paint: {
-        'text-color': ['interpolate', ['linear'], ['zoom'], 4.6, 'rgba(255,255,255,0.94)', 5.4, c.labelSoft],
-        'text-halo-color': ['interpolate', ['linear'], ['zoom'], 4.6, 'rgba(0,0,0,0.42)', 5.4, c.halo],
+        'text-color': ['interpolate', ['linear'], ['zoom'], 4.6, g.country, 5.4, c.labelSoft],
+        'text-halo-color': ['interpolate', ['linear'], ['zoom'], 4.6, g.countryHalo, 5.4, c.halo],
         'text-halo-width': 1.2,
         'text-halo-blur': 0.6,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 2.6, 0, 3.2, 1],
+      },
+    },
+    // Océans en italique bleu, sur plusieurs lignes, comme dans Plans.
+    {
+      id: 'globe-ocean',
+      type: 'symbol',
+      source: 'globe-labels',
+      maxzoom: 5.6,
+      filter: ['==', ['get', 'kind'], 'ocean'],
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ITAL,
+        'text-size': zw([[0.5, 9.5], [2, 12.5], [4, 14]], 1),
+        'text-letter-spacing': 0.08,
+        'text-line-height': 1.12,
+        'text-max-width': 12,
+      },
+      paint: {
+        'text-color': g.ocean,
+        'text-halo-color': g.waterHalo,
+        'text-halo-width': 1,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 4.4, ['coalesce', ['feature-state', 'vis'], 1], 5.4, 0],
+      },
+    },
+    // Grandes villes du globe : un anneau et le nom. Les tuiles n'en ont pas sous le niveau 2 : une liste
+    // des plus grandes sert pour la Terre entière, les tuiles ensuite ; le plan prend le relais au zoom 5,4.
+    {
+      ...globeCity,
+      id: 'globe-city-far',
+      source: 'globe-labels',
+      minzoom: 1.2,
+      maxzoom: 3,
+      filter: ['==', ['get', 'kind'], 'city'],
+      paint: { ...globeCity.paint, 'text-opacity': ['coalesce', ['feature-state', 'vis'], 1], 'icon-opacity': ['coalesce', ['feature-state', 'vis'], 1] },
+    },
+    {
+      ...globeCity,
+      id: 'globe-city',
+      source: 'omt',
+      'source-layer': 'place',
+      minzoom: 3,
+      maxzoom: 5.4,
+      filter: ['all', ['==', ['get', 'class'], 'city'], ['<=', ['get', 'rank'], 3]],
+    },
+    // Continents : capitales espacées, en gris, comme dans Plans ; ils s'effacent quand les pays arrivent.
+    {
+      id: 'globe-continent',
+      type: 'symbol',
+      source: 'globe-labels',
+      maxzoom: 3.8,
+      filter: ['==', ['get', 'kind'], 'continent'],
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': REG,
+        'text-transform': 'uppercase',
+        'text-size': zw([[0.5, 10], [2, 14], [3.2, 16]], 1),
+        'text-letter-spacing': 0.32,
+        'text-line-height': 1.15,
+        'text-max-width': 14,
+      },
+      paint: {
+        'text-color': g.continent,
+        'text-halo-color': theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.4)',
+        'text-halo-width': 1,
+        'text-halo-blur': 1,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 2.8, ['coalesce', ['feature-state', 'vis'], 1], 3.6, 0],
       },
     },
   ];
@@ -574,8 +752,14 @@ export function buildStyle(theme: Theme): StyleSpecification {
     glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     // Globe vu de loin, carte à plat dès le zoom 12 (préréglage MapLibre).
     projection: { type: 'globe' },
-    // Lumière douce venue du sud-ouest : les façades se distinguent des toits.
-    light: { anchor: 'viewport', color: '#ffffff', intensity: theme === 'dark' ? 0.32 : 0.42, position: [1.3, 210, 35] },
+    // Lumière douce venue du sud-ouest : les façades se distinguent des toits. Vu de l'espace, le soleil est
+    // derrière nous : l'atmosphère fait un liseré régulier tout autour du globe, comme dans Plans.
+    light: {
+      anchor: 'viewport',
+      color: '#ffffff',
+      intensity: theme === 'dark' ? 0.32 : 0.42,
+      position: ['interpolate', ['linear'], ['zoom'], 5, ['literal', [1.15, 210, 0]], 9, ['literal', [1.3, 210, 35]]] as unknown as [number, number, number],
+    },
     // Ciel et brume à l'horizon quand la carte est inclinée ; atmosphère autour du globe vu de loin.
     sky: {
       'sky-color': c.sky,
@@ -588,24 +772,11 @@ export function buildStyle(theme: Theme): StyleSpecification {
     },
     sources: {
       omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
-      'earth-day': {
-        type: 'raster',
-        tiles: [EARTH_DAY],
-        tileSize: 256,
-        maxzoom: 8,
-        attribution: '<a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">Terre NASA GIBS</a>',
-      },
-      ...(theme === 'dark'
-        ? {
-            'earth-night': {
-              type: 'raster' as const,
-              tiles: [EARTH_NIGHT],
-              tileSize: 256,
-              maxzoom: 8,
-              attribution: '<a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">Terre NASA GIBS</a>',
-            },
-          }
-        : {}),
+      // Le globe dessiné (Plan) et la photo de la Terre (Satellite).
+      'earth-plan': { type: 'raster', tiles: [earthTiles(theme)], tileSize: 256, maxzoom: 8, attribution: NASA },
+      'earth-day': { type: 'raster', tiles: [earthTiles('photo')], tileSize: 256, maxzoom: 8, attribution: NASA },
+      'globe-lines': { type: 'geojson', data: graticule() },
+      'globe-labels': { type: 'geojson', data: globeLabels() },
       ortho: {
         type: 'raster',
         tiles: [ORTHO_TILES],
@@ -643,6 +814,7 @@ export interface StyleOverride {
 export function satelliteOverrides(): StyleOverride[] {
   const vis = (id: string, v: 'visible' | 'none'): StyleOverride => ({ id, kind: 'layout', prop: 'visibility', value: v });
   const paint = (id: string, prop: string, value: unknown): StyleOverride => ({ id, kind: 'paint', prop, value });
+  const layout = (id: string, prop: string, value: unknown): StyleOverride => ({ id, kind: 'layout', prop, value });
   return [
     vis('earth', 'none'),
     vis('earth-sat', 'visible'),
@@ -655,7 +827,13 @@ export function satelliteOverrides(): StyleOverride[] {
     paint('path', 'line-color', 'rgba(255,255,255,0.82)'),
     paint('track', 'line-color', 'rgba(255,238,206,0.82)'),
     paint('boundary', 'line-color', 'rgba(255,255,255,0.6)'),
-    ...['waterway-label', 'water-label', 'road-label', 'peak', 'place-minor', 'place', 'place-country'].flatMap((id) => [
+    paint('graticule', 'line-color', 'rgba(255,255,255,0.4)'),
+    paint('graticule-label', 'text-color', 'rgba(255,255,255,0.7)'),
+    paint('globe-continent', 'text-color', 'rgba(255,255,255,0.78)'),
+    layout('globe-city', 'icon-image', 'city-dot-night'),
+    layout('globe-city-far', 'icon-image', 'city-dot-night'),
+    ...['globe-ocean', 'globe-sea'].flatMap((id) => [paint(id, 'text-color', '#BFD3FF'), paint(id, 'text-halo-color', 'rgba(0,0,0,0.5)')]),
+    ...['waterway-label', 'water-label', 'road-label', 'peak', 'place-minor', 'place', 'place-country', 'globe-city', 'globe-city-far'].flatMap((id) => [
       paint(id, 'text-color', '#FFFFFF'),
       paint(id, 'text-halo-color', 'rgba(0,0,0,0.62)'),
     ]),
