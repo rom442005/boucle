@@ -123,7 +123,12 @@
         'background-opacity-transition': { duration: 700, delay: 0 },
       },
     });
-    m.addLayer({ id: 'reach-fill', type: 'fill', source: 'reach', paint: { 'fill-color': tint, 'fill-opacity': 0.035 } });
+    m.addLayer({
+      id: 'reach-fill',
+      type: 'fill',
+      source: 'reach',
+      paint: { 'fill-color': tint, 'fill-opacity': 0.035, 'fill-opacity-transition': { duration: 750, delay: 0 } },
+    });
     m.addLayer({
       id: 'reach-line',
       type: 'line',
@@ -214,6 +219,7 @@
     ready = true;
   }
 
+  let b3dTimer: ReturnType<typeof setTimeout> | undefined;
   function apply3D(on: boolean, animate: boolean) {
     if (!map) return;
     try {
@@ -221,7 +227,30 @@
     } catch {
       /* style pas encore prêt */
     }
-    if (animate) map.easeTo({ pitch: on ? 58 : 0, duration: reduce ? 0 : 900 });
+    // Bâtiments en volume : ils apparaissent en fondu, et sont masqués une fois effacés.
+    clearTimeout(b3dTimer);
+    if (map.getLayer('building-3d')) {
+      if (on) {
+        map.setLayoutProperty('building-3d', 'visibility', 'visible');
+        map.setPaintProperty('building-3d', 'fill-extrusion-opacity', theme === 'dark' ? 0.88 : 0.94);
+      } else {
+        map.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0);
+        b3dTimer = setTimeout(() => {
+          if (map?.getLayer('building-3d') && !app.terrain3d) map.setLayoutProperty('building-3d', 'visibility', 'none');
+        }, animate ? 700 : 0);
+      }
+    }
+    if (animate) {
+      const r = app.phase === 'results' || app.phase === 'detail' ? app.route : null;
+      if (r) {
+        // Un parcours affiché : on le recadre en entier, incliné en 3D, à plat sinon.
+        fitCoords(r.coords, true, on ? 52 : 0);
+      } else {
+        // Assez près pour que la ville se lève (les volumes montent avec le zoom jusqu'à 13,8).
+        const z = map.getZoom();
+        map.easeTo({ pitch: on ? 60 : 0, zoom: on ? Math.max(z, 14.8) : z, duration: reduce ? 0 : 1200, easing: (t) => 1 - Math.pow(1 - t, 3) });
+      }
+    }
   }
 
   function element(cls: string, html = ''): HTMLElement {
@@ -231,7 +260,8 @@
     return d;
   }
 
-  function fitCoords(coords: LngLat[], animate = true) {
+  /** Cadre des coordonnées ; en 3D, avec une inclinaison douce qui embrasse tout le parcours. */
+  function fitCoords(coords: LngLat[], animate = true, pitch = app.terrain3d ? 52 : 0) {
     if (!map || coords.length < 2) return;
     const [w, s, e, n] = bbox(coords);
     const pad = untrack(() => app.padding);
@@ -240,7 +270,7 @@
         [w, s],
         [e, n],
       ],
-      { padding: pad, maxZoom: 16, duration: animate && !reduce ? 850 : 0 },
+      { padding: pad, maxZoom: 16, duration: animate && !reduce ? 850 : 0, pitch },
     );
   }
 
@@ -303,6 +333,7 @@
     placeAttribution();
     map.on('style.load', onStyleLoad);
     map.on('rotate', () => (app.bearing = map!.getBearing()));
+    map.on('zoomend', () => (app.zoom = map!.getZoom()));
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     map.on('moveend', () => {
       clearTimeout(saveTimer);
@@ -419,6 +450,24 @@
     }
     const D = p.distanceKm * 1000;
     setData('reach', circlePolygon(app.start!.coord, p.shape === 'loop' ? D / 3.7 : D / 2.56));
+  });
+
+  // Pendant la création, la zone explorée « respire » : la recherche est en cours.
+  $effect(() => {
+    if (!ready || !map) return;
+    const m = map;
+    if (!app.generating || reduce) {
+      m.setPaintProperty('reach-fill', 'fill-opacity', 0.035);
+      return;
+    }
+    let hi = false;
+    const tick = () => {
+      hi = !hi;
+      m.setPaintProperty('reach-fill', 'fill-opacity', hi ? 0.12 : 0.035);
+    };
+    tick();
+    const t = setInterval(tick, 800);
+    return () => clearInterval(t);
   });
 
   // Départ : marqueur déplaçable pendant la composition, cadrage quand il change.

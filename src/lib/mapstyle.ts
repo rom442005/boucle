@@ -37,6 +37,10 @@ interface Palette {
   hillHighlight: string;
   hillAccent: string;
   routeCasing: string;
+  /** Bâtiments en volume, par hauteur : maison, immeuble, tour. */
+  b3d: [string, string, string];
+  sky: string;
+  horizon: string;
 }
 
 const LIGHT: Palette = {
@@ -68,6 +72,10 @@ const LIGHT: Palette = {
   hillHighlight: 'rgba(255,255,255,0.22)',
   hillAccent: 'rgba(70,58,40,0.16)',
   routeCasing: '#FFFFFF',
+  // Maisons sable chaud, immeubles gris, tours ardoise : des teintes de matériaux, jamais le rose des actions.
+  b3d: ['#E4D6BD', '#D2CEC7', '#AFB8C9'],
+  sky: '#C9DDF0',
+  horizon: '#EEF0F0',
 };
 
 const DARK: Palette = {
@@ -99,7 +107,15 @@ const DARK: Palette = {
   hillHighlight: 'rgba(255,255,255,0.06)',
   hillAccent: 'rgba(0,0,0,0.25)',
   routeCasing: '#0E0E10',
+  // De nuit, plus c'est haut, plus c'est clair.
+  b3d: ['#423D35', '#4B4C53', '#5C6782'],
+  sky: '#101216',
+  horizon: '#25272C',
 };
+
+/** Seuils de hauteur (m) des classes de bâtiments : en dessous de 10 m, une maison (1 à 2 étages) ; à partir de 30 m, une tour. */
+export const BUILDING_STEPS = [10, 30] as const;
+export const BUILDING_COLORS: Record<Theme, [string, string, string]> = { light: LIGHT.b3d, dark: DARK.b3d };
 
 export const ROUTE_CASING: Record<Theme, string> = { light: LIGHT.routeCasing, dark: DARK.routeCasing };
 
@@ -435,9 +451,45 @@ export function buildStyle(theme: Theme): StyleSpecification {
     },
   ];
 
+  // Bâtiments en volume (mode 3D) : hauteur réelle (étages), couleur selon la classe, sous les noms de lieux.
+  // Les volumes montent avec le zoom entre 13 et 13,8 : en activant la 3D, la ville se lève ; ils restent
+  // visibles sur la vue d'ensemble d'un parcours de 10 km.
+  const height: ExpressionSpecification = ['max', ['coalesce', ['get', 'render_height'], 0], 3];
+  const building3d: LayerSpecification = {
+    id: 'building-3d',
+    type: 'fill-extrusion',
+    source: 'omt',
+    'source-layer': 'building',
+    minzoom: 13,
+    filter: ['!=', ['get', 'hide_3d'], true],
+    layout: { visibility: 'none' },
+    paint: {
+      'fill-extrusion-color': ['step', height, c.b3d[0], BUILDING_STEPS[0], c.b3d[1], BUILDING_STEPS[1], c.b3d[2]],
+      'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.8, height],
+      'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 13, 0, 13.8, ['coalesce', ['get', 'render_min_height'], 0]],
+      'fill-extrusion-opacity': 0,
+      'fill-extrusion-opacity-transition': { duration: 650, delay: 0 },
+      'fill-extrusion-vertical-gradient': true,
+    },
+  };
+  const firstLabel = layers.findIndex((l) => l.type === 'symbol');
+  layers.splice(firstLabel < 0 ? layers.length : firstLabel, 0, building3d);
+
   return {
     version: 8,
     glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    // Lumière douce venue du sud-ouest : les façades se distinguent des toits.
+    light: { anchor: 'viewport', color: '#ffffff', intensity: theme === 'dark' ? 0.32 : 0.42, position: [1.3, 210, 35] },
+    // Ciel et brume à l'horizon quand la carte est inclinée.
+    sky: {
+      'sky-color': c.sky,
+      'horizon-color': c.horizon,
+      'fog-color': c.bg,
+      'sky-horizon-blend': 0.55,
+      'horizon-fog-blend': 0.7,
+      'fog-ground-blend': 0.72,
+      'atmosphere-blend': 0,
+    },
     sources: {
       omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
       'dem-hs': {

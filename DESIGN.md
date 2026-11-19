@@ -323,6 +323,9 @@ A Fill 2 capsule with a 3 px inset and a white (dark: grey) sliding thumb on a b
 ### Navigation
 Inside the panel: on Mac a brand row (pink squircle logo, "Boucle" at 1.375rem 750) with two small transparent pills ("Créer", "Mes parcours"), the active one on Fill 2. Sub-views use a centred title between 40 px round grey buttons. On iPhone the library is reached from the round glass button in the top bar, with a pink count badge.
 
+### 3D city
+The "3D" map button (it reads "2D" while active, as in Apple Plans, and flips on a spring) raises the terrain (1.4x) and the buildings. Buildings are `fill-extrusion` volumes from the OpenMapTiles building layer at their real height (OSM levels), coloured in three material tones by height, never in pink: houses under 10 m in warm sand (`#E4D6BD`, dark `#423D35`), apartment buildings from 10 to 30 m in warm grey (`#D2CEC7`, dark `#4B4C53`), towers from 30 m in slate (`#AFB8C9`, dark `#5C6782`; at night taller is lighter). Volumes grow with the zoom between 13 and 13.8 so the city rises as the camera tilts (60° and at least zoom 14.8 while composing; a whole-route refit at 52° when a route is shown), and fade in over 650 ms. A soft south-west light shades the façades, and a sky with horizon fog fills the top of a tilted map. A glass legend capsule ("Maison · Immeuble · Tour") appears only while volumes are visible: above the sheet on iPhone, at the top-left of the map on Mac.
+
 ### Rolling figures
 Every figure the user watches change (slider values, the route summary and stats, the remaining distance in live follow) is a `RollingNumber`: each digit is a 0 to 9 strip clipped to one line that springs to its new value, digits are aligned from the right so units never jump, and a new leading digit slides in. Screen readers get the plain value. Reduce Motion turns the roll into an instant change.
 

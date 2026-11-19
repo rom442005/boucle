@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { haptic } from '../lib/haptics';
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
 </script>
@@ -8,8 +9,19 @@
     <span class:spin={app.locating}><Icon name="locate" size={20} fill={!!app.userPos} /></span>
   </button>
   <span class="sep" aria-hidden="true"></span>
-  <button type="button" class="round" aria-pressed={app.terrain3d} aria-label="Relief en 3D" onclick={() => (app.terrain3d = !app.terrain3d)}>
-    <span class="three">3D</span>
+  <!-- Comme dans Plans : le bouton annonce la vue vers laquelle il bascule. -->
+  <button
+    type="button"
+    class="round"
+    aria-pressed={app.terrain3d}
+    aria-label="Relief et bâtiments en 3D"
+    title={app.terrain3d ? 'Revenir à la carte à plat' : 'Relief et bâtiments en 3D'}
+    onclick={() => {
+      haptic('tap');
+      app.terrain3d = !app.terrain3d;
+    }}
+  >
+    {#key app.terrain3d}<span class="three">{app.terrain3d ? '2D' : '3D'}</span>{/key}
   </button>
   {#if Math.abs(app.bearing) > 2}
     <span class="sep" aria-hidden="true"></span>
@@ -53,6 +65,16 @@
   }
   .round[aria-pressed='true'] .three {
     color: var(--tint);
+  }
+  .three {
+    display: inline-block;
+    animation: flip-in 420ms var(--spring-bouncy);
+  }
+  @keyframes flip-in {
+    from {
+      opacity: 0;
+      transform: rotateX(80deg);
+    }
   }
   .compass {
     display: inline-grid;

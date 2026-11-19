@@ -219,3 +219,16 @@ test('imposer un point de passage dans une boucle', async ({ page, browserName }
   await page.getByRole('button', { name: /Retirer le point de passage/ }).click();
   await expect(page.getByRole('button', { name: /Passer par un lieu/ })).toBeVisible();
 });
+
+test('la 3D met la ville en volume, avec sa légende', async ({ page }) => {
+  await open(page);
+  const btn = page.getByRole('button', { name: 'Relief et bâtiments en 3D' });
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  // Comme dans Plans, le bouton annonce la vue vers laquelle il bascule.
+  await expect(btn).toHaveText('2D');
+  await expect(page.getByRole('note', { name: /Bâtiments en volume/ })).toContainText('Immeuble');
+  await btn.click();
+  await expect(btn).toHaveText('3D');
+  await expect(page.getByRole('note', { name: /Bâtiments en volume/ })).toHaveCount(0);
+});

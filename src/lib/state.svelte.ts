@@ -80,6 +80,8 @@ class AppState {
   toast = $state<{ text: string; id: number } | null>(null);
 
   detent = $state<Detent>('half');
+  /** zoom de la carte (mis à jour à la fin de chaque mouvement) */
+  zoom = $state(12);
   wide = $state(false);
   padding = $state<Padding>({ top: 80, bottom: 320, left: 16, right: 16 });
 

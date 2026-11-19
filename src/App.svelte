@@ -13,6 +13,7 @@
   import Icon from './components/Icon.svelte';
   import InstallGuide from './components/InstallGuide.svelte';
   import Stops from './components/Stops.svelte';
+  import BuildingsLegend from './components/BuildingsLegend.svelte';
   import RollingNumber from './components/RollingNumber.svelte';
   import { duration, kmValue } from './lib/format';
   import { app } from './lib/state.svelte';
@@ -96,6 +97,10 @@
   {/if}
 
   <MapControls />
+  <!-- Légende seulement quand les volumes sont visibles (à partir du zoom 13). -->
+  {#if app.terrain3d && app.zoom >= 13.2 && !app.pickOnMap}
+    <BuildingsLegend />
+  {/if}
 
   <Panel label={headTitle} footer={app.phase === 'library' ? undefined : footer} onswipe={canSwipe ? swipe : undefined}>
     {#snippet header()}
