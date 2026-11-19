@@ -442,9 +442,11 @@
    * en douceur, sur la planète entière, nord en haut, au milieu de la partie visible. Comme si l'élan du
    * geste nous emportait dans l'espace, puis ralentissait jusqu'à l'arrêt.
    */
-  /** Un dézoom qui finit à moins de 3,6 niveaux de la Terre entière (l'échelle d'un pays) file jusqu'à elle. */
-  const ORBIT_SPAN = 3.6;
+  /** Un dézoom qui finit à moins de 4,2 niveaux de la Terre entière (l'échelle d'un pays) file jusqu'à elle. */
+  const ORBIT_SPAN = 4.2;
   let zoomingOut = false;
+  /** Sens du dernier geste de zoom : −1 vers l'espace, 1 vers le sol. */
+  let lastDir = 0;
   let lastZoom = 0;
   /** Distance caméra-centre de MapLibre, en hauteurs de carte (champ de 36,87°). */
   const CAM = 0.5 / Math.tan(0.6435011087932844 / 2);
@@ -522,7 +524,15 @@
    */
   function queueOrbit(spring: boolean) {
     requestAnimationFrame(() => {
-      if (map && !map.isMoving()) toOrbit(spring);
+      const m = map;
+      if (!m) return;
+      if (!m.isMoving()) return toOrbit(spring);
+      // La carte bouge encore (fin d'un geste, molette) : on attend qu'elle s'arrête, si l'on ne s'est pas
+      // remis à zoomer vers le sol entre-temps.
+      m.once('moveend', () => {
+        if (!map || map.isMoving()) return;
+        if (spring ? map.getZoom() < orbitZoom() - 0.01 : lastDir < 0 && map.getZoom() < orbitZoom() + ORBIT_SPAN) toOrbit(spring);
+      });
     });
   }
   /*
@@ -700,6 +710,23 @@
     map.on('style.load', onStyleLoad);
     map.on('rotate', () => (app.bearing = map!.getBearing()));
     far = map.getZoom() < 11;
+    // Une molette de souris ne transmet pas son événement aux zooms de MapLibre (le zoom part un peu plus tard) :
+    // on la suit à part, pour savoir qu'un geste vers l'espace est en cours et montrer l'échelle.
+    let wheelAt = 0;
+    el.addEventListener(
+      'wheel',
+      (e) => {
+        wheelAt = performance.now();
+        if (e.deltaY > 0) {
+          zoomingOut = true;
+          lastDir = -1;
+        } else if (e.deltaY < 0) {
+          zoomingOut = false;
+          lastDir = 1;
+        }
+      },
+      { capture: true, passive: true },
+    );
     map.on('zoom', (e) => {
       const z = map!.getZoom();
       if (z < SPACE_ZOOM !== space) space = z < SPACE_ZOOM;
@@ -713,10 +740,15 @@
         prefetchEarth([c.lng, c.lat], tz > 0 ? [tz - 1, tz] : [0]);
       }
       // L'échelle ne répond qu'aux gestes (pincement, molette), pas aux cadrages automatiques.
-      if (e.originalEvent) {
+      if (e.originalEvent || performance.now() - wheelAt < 700) {
         // Sens du geste : vers l'espace ou vers le sol.
-        if (z < lastZoom - 1e-4) zoomingOut = true;
-        else if (z > lastZoom + 1e-4) zoomingOut = false;
+        if (z < lastZoom - 1e-4) {
+          zoomingOut = true;
+          lastDir = -1;
+        } else if (z > lastZoom + 1e-4) {
+          zoomingOut = false;
+          lastDir = 1;
+        }
         updateScale();
         scaleOn = true;
         clearTimeout(scaleTimer);

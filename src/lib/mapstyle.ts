@@ -337,7 +337,8 @@ export function buildStyle(theme: Theme): StyleSpecification {
       maxzoom: 5.6,
       paint: {
         'raster-opacity': ['interpolate', ['linear'], ['zoom'], 4.2, 1, 5.4, 0],
-        'raster-fade-duration': 250,
+        // Les images arrivent en fondu sur la Terre unie : pas de damier pendant le chargement.
+        'raster-fade-duration': 600,
         'raster-resampling': 'linear',
       },
     },

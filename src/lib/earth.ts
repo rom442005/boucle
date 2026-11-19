@@ -105,8 +105,8 @@ export const EARTH_PALETTES: Record<EarthTheme, EarthPalette> = {
  * images arrivent ; le globe ne s'affiche jamais en morceaux.
  */
 export const EARTH_FLAT: Record<EarthTheme, { land: string; ocean: string }> = {
-  dark: { land: EARTH_PALETTES.dark.land[2][1], ocean: EARTH_PALETTES.dark.water[1][1] },
-  light: { land: EARTH_PALETTES.light.land[2][1], ocean: EARTH_PALETTES.light.water[1][1] },
+  dark: { land: '#2E7665', ocean: '#02122F' },
+  light: { land: '#A5D2A3', ocean: '#4B84CF' },
 };
 
 const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
