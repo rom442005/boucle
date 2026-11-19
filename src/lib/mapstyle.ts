@@ -1,5 +1,5 @@
 import type { StyleSpecification, ExpressionSpecification, LayerSpecification, SymbolLayerSpecification } from 'maplibre-gl';
-import { earthTiles, globeLabels, graticule } from './earth';
+import { EARTH_FLAT, earthTiles, globeLabels, graticule } from './earth';
 
 /*
  * Fond de carte maison, volontairement calme : terres gris chaud, forêts sauge, eau bleu pâle,
@@ -210,7 +210,13 @@ export function buildStyle(theme: Theme): StyleSpecification {
   const roadClass = (classes: string[]): ExpressionSpecification => ['in', ['get', 'class'], ['literal', classes]];
 
   const layers: LayerSpecification[] = [
-    { id: 'bg', type: 'background', paint: { 'background-color': c.bg } },
+    // Vu de loin, le sol et l'eau prennent les couleurs de la Terre dessinée : tant que ses images chargent, le
+    // globe est déjà là, uni ; en approchant, ils reviennent aux couleurs calmes du plan.
+    {
+      id: 'bg',
+      type: 'background',
+      paint: { 'background-color': ['interpolate', ['linear'], ['zoom'], 4.2, EARTH_FLAT[theme].land, 5.6, c.bg] },
+    },
     {
       id: 'residential',
       type: 'fill',
@@ -301,7 +307,7 @@ export function buildStyle(theme: Theme): StyleSpecification {
       source: 'omt',
       'source-layer': 'water',
       filter: ['all', ['!=', ['get', 'class'], 'swimming_pool'], ['!=', ['get', 'brunnel'], 'tunnel']],
-      paint: { 'fill-color': c.water },
+      paint: { 'fill-color': ['interpolate', ['linear'], ['zoom'], 4.2, EARTH_FLAT[theme].ocean, 5.6, c.water] },
     },
     {
       id: 'waterway',

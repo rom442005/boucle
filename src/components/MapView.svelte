@@ -5,7 +5,7 @@
   import type { FeatureCollection, GeoJSON, Polygon } from 'geojson';
   import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
-  import { cityDot, globeLabels, registerEarth } from '../lib/earth';
+  import { cityDot, globeLabels, prefetchEarth, registerEarth } from '../lib/earth';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { ICONS } from '../lib/icons';
@@ -265,6 +265,7 @@
     ready = true;
     limbFaded = false;
     fadeLimb();
+    placeShade();
   }
 
   /** Plan ou Satellite : les photos et les noms en blanc s'appliquent sur le style en place, sans le recharger. */
@@ -441,7 +442,8 @@
    * en douceur, sur la planète entière, nord en haut, au milieu de la partie visible. Comme si l'élan du
    * geste nous emportait dans l'espace, puis ralentissait jusqu'à l'arrêt.
    */
-  const ORBIT_FROM = 4.2;
+  /** Un dézoom qui finit à moins de 3,6 niveaux de la Terre entière (l'échelle d'un pays) file jusqu'à elle. */
+  const ORBIT_SPAN = 3.6;
   let zoomingOut = false;
   let lastZoom = 0;
   /** Distance caméra-centre de MapLibre, en hauteurs de carte (champ de 36,87°). */
@@ -478,8 +480,9 @@
       pitch: 0,
       ...(spring ? {} : { bearing: 0 }),
       padding: p,
-      duration: reduce ? 0 : spring ? 480 : Math.min(1900, 900 + span * 380),
-      easing: (t) => 1 - Math.pow(1 - t, 3.2),
+      duration: reduce ? 0 : spring ? 480 : Math.min(2300, 1100 + span * 300),
+      // Le glissement part en douceur et se pose en douceur ; le ressort, lui, revient vite puis ralentit.
+      easing: spring ? (t) => 1 - Math.pow(1 - t, 3.2) : (t) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2),
     });
   }
   /**
@@ -521,6 +524,32 @@
     requestAnimationFrame(() => {
       if (map && !map.isMoving()) toOrbit(spring);
     });
+  }
+  /*
+   * La Terre vue de loin est une boule, comme dans Plans : ses bords s'assombrissent et l'atmosphère y dessine
+   * un liseré bleu. Un disque posé exactement sur le globe (même centre, même rayon apparent, perspective
+   * comprise), entre la carte et les marqueurs ; il s'efface en approchant ou quand la carte est inclinée.
+   */
+  let shade: HTMLDivElement | null = null;
+  let earthReady = false;
+  function placeShade() {
+    const m = map;
+    if (!m || !shade) return;
+    const z = m.getZoom();
+    const vis = Math.max(0, Math.min(1, (orbitZoom() + 1.7 - z) / 0.9)) * Math.max(0, 1 - m.getPitch() / 6);
+    if (vis <= 0) {
+      if (shade.style.opacity !== '0') shade.style.opacity = '0';
+      return;
+    }
+    const box = m.getContainer();
+    const { top = 0, bottom = 0, left = 0, right = 0 } = m.getPadding();
+    const R = (512 * 2 ** z) / (2 * Math.PI) / Math.cos((m.getCenter().lat * Math.PI) / 180);
+    const r = R / Math.sqrt(1 + (2 * R) / (CAM * box.clientHeight));
+    const cx = left + (box.clientWidth - left - right) / 2;
+    const cy = top + (box.clientHeight - top - bottom) / 2;
+    shade.style.opacity = vis.toFixed(3);
+    shade.style.width = shade.style.height = `${(2 * r).toFixed(1)}px`;
+    shade.style.transform = `translate(${(cx - r).toFixed(1)}px, ${(cy - r).toFixed(1)}px)`;
   }
   function updateOrbit() {
     const m = map;
@@ -648,6 +677,11 @@
       touchPitch: true,
     });
     map.touchZoomRotate.enableRotation();
+    // Molette de souris : un cran dézoome franchement (le réglage par défaut demande des dizaines de crans).
+    map.scrollZoom.setWheelZoomRate(1 / 160);
+    shade = document.createElement('div');
+    shade.className = 'globe-shade';
+    map.getCanvas().insertAdjacentElement('afterend', shade);
     placeAttribution();
     fitMinZoom();
     map.on('resize', () => {
@@ -671,6 +705,13 @@
       if (z < SPACE_ZOOM !== space) space = z < SPACE_ZOOM;
       if (z < 11 !== far) far = z < 11;
       updateOrbit();
+      // En route vers l'espace : les images de la Terre entière se chargent avant d'y arriver.
+      if (!earthReady && z < 8) {
+        earthReady = true;
+        const c = map!.getCenter();
+        const tz = Math.max(0, Math.round(orbitZoom() + 1));
+        prefetchEarth([c.lng, c.lat], tz > 0 ? [tz - 1, tz] : [0]);
+      }
       // L'échelle ne répond qu'aux gestes (pincement, molette), pas aux cadrages automatiques.
       if (e.originalEvent) {
         // Sens du geste : vers l'espace ou vers le sol.
@@ -688,7 +729,7 @@
       zoomingOut = false;
       if (app.phase !== 'follow') {
         // Un dézoom qui a quitté le plan file jusqu'à la Terre entière ; au-delà, elle revient en place.
-        if (out && app.zoom < ORBIT_FROM) queueOrbit(false);
+        if (out && app.zoom < orbitZoom() + ORBIT_SPAN) queueOrbit(false);
         else if (app.zoom < orbitZoom() - 0.01) queueOrbit(true);
         // Fin d'un dézoom vers l'espace : le globe vient au milieu de la partie visible.
         else if (app.zoom < SPACE_ZOOM) syncPadding(app.padding);
@@ -754,6 +795,8 @@
     });
     map.on('dragend', () => (dragging = false));
     map.on('move', fadeLimb);
+    map.on('move', placeShade);
+    map.on('resize', placeShade);
     // Zoom à la molette : le point visé change sous le curseur immobile.
     map.on('move', () => {
       if (!aim || !map) return;
@@ -1097,6 +1140,16 @@
     if (ready) untrack(() => apply3D(on, true));
   });
 
+  // Boutons + et − (Mac) : un niveau à la fois ; comme un geste, un dézoom loin finit sur la Terre entière.
+  $effect(() => {
+    const s = app.zoomStep;
+    if (!s || !map) return;
+    untrack(() => {
+      const m = map!;
+      m.easeTo({ zoom: m.getZoom() + s.d, duration: reduce ? 0 : 320, easing: (t) => 1 - Math.pow(1 - t, 3) }, { originalEvent: new Event('zoom-button') });
+    });
+  });
+
   // Remise au nord.
   $effect(() => {
     if (app.northTick && map) map.easeTo({ bearing: 0, duration: reduce ? 0 : 500 });
@@ -1221,6 +1274,42 @@
       );
     background-color: #000;
   }
+  /* Relief de la boule : bords assombris, liseré et halo d'atmosphère (le disque suit le globe, voir placeShade). */
+  .map :global(.globe-shade) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(
+      circle closest-side,
+      rgba(0, 3, 18, 0) 56%,
+      rgba(0, 3, 18, 0.12) 74%,
+      rgba(0, 3, 18, 0.34) 92%,
+      rgba(28, 64, 150, 0.32) 99%,
+      rgba(90, 140, 255, 0.5) 100%
+    );
+    box-shadow:
+      0 0 0 1px rgba(120, 160, 255, 0.4),
+      0 0 10px 2px rgba(84, 132, 255, 0.42),
+      0 0 40px 8px rgba(48, 98, 230, 0.2);
+  }
+  @media (prefers-color-scheme: light) {
+    .map :global(.globe-shade) {
+      background: radial-gradient(
+        circle closest-side,
+        rgba(4, 18, 50, 0) 58%,
+        rgba(4, 18, 50, 0.1) 76%,
+        rgba(4, 18, 50, 0.28) 93%,
+        rgba(60, 110, 210, 0.32) 99%,
+        rgba(150, 190, 255, 0.55) 100%
+      );
+    }
+  }
+
   /* De loin, les pastilles des côtes s'empileraient sur un point : elles attendent qu'on s'approche. */
   .map.far :global(.mk-climb) {
     visibility: hidden;

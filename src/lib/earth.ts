@@ -13,6 +13,37 @@ export type EarthTheme = 'light' | 'dark';
 export type EarthStyle = EarthTheme | 'photo';
 
 const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8';
+const gibsUrl = (z: number | string, x: number | string, y: number | string) => `${GIBS}/${z}/${y}/${x}.jpeg`;
+
+/**
+ * Prépare les images de la Terre entière avant d'y arriver (cache du navigateur, gardées 3 jours par la NASA) :
+ * les tuiles du niveau qu'il faudra, sur la face visible, de la plus proche du centre à la plus lointaine.
+ */
+export function prefetchEarth(center: [number, number], zooms: number[], parallel = 6): void {
+  const rad = Math.PI / 180;
+  const list: { url: string; d: number }[] = [];
+  for (const z of zooms) {
+    const n = 2 ** z;
+    for (let y = 0; y < n; y++) {
+      const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) / rad;
+      for (let x = 0; x < n; x++) {
+        const lng = ((x + 0.5) / n) * 360 - 180;
+        const cos =
+          Math.sin(center[1] * rad) * Math.sin(lat * rad) + Math.cos(center[1] * rad) * Math.cos(lat * rad) * Math.cos((lng - center[0]) * rad);
+        const d = Math.acos(Math.max(-1, Math.min(1, cos))) / rad;
+        if (d < 100) list.push({ url: gibsUrl(z, x, y), d: d + z * 1000 });
+      }
+    }
+  }
+  list.sort((a, b) => a.d - b.d);
+  let i = 0;
+  const next = (): void => {
+    const job = list[i++];
+    if (job) void fetch(job.url).catch(() => undefined).finally(next);
+  };
+  for (let k = 0; k < parallel; k++) next();
+}
+
 /** Tuiles du globe : terre://light|dark|photo/{z}/{x}/{y}. */
 export const EARTH_PROTOCOL = 'terre';
 export const earthTiles = (style: EarthStyle) => `${EARTH_PROTOCOL}://${style}/{z}/{x}/{y}`;
@@ -69,7 +100,17 @@ export const EARTH_PALETTES: Record<EarthTheme, EarthPalette> = {
   },
 };
 
+/**
+ * Couleurs unies de la Terre dessinée (prairie, océan profond) : le plan les prend vu de loin, le temps que les
+ * images arrivent ; le globe ne s'affiche jamais en morceaux.
+ */
+export const EARTH_FLAT: Record<EarthTheme, { land: string; ocean: string }> = {
+  dark: { land: EARTH_PALETTES.dark.land[2][1], ocean: EARTH_PALETTES.dark.water[1][1] },
+  light: { land: EARTH_PALETTES.light.land[2][1], ocean: EARTH_PALETTES.light.water[1][1] },
+};
+
 const hex = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+
 
 /** Table de 256 couleurs (r, g, b à la suite) interpolées entre les paliers. */
 function lut(stops: Stop[]): Uint8Array {
@@ -192,7 +233,7 @@ export function registerEarth(addProtocol: (name: string, load: AddProtocolActio
     const m = /^terre:\/\/(light|dark|photo)\/(\d+)\/(\d+)\/(\d+)/.exec(params.url);
     if (!m) throw new Error(`Tuile inconnue : ${params.url}`);
     const [, style, z, x, y] = m as unknown as [string, EarthStyle, string, string, string];
-    const src = await createImageBitmap(await fetchTile(`${GIBS}/${z}/${y}/${x}.jpeg`, abort.signal));
+    const src = await createImageBitmap(await fetchTile(gibsUrl(z, x, y), abort.signal));
     const { width: w, height: h } = src;
     const canvas: OffscreenCanvas | HTMLCanvasElement =
       typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });

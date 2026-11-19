@@ -99,6 +99,11 @@ class AppState {
   followCamera = $state(true);
   /** demande de remise au nord (lue par MapView) */
   northTick = $state(0);
+  /** demande de zoom d'un niveau, + ou − (boutons de la carte sur Mac, lue par MapView) */
+  zoomStep = $state.raw<{ d: number; id: number } | null>(null);
+  zoomBy(d: number) {
+    this.zoomStep = { d, id: (this.zoomStep?.id ?? 0) + 1 };
+  }
   /** demande de déplacement de la carte (lue par MapView) */
   camera = $state.raw<{ center: LngLat; zoom?: number; id: number } | null>(null);
 

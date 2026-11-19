@@ -48,7 +48,8 @@
 
 <svelte:window onpointerdown={onDown} onkeydown={(e) => open && e.key === 'Escape' && (open = false)} />
 
-<div class="ctrls glass" class:wide={app.wide} role="toolbar" aria-label="Carte" bind:this={pill}>
+<div class="ctrls-wrap" class:wide={app.wide} bind:this={pill}>
+<div class="ctrls glass" role="toolbar" aria-label="Carte">
   <!-- Comme dans Plans : le type de carte en haut de la pilule. -->
   <button
     type="button"
@@ -89,6 +90,15 @@
     </button>
   {/if}
 </div>
+{#if app.wide}
+  <!-- Comme dans Plans sur Mac : zoomer et dézoomer d'un clic ; dézoomer loin mène à la Terre entière. -->
+  <div class="ctrls zoom glass" role="group" aria-label="Zoom">
+    <button type="button" class="round" aria-label="Zoomer" onclick={() => app.zoomBy(1)}><Icon name="plus" size={18} /></button>
+    <span class="sep" aria-hidden="true"></span>
+    <button type="button" class="round" aria-label="Dézoomer" onclick={() => app.zoomBy(-1)}><Icon name="minus" size={18} /></button>
+  </div>
+{/if}
+</div>
 
 {#if open}
   <div class="types glass glass-panel" class:wide={app.wide} role="group" aria-label="Type de carte">
@@ -116,18 +126,25 @@
 {/if}
 
 <style>
-  .ctrls {
+  .ctrls-wrap {
     position: fixed;
     z-index: 15;
     right: 12px;
     top: calc(var(--safe-top) + 72px);
+    display: grid;
+    gap: 10px;
+  }
+  .ctrls-wrap.wide {
+    top: 12px;
+  }
+  .ctrls {
     display: flex;
     flex-direction: column;
     border-radius: 24px;
     padding: 2px;
   }
-  .ctrls.wide {
-    top: 12px;
+  .ctrls.zoom .round {
+    color: var(--label);
   }
   .ctrls .round {
     color: var(--location);

@@ -288,6 +288,20 @@ test('vu de loin, la Terre est un globe, et on revient au départ', async ({ pag
   await expect(page.locator('.map.space')).toHaveCount(0);
 });
 
+test('sur Mac, le bouton Dézoomer mène à la Terre entière, comme dans Plans', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Boutons + et − affichés sur Mac.');
+  await open(page);
+  await expect(page.getByRole('button', { name: /^Départ : / }).first()).toBeVisible({ timeout: 20_000 });
+  const out = page.getByRole('button', { name: 'Dézoomer' });
+  for (let i = 0; i < 10 && !(await page.locator('.map.orbit').count()); i++) {
+    await out.click();
+    await page.waitForTimeout(400);
+  }
+  await expect(page.locator('.map.orbit')).toBeAttached({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Zoomer', exact: true }).click();
+  await expect(page.locator('.map.orbit')).toHaveCount(0, { timeout: 5_000 });
+});
+
 test('si tu pars maintenant : lumière du jour au retour', async ({ page }) => {
   await open(page);
   await createLoop(page);
