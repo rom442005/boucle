@@ -31,6 +31,11 @@ export default defineConfig(({ command, isPreview }) => ({
         ],
       },
       workbox: {
+        // Une nouvelle version prend la main tout de suite (sinon elle attend que tous les onglets et l'app
+        // soient fermés : avec injectRegister à false, le plugin ne l'active pas de lui-même). main.ts recharge
+        // ensuite la page au bon moment.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
