@@ -8,6 +8,7 @@
   import { haptic } from '../lib/haptics';
   import { duration, km, kmValue, meters, pace, percent, speed, NNBSP } from '../lib/format';
   import { ENVS, ENV_ORDER, SHAPES, SPORTS } from '../lib/sports';
+  import { cumulative, nearestOnRoute } from '../lib/geo';
   import type { EnvClass, Route } from '../lib/types';
 
   const r = $derived(app.route);
@@ -46,6 +47,12 @@
       text: exact ? 'Distance tenue' : `Distance à ${percent(Math.max(dErr, 0.01))} près`,
       short: exact ? 'Distance tenue' : `Distance ±${percent(Math.max(dErr, 0.01))}`,
     });
+    if (x.via) {
+      // Le point de passage choisi (souvent au milieu d'un parc ou d'une place) : tenu si le tracé passe à moins de 120 m.
+      const near = nearestOnRoute(x.coords, cumulative(x.coords), x.via.coord).dist <= 120;
+      const name = x.via.name.length > 24 ? x.via.name.slice(0, 23) + '…' : x.via.name;
+      out.push({ ok: near, text: near ? `Passe par ${x.via.name}` : `Passe près de ${x.via.name}`, short: `Par ${name}` });
+    }
     if (p.elevation != null) {
       const ok = Math.abs(x.ascent - p.elevation) <= Math.max(25, p.elevation * 0.2);
       out.push({ ok, text: `${meters(x.ascent)} de D+ pour ${meters(p.elevation)} visés`, short: `D+ ${Math.round(x.ascent)} / ${meters(p.elevation)}` });

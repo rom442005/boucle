@@ -284,7 +284,7 @@ Depth is material, not stacking. There are two planes: the map, and glass over i
 
 ## Shapes
 
-Capsules and circles for every control (999px, 50%). Containers use concentric radii that shrink as they nest: sheet 30 px top / 40 px bottom on iPhone (matching the device corner), Mac column 28 px, profile dock 26 px, map control pill 24 px, proposal cards 22 px, grouped lists 18 to 20 px, banners 16 px, inline name field and route thumbnails 12 px, tracks and bars 3 to 4 px. Borders are almost absent: 0.5 px separators, an inset 2 px pink ring for the selected card, an inset 1.5 px series-colour ring for a selected chip. The route on the map is a round-capped line on a white (dark: near-black) casing; the start point is a pink disc in a white ring; kilometre markers are small white circles with a pink ring and number.
+Capsules and circles for every control (999px, 50%). Containers use concentric radii that shrink as they nest: sheet 30 px top / 40 px bottom on iPhone (matching the device corner), Mac column 28 px, profile dock 26 px, map control pill 24 px, proposal cards 22 px, grouped lists 18 to 20 px, banners 16 px, inline name field and route thumbnails 12 px, tracks and bars 3 to 4 px. Borders are almost absent: 0.5 px separators, an inset 2 px pink ring for the selected card, an inset 1.5 px series-colour ring for a selected chip. The route on the map is a round-capped line on a white (dark: near-black) casing; the start point is a pink disc in a white ring; the must-visit place is a white diamond (17 px square turned 45°, 4 px radius) with a 3.5 px pink inner ring; the destination a near-black disc with a checkered square; kilometre markers are small white circles with a pink ring and number.
 
 ## Components
 
@@ -317,6 +317,7 @@ A Fill 2 capsule with a 3 px inset and a white (dark: grey) sliding thumb on a b
 ### Inputs / Fields
 - **Search field:** 44 px capsule on Fill 2 with a leading magnifier in Label 2, text at 1.0625rem, placeholder Label 3, pink caret.
 - **Place capsule:** 52 px capsule with a 36 px pink disc icon (destination: Label disc), small Label 2 title over a 600 value; floating over the map it becomes control glass.
+- **Stops:** the places after the start, in route order: "Passer par" (the must-visit place: a 26 px pink-wash disc with a filled diamond, pink 600 label "Passer par un lieu" and a Label 2 "facultatif"; once set, a place capsule with a 36 px grey remove circle) then "Destination" for "Vers un lieu", with a footnote on clicking the map. On Mac they sit in the column header under the start capsule so they are never scrolled away; on iPhone they follow the shape control.
 - **Focus:** a 2.5 px outline of 75% pink, 2 px offset, everywhere; the slider moves it onto the knob as a 3 px ring.
 
 ### Navigation

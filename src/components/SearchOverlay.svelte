@@ -5,6 +5,9 @@
   import type { Place } from '../lib/types';
 
   const kind = $derived(app.search!);
+  const TITLE = { start: 'Choisir le départ', destination: 'Choisir la destination', via: 'Choisir un point de passage' } as const;
+  const FIELD = { start: 'Adresse de départ', destination: 'Adresse de destination', via: 'Adresse du point de passage' } as const;
+  const HINT = { start: 'Adresse, lieu, parc…', destination: 'Où veux-tu aller ?', via: 'Par où veux-tu passer ?' } as const;
   let q = $state('');
   let results = $state<Place[]>([]);
   let loading = $state(false);
@@ -65,11 +68,11 @@
 <svelte:window onkeydown={onkey} />
 
 <div class="scrim" class:wide={app.wide} onclick={close} aria-hidden="true"></div>
-<div class="search glass glass-panel" class:wide={app.wide} role="dialog" aria-modal="true" aria-label={kind === 'start' ? 'Choisir le départ' : 'Choisir la destination'}>
+<div class="search glass glass-panel" class:wide={app.wide} role="dialog" aria-modal="true" aria-label={TITLE[kind]}>
   <div class="bar">
     <label class="field">
       <Icon name="search" size={18} />
-      <span class="visually-hidden">{kind === 'start' ? 'Adresse de départ' : 'Adresse de destination'}</span>
+      <span class="visually-hidden">{FIELD[kind]}</span>
       <input
         bind:this={input}
         bind:value={q}
@@ -77,7 +80,7 @@
         type="search"
         enterkeyhint="search"
         autocomplete="off"
-        placeholder={kind === 'start' ? 'Adresse, lieu, parc…' : 'Où veux-tu aller ?'}
+        placeholder={HINT[kind]}
       />
     </label>
     <button type="button" class="text-btn" onclick={close}>Annuler</button>
@@ -85,7 +88,7 @@
 
   {#snippet mapRow()}
     <button type="button" class="row" onclick={onMap}>
-      <span class="ic" class:map-ic={kind === 'destination'}><Icon name="crosshair" size={18} /></span>
+      <span class="ic" class:map-ic={kind !== 'start'}><Icon name="crosshair" size={18} /></span>
       <span class="row-label">
         Choisir sur la carte
         {#if app.wide}<span class="row-sub">Ou clique directement sur la carte, à droite.</span>{/if}
@@ -99,10 +102,12 @@
     </button>
   {/snippet}
   <div class="group quick">
-    <!-- Pour une destination, la carte d'abord : « Ma position » y sert rarement. -->
+    <!-- Pour une destination, la carte d'abord : « Ma position » y sert rarement (et jamais pour un point de passage). -->
     {#if kind === 'destination'}
       {@render mapRow()}
       {@render mineRow()}
+    {:else if kind === 'via'}
+      {@render mapRow()}
     {:else}
       {@render mineRow()}
       {@render mapRow()}

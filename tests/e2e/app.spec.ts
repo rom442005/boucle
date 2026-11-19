@@ -191,3 +191,31 @@ test('choisir la destination en touchant la carte', async ({ page, browserName }
   await page.getByRole('button', { name: /Créer l’itinéraire/ }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
 });
+
+test('imposer un point de passage dans une boucle', async ({ page, browserName }) => {
+  await open(page);
+  const box = (await page.locator('.maplibregl-canvas').boundingBox())!;
+  if (browserName === 'chromium') {
+    // Sur Mac, le bouton est en haut de la colonne, sous le départ, toujours visible.
+    await page.getByRole('button', { name: /Passer par un lieu/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Choisir un point de passage' })).toBeVisible();
+    await page.mouse.move(box.x + box.width * 0.72, box.y + box.height * 0.3, { steps: 4 });
+    await expect(page.locator('.aim-label')).toHaveText('Passer par ici');
+    await page.mouse.click(box.x + box.width * 0.72, box.y + box.height * 0.3);
+  } else {
+    // Sur iPhone, dans la section Forme du panneau.
+    await page.getByRole('button', { name: /Passer par un lieu/ }).click();
+    await page.getByRole('dialog', { name: 'Choisir un point de passage' }).getByRole('button', { name: /Choisir sur la carte/ }).click();
+    await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
+  }
+  await expect(page.getByText('Point de passage placé ici')).toBeVisible();
+  await expect(page.locator('.mk-via')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Passer par :/ })).not.toHaveAccessibleName(/Choisir un lieu/);
+  await createLoop(page);
+  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/^Passe (par|près de)/)).toBeVisible();
+  await expect(page.locator('.mk-via')).toBeVisible();
+  // Retour aux réglages : on peut le retirer.
+  await page.getByRole('button', { name: 'Retour aux réglages' }).click();
+  await page.getByRole('button', { name: /Retirer le point de passage/ }).click();
+  await expect(page.getByRole('button', { name: /Passer par un lieu/ })).toBeVisible();
+});

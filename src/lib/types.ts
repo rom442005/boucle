@@ -60,6 +60,8 @@ export interface Match {
 export interface Route {
   id: string;
   name: string;
+  /** point de passage imposé par l'utilisateur */
+  via?: { name: string; coord: LngLat };
   sport: Sport;
   shape: Shape;
   coords: LngLat[];

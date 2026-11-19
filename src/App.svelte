@@ -12,6 +12,7 @@
   import ElevationProfile from './components/ElevationProfile.svelte';
   import Icon from './components/Icon.svelte';
   import InstallGuide from './components/InstallGuide.svelte';
+  import Stops from './components/Stops.svelte';
   import RollingNumber from './components/RollingNumber.svelte';
   import { duration, kmValue } from './lib/format';
   import { app } from './lib/state.svelte';
@@ -120,7 +121,11 @@
       {/if}
       {#if app.phase === 'compose'}
         {#if app.wide}
-          <div class="start-wide"><PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} /></div>
+          <!-- Les lieux du parcours, toujours visibles en haut : départ, point de passage, destination. -->
+          <div class="start-wide">
+            <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} />
+            <Stops />
+          </div>
         {/if}
       {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
         <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->
@@ -276,7 +281,9 @@
     font-weight: 500;
   }
   .start-wide {
-    padding-bottom: 8px;
+    display: grid;
+    gap: 8px;
+    padding-bottom: 10px;
   }
   .nav {
     display: flex;

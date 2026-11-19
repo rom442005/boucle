@@ -3,7 +3,7 @@
   import maplibregl from 'maplibre-gl';
   import type { GeoJSONSource, Map as MLMap, Marker } from 'maplibre-gl';
   import type { FeatureCollection, GeoJSON, Polygon } from 'geojson';
-  import { app } from '../lib/state.svelte';
+  import { app, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, ROUTE_CASING, type Theme } from '../lib/mapstyle';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
@@ -25,6 +25,7 @@
   let lastStartKey = '';
   let startMarker: Marker | null = null;
   let destMarker: Marker | null = null;
+  let viaMarker: Marker | null = null;
   let userMarker: Marker | null = null;
   let lens: Marker | null = null;
   let attrib: maplibregl.AttributionControl | null = null;
@@ -36,7 +37,7 @@
   };
 
   /** Ce qu'un clic sur la carte place, selon le moment (null : le clic ne place rien). */
-  function clickKind(): 'start' | 'destination' | null {
+  function clickKind(): PlaceKind | null {
     if (app.pickOnMap) return app.pickOnMap;
     if (app.search && app.wide) return app.search;
     if (app.phase === 'compose' && app.params.shape === 'oneway') return 'destination';
@@ -54,6 +55,7 @@
   const aimLabel = $derived.by(() => {
     if (!aim || !aimKind) return '';
     if (aimKind === 'start') return 'Départ ici';
+    if (aimKind === 'via') return 'Passer par ici';
     const s = app.start?.coord;
     return s ? `à ${km(haversine(s, aim.ll))} du départ` : 'Destination ici';
   });
@@ -61,13 +63,13 @@
   let rippleId = 0;
 
   /** Retour visuel d'un point posé : onde à l'endroit du clic, puis le marqueur se pose. */
-  function landed(kind: 'start' | 'destination', pt: { x: number; y: number }) {
+  function landed(kind: PlaceKind, pt: { x: number; y: number }) {
     aim = null;
     aimHold = { x: pt.x, y: pt.y };
     if (reduce) return;
     ripple = { x: pt.x, y: pt.y, id: ++rippleId };
     requestAnimationFrame(() => {
-      const mk = (kind === 'start' ? startMarker : destMarker)?.getElement();
+      const mk = (kind === 'start' ? startMarker : kind === 'via' ? viaMarker : destMarker)?.getElement();
       if (!mk) return;
       mk.classList.remove('is-dropping');
       void mk.offsetWidth;
@@ -317,10 +319,10 @@
       if (app.phase === 'follow') app.followCamera = false;
     });
     let longPressAt = 0;
-    const place = (kind: 'start' | 'destination', c: LngLat, pt: { x: number; y: number }) => {
+    const place = (kind: PlaceKind, c: LngLat, pt: { x: number; y: number }) => {
       haptic('tap');
       void app.placeFromMap(kind, c);
-      app.showToast(kind === 'start' ? 'Départ placé ici' : 'Destination placée ici');
+      app.showToast(kind === 'start' ? 'Départ placé ici' : kind === 'via' ? 'Point de passage placé ici' : 'Destination placée ici');
       landed(kind, pt);
     };
     // Un clic place un point : « Choisir sur la carte », recherche ouverte sur Mac (la carte reste visible),
@@ -488,6 +490,29 @@
     map.setPaintProperty('focus-veil', 'background-opacity', on ? (theme === 'dark' ? 0.34 : 0.42) : 0);
   });
 
+  // Point de passage imposé : losange, déplaçable pendant la composition.
+  $effect(() => {
+    if (!ready || !map) return;
+    const compose = app.phase === 'compose';
+    const v = compose ? app.via?.coord : app.phase === 'results' || app.phase === 'detail' ? app.route?.via?.coord : undefined;
+    if (!v) {
+      viaMarker?.remove();
+      viaMarker = null;
+      return;
+    }
+    if (!viaMarker) {
+      viaMarker = new maplibregl.Marker({ element: element('mk-via', '<span></span>'), draggable: compose, anchor: 'center' }).setLngLat(v).addTo(map);
+      viaMarker.on('dragend', () => {
+        const ll = viaMarker!.getLngLat();
+        app.placeFromMap('via', [ll.lng, ll.lat]);
+      });
+    } else {
+      viaMarker.setLngLat(v);
+      viaMarker.setDraggable(compose);
+    }
+    viaMarker.getElement().classList.toggle('is-draggable', compose);
+  });
+
   // Aperçu au survol : ligne droite du départ vers la destination visée.
   $effect(() => {
     if (!ready) return;
@@ -607,7 +632,7 @@
   <div class="aim" style:transform="translate({aim.x}px, {aim.y}px)" aria-hidden="true">
     <span class="aim-pulse"></span>
     <span class="aim-shadow"></span>
-    <span class="aim-pin" class:start={aimKind === 'start'}><span></span></span>
+    <span class="aim-pin" class:start={aimKind === 'start'} class:via={aimKind === 'via'}><span></span></span>
     <span class="aim-label">{aimLabel}</span>
   </div>
 {/if}
@@ -657,12 +682,31 @@
     display: grid;
     place-items: center;
   }
-  :global(.mk-dest.is-draggable) {
+  :global(.mk-dest.is-draggable),
+  :global(.mk-via.is-draggable) {
     cursor: grab;
+  }
+  /* Point de passage : losange blanc cerclé de rose, distinct du départ (disque) et de l'arrivée (damier). */
+  :global(.mk-via) {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+  }
+  :global(.mk-via span) {
+    width: 17px;
+    height: 17px;
+    border-radius: 4px;
+    rotate: 45deg;
+    background: #fff;
+    box-shadow:
+      inset 0 0 0 3.5px var(--tint),
+      0 4px 10px rgba(0, 0, 0, 0.28);
   }
   /* Le marqueur se pose (translate s'ajoute au transform de positionnement de MapLibre). */
   :global(.mk-start.is-dropping),
-  :global(.mk-dest.is-dropping) {
+  :global(.mk-dest.is-dropping),
+  :global(.mk-via.is-dropping) {
     animation: mk-drop 440ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   @keyframes -global-mk-drop {
@@ -747,6 +791,20 @@
     height: 13px;
     border-radius: 50%;
     background: var(--tint);
+  }
+  .aim-pin.via {
+    background: transparent;
+    box-shadow: none;
+  }
+  .aim-pin.via span {
+    width: 17px;
+    height: 17px;
+    border-radius: 4px;
+    rotate: 45deg;
+    background: #fff;
+    box-shadow:
+      inset 0 0 0 3.5px var(--tint),
+      0 6px 14px rgba(0, 0, 0, 0.26);
   }
   .aim-label {
     top: 12px;

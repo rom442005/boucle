@@ -17,7 +17,8 @@ L'app est une web app installable : pas d'App Store, mises à jour automatiques.
 3. **Distance** et **dénivelé positif** : le dénivelé reste « indifférent » tant qu'on ne touche pas son curseur. Le cercle en pointillés sur la carte montre jusqu'où la boucle peut aller.
 4. **Milieu** : forêt, bord de l'eau, parcs, campagne ou ville. Les parcours passent en priorité par ces milieux quand il y en a autour du départ.
 5. **Forme** : boucle, aller-retour, ou vers un lieu. La destination se choisit par adresse, ou d'un clic (d'une touche sur iPhone) sur la carte : en mode « Vers un lieu », chaque clic sur la carte place la destination, et le drapeau se fait glisser pour l'ajuster. Sur Mac, la carte reste cliquable pendant la recherche d'adresse, et un aperçu suit la souris : le drapeau, une ligne pointillée depuis le départ et la distance à vol d'oiseau.
-6. **Sol** et **options** : bitume, mixte ou chemins ; éviter les grands axes ; rues éclairées pour courir de nuit ; points d'eau ; départ face au vent (vélo) ; allure ou vitesse pour estimer la durée.
+6. **Passer par un lieu** (facultatif) : un endroit à visiter forcément (un parc, un point de vue, un monument), par adresse ou d'un clic sur la carte. La boucle, l'aller-retour ou l'itinéraire y passent, en tenant la distance demandée ; si elle est trop courte pour l'atteindre, Boucle le dit et propose le parcours le plus court qui y passe. Le losange se fait glisser pour l'ajuster. Sur Mac, le bouton et les lieux du parcours sont en haut de la colonne, sous le départ ; sur iPhone, dans la section Forme.
+7. **Sol** et **options** : bitume, mixte ou chemins ; éviter les grands axes ; rues éclairées pour courir de nuit ; points d'eau ; départ face au vent (vélo) ; allure ou vitesse pour estimer la durée.
 
 Sur iPhone, quand les propositions arrivent, le panneau descend pour montrer tout le parcours avec un résumé (distance, dénivelé, durée) : toucher le résumé pour voir le détail, le balayer de côté pour passer d'une proposition à l'autre.
 
@@ -37,7 +38,7 @@ Actions :
 
 Tout se passe dans le navigateur, sans compte ni serveur à nous :
 
-- **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap). Boucle place des points de passage autour du départ, choisit les directions selon le relief, les milieux et le vent, ajuste le rayon jusqu'à tomber à quelques pour cent de la distance demandée, puis garde les trois meilleures propositions. Les petits allers-retours vers un point de passage (impasse, petite rue, jusqu'à 900 m aller et retour) sont retirés du tracé.
+- **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap). Boucle place des points de passage autour du départ, choisit les directions selon le relief, les milieux et le vent, ajuste le rayon jusqu'à tomber à quelques pour cent de la distance demandée, puis garde les trois meilleures propositions. Les petits allers-retours vers un point de passage (impasse, petite rue, jusqu'à 900 m aller et retour) sont retirés du tracé, sauf celui qui mène au lieu imposé. Avec un lieu imposé, les boucles suivent deux cercles passant par le départ et ce lieu (un de chaque côté) et deux triangles, ajustés à la distance.
 - **Carte et milieux** : tuiles vectorielles [OpenFreeMap](https://openfreemap.org) (OpenMapTiles). Les forêts, l'eau, les parcs, les champs, la ville et les chemins sont lus dans ces tuiles pour orienter les parcours et calculer les répartitions.
 - **Relief** : tuiles d'altitude Terrarium (Mapzen, AWS Open Data) pour l'ombrage et la 3D ; altitudes des parcours fournies par Valhalla.
 - **Adresses** : [Photon](https://photon.komoot.io) (komoot, OpenStreetMap).

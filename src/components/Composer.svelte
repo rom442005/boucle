@@ -3,8 +3,8 @@
   import Segmented from './Segmented.svelte';
   import RangeField from './RangeField.svelte';
   import EnvChips from './EnvChips.svelte';
-  import PlaceField from './PlaceField.svelte';
   import InstallGuide from './InstallGuide.svelte';
+  import Stops from './Stops.svelte';
   import { app } from '../lib/state.svelte';
   import { isDesktop, isIOS, isStandalone } from '../lib/platform';
   import { asSwitch, haptic, nativeSwitch } from '../lib/haptics';
@@ -125,15 +125,9 @@
       options={(Object.keys(SHAPES) as Shape[]).map((s) => ({ value: s, label: SHAPES[s].label }))}
       onchange={setShape}
     />
-    {#if p.shape === 'oneway'}
-      <PlaceField kind="destination" place={app.destination} onclick={() => (app.search = 'destination')} />
-      <p class="hint">
-        {#if app.destination}
-          Pour la déplacer, {isDesktop ? 'clique ailleurs sur' : 'touche ailleurs'} la carte ou fais glisser le drapeau.
-        {:else}
-          Ou {isDesktop ? 'clique directement sur' : 'touche directement'} la carte, là où tu veux aller.
-        {/if}
-      </p>
+    <!-- Sur Mac, ces lieux sont en haut de la colonne, sous le départ. -->
+    {#if !app.wide}
+      <Stops />
     {/if}
   </section>
 

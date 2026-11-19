@@ -24,6 +24,8 @@ export interface SerialRoute {
   w: LngLat[];
   t: number;
   pr?: Params;
+  /** point de passage imposé */
+  vp?: { n: string; c: LngLat };
 }
 
 export function serialize(r: Route, compact = false): SerialRoute {
@@ -45,6 +47,7 @@ export function serialize(r: Route, compact = false): SerialRoute {
     w: r.waterPoints.map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5]),
     t: r.createdAt,
     pr: compact ? undefined : r.params,
+    vp: r.via ? { n: r.via.name, c: [Math.round(r.via.coord[0] * 1e5) / 1e5, Math.round(r.via.coord[1] * 1e5) / 1e5] } : undefined,
   };
 }
 
@@ -81,6 +84,7 @@ export function deserialize(s: SerialRoute, settings: Settings): Route {
     durationS: estimateDuration(s.s, lengthM, st.ascent, settings),
     params: s.pr,
     createdAt: s.t,
+    via: s.vp ? { name: s.vp.n, coord: s.vp.c } : undefined,
   };
 }
 
@@ -151,6 +155,7 @@ export interface LastSession {
   params?: Params;
   start?: SavedPlace;
   destination?: SavedPlace;
+  via?: SavedPlace;
   view?: { center: LngLat; zoom: number };
 }
 export function loadLast(): LastSession {

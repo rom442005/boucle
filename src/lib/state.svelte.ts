@@ -34,6 +34,8 @@ const same = (a: LngLat, b: LngLat) => a[0] === b[0] && a[1] === b[1];
 
 export type Phase = 'compose' | 'results' | 'library' | 'detail' | 'follow';
 export type Detent = 'peek' | 'half' | 'full';
+/** Rôle d'un lieu choisi : départ, destination (« Vers un lieu ») ou point de passage imposé. */
+export type PlaceKind = 'start' | 'destination' | 'via';
 
 export interface Padding {
   top: number;
@@ -47,6 +49,8 @@ class AppState {
   settings = $state<Settings>(loadSettings(DEFAULT_SETTINGS));
   start = $state<Place | null>(null);
   destination = $state<Place | null>(null);
+  /** point de passage imposé : un endroit à visiter forcément */
+  via = $state<Place | null>(null);
 
   phase = $state<Phase>('compose');
   /** écran à retrouver en quittant le suivi */
@@ -71,8 +75,8 @@ class AppState {
   flags = $state<Record<string, boolean>>(loadFlags());
   weather = $state.raw<Weather | null>(null);
 
-  search = $state<null | 'start' | 'destination'>(null);
-  pickOnMap = $state<null | 'start' | 'destination'>(null);
+  search = $state<null | PlaceKind>(null);
+  pickOnMap = $state<null | PlaceKind>(null);
   toast = $state<{ text: string; id: number } | null>(null);
 
   detent = $state<Detent>('half');
@@ -117,6 +121,7 @@ class AppState {
     if (last.params && SPORTS[last.params.sport]) this.params = { ...defaultParams(last.params.sport), ...last.params };
     if (last.start) this.start = last.start;
     if (last.destination) this.destination = last.destination;
+    if (last.via) this.via = last.via;
   }
 
   get route(): Route | null {
@@ -135,6 +140,7 @@ class AppState {
       params: $state.snapshot(this.params),
       start: this.start ? $state.snapshot(this.start) : undefined,
       destination: this.destination ? $state.snapshot(this.destination) : undefined,
+      via: this.via ? $state.snapshot(this.via) : undefined,
     });
   }
 
@@ -208,26 +214,38 @@ class AppState {
     });
   }
 
-  async useMyPosition(kind: 'start' | 'destination' = 'start') {
+  /** Le lieu d'un rôle donné (départ, destination, point de passage). */
+  placeOf(kind: PlaceKind): Place | null {
+    return kind === 'start' ? this.start : kind === 'destination' ? this.destination : this.via;
+  }
+
+  async useMyPosition(kind: PlaceKind = 'start') {
     const c = await this.locate();
     if (!c) return null;
     const place: Place = { name: 'Ma position', coord: c, kind: 'gps' };
     this.setPlace(kind, place);
     void reverse(c).then((r) => {
-      const cur = kind === 'start' ? this.start : this.destination;
+      const cur = this.placeOf(kind);
       if (r && cur && same(cur.coord, c)) this.setPlace(kind, { ...place, detail: r.detail ? `${r.name}, ${r.detail}` : r.name });
     });
     return c;
   }
 
-  setPlace(kind: 'start' | 'destination', p: Place) {
+  setPlace(kind: PlaceKind, p: Place) {
     if (kind === 'start') this.start = p;
-    else this.destination = p;
+    else if (kind === 'destination') this.destination = p;
+    else this.via = p;
     this.persist();
   }
 
   /** Choisir un point sur la carte : sur iPhone, le panneau descend pour dégager la carte. */
-  startPick(kind: 'start' | 'destination') {
+  /** Retire le point de passage. */
+  clearVia() {
+    this.via = null;
+    this.persist();
+  }
+
+  startPick(kind: PlaceKind) {
     this.search = null;
     this.pickOnMap = kind;
     if (!this.wide && this.detent !== 'peek') {
@@ -247,13 +265,13 @@ class AppState {
     this.pickPrevDetent = null;
   }
 
-  async placeFromMap(kind: 'start' | 'destination', c: LngLat) {
+  async placeFromMap(kind: PlaceKind, c: LngLat) {
     const place: Place = { name: 'Point choisi', coord: c, kind: 'map' };
     this.setPlace(kind, place);
     this.pickOnMap = null;
     this.restoreDetent();
     const r = await reverse(c);
-    const cur = kind === 'start' ? this.start : this.destination;
+    const cur = this.placeOf(kind);
     if (r && cur && same(cur.coord, c)) this.setPlace(kind, { ...place, name: r.name, detail: r.detail });
   }
 
@@ -284,6 +302,7 @@ class AppState {
       const res = await generate({
         start: $state.snapshot(this.start!) as Place,
         destination: this.destination ? ($state.snapshot(this.destination) as Place) : null,
+        via: this.via ? ($state.snapshot(this.via) as Place) : null,
         params: $state.snapshot(this.params) as Params,
         settings: $state.snapshot(this.settings) as Settings,
         seed: this.seed,

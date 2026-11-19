@@ -23,7 +23,7 @@ function angDiff(a: number, b: number): number {
  * Repère les allers-retours d'au plus `maxHalf` m de chaque côté (donc 2 x maxHalf en tout).
  * `tol` : écart maximal entre l'aller et le retour pour les considérer superposés.
  */
-export function findSpurs(coords: LngLat[], maxHalf = 450, tol = 7): Cut[] {
+export function findSpurs(coords: LngLat[], maxHalf = 450, tol = 7, keep: LngLat[] = []): Cut[] {
   if (coords.length < 3) return [];
   const cum = cumulative(coords);
   const total = cum[cum.length - 1];
@@ -46,7 +46,12 @@ export function findSpurs(coords: LngLat[], maxHalf = 450, tol = 7): Cut[] {
     let m = 0;
     while (k - m - 1 >= 0 && k + m + 1 < pts.length && haversine(pts[k - m - 1], pts[k + m + 1]) <= tol) m++;
     const half = m * STEP;
-    if (half >= 15 && half <= maxHalf) {
+    // Un aller-retour qui mène à un point de passage imposé est voulu : on le garde.
+    const reachesKeep = keep.some((q) => {
+      for (let j = k - m; j <= k + m; j++) if (haversine(pts[j], q) <= 35) return true;
+      return false;
+    });
+    if (half >= 15 && half <= maxHalf && !reachesKeep) {
       cuts.push({ from: (k - m) * STEP, to: Math.min(total, (k + m) * STEP) });
       k += m + 1;
     } else k++;
@@ -99,11 +104,14 @@ export function applyCuts(coords: LngLat[], profile: Profile, cuts: Cut[]): { co
   return { coords: out, profile: { step: profile.step, ele } };
 }
 
-/** Plusieurs passes : retirer un aller-retour peut en révéler un autre au même carrefour. */
-export function removeSpurs(coords: LngLat[], profile: Profile, maxHalf = 450) {
+/**
+ * Plusieurs passes : retirer un aller-retour peut en révéler un autre au même carrefour.
+ * `keep` : points de passage imposés, jamais coupés.
+ */
+export function removeSpurs(coords: LngLat[], profile: Profile, maxHalf = 450, keep: LngLat[] = []) {
   let cur = { coords, profile };
   for (let pass = 0; pass < 4; pass++) {
-    const cuts = findSpurs(cur.coords, maxHalf);
+    const cuts = findSpurs(cur.coords, maxHalf, 7, keep);
     if (!cuts.length) break;
     cur = applyCuts(cur.coords, cur.profile, cuts);
   }

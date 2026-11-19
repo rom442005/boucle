@@ -11,6 +11,8 @@ import { estimateDuration, SPORTS } from './sports';
 export interface GenerateOptions {
   start: Place;
   destination?: Place | null;
+  /** point de passage imposé : un endroit à visiter forcément */
+  via?: Place | null;
   params: Params;
   settings: Settings;
   seed: number;
@@ -117,6 +119,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   const report = (message: string, ratio: number) => o.onProgress?.({ message, ratio });
 
   if (p.shape === 'oneway' && !o.destination) throw new GenerateError('Choisis d’abord une destination.');
+  const via = o.via?.coord ?? null;
 
   // Zone de recherche autour du départ (ou du milieu du trajet).
   let center = start.coord;
@@ -125,11 +128,16 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     const ab = haversine(start.coord, o.destination.coord);
     center = destination(start.coord, bearing(start.coord, o.destination.coord), ab / 2);
     areaR = Math.max(ab / 2 + 1200, D / 3.2);
+  } else if (via) {
+    const sv = haversine(start.coord, via);
+    center = destination(start.coord, bearing(start.coord, via), sv / 2);
+    areaR = Math.max(sv / 2 + 1500, p.shape === 'outback' ? D / 2 / 1.15 + 700 : D / 4 + 700);
   } else if (p.shape === 'outback') {
     areaR = D / 2 / 1.15 + 700;
   } else {
     areaR = D / 4 + 700;
   }
+  if (via) areaR = Math.max(areaR, haversine(center, via) + 800);
   areaR = Math.min(areaR, 45000);
 
   report('Lecture du terrain autour du départ…', 0.06);
@@ -142,9 +150,9 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   const des = raster ? desirability(raster, p.envs, unpavedWeight(p)) : null;
 
   let candidates: Candidate[] = [];
-  const ctx: Ctx = { p, start: start.coord, D, costing, des, rnd, wx, signal, report };
-  if (p.shape === 'loop') candidates = await loops(ctx);
-  else if (p.shape === 'outback') candidates = await outbacks(ctx);
+  const ctx: Ctx = { p, start: start.coord, D, costing, des, rnd, wx, signal, report, via };
+  if (p.shape === 'loop') candidates = via ? await viaLoops(ctx, via) : await loops(ctx);
+  else if (p.shape === 'outback') candidates = via ? await viaOutbacks(ctx, via) : await outbacks(ctx);
   else candidates = await oneways(ctx, o.destination!.coord);
 
   if (!candidates.length) {
@@ -187,10 +195,17 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   );
 
   const routes = picked.map((a) => a.route);
+  if (o.via) for (const r of routes) r.via = { name: o.via.name, coord: o.via.coord };
   tag(routes, p);
 
   let note: string | null = null;
-  if (p.elevation != null && routes.length) {
+  if (o.via && routes.length) {
+    const shortest = Math.min(...routes.map((r) => r.lengthM));
+    if (shortest > D * 1.12) {
+      note = `Pour passer par ${o.via.name}, le parcours fait au moins ${(shortest / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km.`;
+    }
+  }
+  if (p.elevation != null && routes.length && !note) {
     const bestAscent = Math.max(...routes.map((r) => r.ascent));
     const lowest = Math.min(...routes.map((r) => r.ascent));
     if (bestAscent < p.elevation * 0.6) note = `Le relief autour du départ est limité : au mieux ${bestAscent} m de dénivelé pour cette distance.`;
@@ -213,6 +228,8 @@ interface Ctx {
   wx: Weather | null;
   signal?: AbortSignal;
   report: (m: string, r: number) => void;
+  /** point de passage imposé */
+  via: LngLat | null;
 }
 
 /* ---------------------------------- Boucles ---------------------------------- */
@@ -342,11 +359,12 @@ function mirror(res: RouteResult): RouteResult {
 /* ------------------------------ Vers un lieu (A vers B) ------------------------------ */
 
 async function oneways(c: Ctx, B: LngLat): Promise<Candidate[]> {
+  if (c.via) return viaOneways(c, B, c.via);
   const { start: A, D } = c;
   const out: Candidate[] = [];
   let direct: RouteResult[] = [];
   try {
-    direct = (await route([{ coord: A }, { coord: B }], c.costing, c.signal, 2)).map(clean);
+    direct = (await route([{ coord: A }, { coord: B }], c.costing, c.signal, 2)).map((r) => clean(r));
   } catch (e) {
     if (e instanceof RoutingError) throw new GenerateError(routingMessage(e));
     throw e;
@@ -384,25 +402,163 @@ async function oneways(c: Ctx, B: LngLat): Promise<Candidate[]> {
   return [...detours.filter((x): x is Candidate => !!x), ...out];
 }
 
+/* -------------------------- Avec un point de passage imposé -------------------------- */
+
+/**
+ * Boucles qui passent par V : deux cercles passant par le départ et V (un de chaque côté
+ * de la ligne départ–V) et deux triangles départ → V → W. La taille s'ajuste à la distance.
+ */
+async function viaLoops(c: Ctx, V: LngLat): Promise<Candidate[]> {
+  const { p, start: S, D } = c;
+  const bike = SPORTS[p.sport].bike;
+  const d = Math.max(60, haversine(S, V));
+  const brg = bearing(S, V);
+  const M = destination(S, brg, d / 2);
+  const ratio = bike ? 1.25 : 1.32;
+  const n = D <= 8000 ? 4 : 5; // sommets du polygone, départ et V compris
+  const poly = 2 * n * Math.sin(Math.PI / n);
+  const pull = (w: LngLat, r: number) => (c.des ? pullToward(c.des, w, Math.max(200, r * 0.3)) : w);
+
+  const circle = (side: 1 | -1, r: number): LngLat[] => {
+    const rr = Math.max(r, (d / 2) * 1.04);
+    const h = Math.sqrt(rr * rr - (d / 2) ** 2);
+    const C = destination(M, brg + 90 * side, h);
+    const aS = bearing(C, S);
+    const aV = bearing(C, V);
+    const span = (aV - aS + 360) % 360;
+    const k1 = Math.round(((n - 2) * span) / 360);
+    const k2 = n - 2 - k1;
+    const pts: LngLat[] = [];
+    for (let i = 1; i <= k1; i++) pts.push(pull(destination(C, aS + (span * i) / (k1 + 1), rr), rr));
+    pts.push(V);
+    for (let i = 1; i <= k2; i++) pts.push(pull(destination(C, aV + ((360 - span) * i) / (k2 + 1), rr), rr));
+    return [S, ...pts, S];
+  };
+  const triangle = (side: 1 | -1, e: number): LngLat[] => [S, V, pull(destination(S, brg + 55 * side, e), e), S];
+
+  const variants: { side: 1 | -1; tri: boolean }[] = [
+    { side: 1, tri: false },
+    { side: -1, tri: false },
+    { side: 1, tri: true },
+    { side: -1, tri: true },
+  ];
+  let done = 0;
+  const results = await Promise.all(
+    variants.map(async (v): Promise<Candidate | null> => {
+      let size = v.tri ? Math.max(d * 0.6, (D / ratio - d) / 2) : D / (ratio * poly);
+      let best: { res: RouteResult; err: number } | null = null;
+      for (let it = 0; it < 3; it++) {
+        const res = await routeWithFallback(c, v.tri ? triangle(v.side, size) : circle(v.side, size));
+        if (!res) break;
+        const L = lengthOf(res.coords);
+        const err = Math.abs(L - D) / D;
+        if (!best || err < best.err) best = { res, err };
+        if (err <= 0.04) break;
+        size *= clamp(Math.pow(D / L, v.tri ? 1.1 : 0.95), 0.55, 1.7);
+      }
+      done++;
+      c.report('Recherche des chemins…', 0.15 + (0.68 * done) / variants.length);
+      // Même trop longue (point de passage loin), la boucle reste proposée : une remarque le dira.
+      return best ? { res: best.res, far: V, windAlign: windAlign(c.wx, brg) } : null;
+    }),
+  );
+  return results.filter((x): x is Candidate => !!x);
+}
+
+/** Allers-retours par V : on va jusqu'à V, puis plus loin si la distance le demande, et on revient. */
+async function viaOutbacks(c: Ctx, V: LngLat): Promise<Candidate[]> {
+  const { start: S, D } = c;
+  const half = D / 2;
+  const first = await routeWithFallback(c, [S, V]);
+  if (!first) throw new GenerateError('Aucun chemin praticable ne mène à ce point de passage pour ce sport.');
+  const L1 = lengthOf(first.coords);
+  const brg = bearing(S, V);
+  const only: Candidate = { res: mirror(first), half: first, far: V, windAlign: windAlign(c.wx, brg) };
+  if (L1 >= half * 0.92) return [only];
+  let done = 0;
+  const results = await Promise.all(
+    [0, 55, -55].map(async (dev): Promise<Candidate | null> => {
+      let e = (half - L1) / 1.3;
+      let best: { res: RouteResult; err: number; turn: LngLat } | null = null;
+      for (let it = 0; it < 3; it++) {
+        let turn = destination(V, brg + dev, e);
+        if (c.des) turn = pullToward(c.des, turn, Math.max(200, e * 0.3));
+        const res = await routeWithFallback(c, [S, V, turn]);
+        if (!res) break;
+        const L = lengthOf(res.coords);
+        const err = Math.abs(L - half) / half;
+        if (!best || err < best.err) best = { res, err, turn };
+        if (err <= 0.04) break;
+        e *= clamp((half - L1) / Math.max(50, L - L1), 0.5, 1.8);
+      }
+      done++;
+      c.report('Recherche des chemins…', 0.3 + (0.55 * done) / 3);
+      return best && best.err < 0.3 ? { res: mirror(best.res), half: best.res, far: best.turn, windAlign: windAlign(c.wx, brg + dev) } : null;
+    }),
+  );
+  const found = results.filter((x): x is Candidate => !!x);
+  return found.length ? found : [only];
+}
+
+/** Vers un lieu par V : le trajet direct par V, puis deux détours sur la plus longue étape si la distance le permet. */
+async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Candidate[]> {
+  const { start: A, D } = c;
+  const base = await routeWithFallback(c, [A, V, B]);
+  if (!base) throw new GenerateError('Aucun chemin praticable ne relie ces points pour ce sport.');
+  const out: Candidate[] = [{ res: base, far: B, windAlign: 0 }];
+  const L0 = lengthOf(base.coords);
+  c.report('Recherche des chemins…', 0.4);
+  if (D <= L0 * 1.1) return out;
+  const firstLeg = haversine(A, V) >= haversine(V, B);
+  const [P, Q] = firstLeg ? [A, V] : [V, B];
+  const pq = Math.max(60, haversine(P, Q));
+  const brg = bearing(P, Q);
+  const mid = destination(P, brg, pq / 2);
+  const extra = (D - L0) / 1.3;
+  let done = 0;
+  const detours = await Promise.all(
+    [90, -90].map(async (side): Promise<Candidate | null> => {
+      let h = Math.sqrt(Math.max(0, ((extra + pq) / 2) ** 2 - (pq / 2) ** 2));
+      let best: { res: RouteResult; err: number } | null = null;
+      for (let it = 0; it < 3; it++) {
+        let w = destination(mid, brg + side, h);
+        if (c.des) w = pullToward(c.des, w, Math.max(250, h * 0.3));
+        const res = await routeWithFallback(c, firstLeg ? [A, w, V, B] : [A, V, w, B]);
+        if (!res) break;
+        const L = lengthOf(res.coords);
+        const err = Math.abs(L - D) / D;
+        if (!best || err < best.err) best = { res, err };
+        if (err <= 0.05) break;
+        h *= clamp(Math.pow(D / L, 1.3), 0.5, 1.8);
+      }
+      done++;
+      c.report('Recherche des chemins…', 0.4 + (0.45 * done) / 2);
+      return best && best.err < 0.3 ? { res: best.res, far: B, windAlign: 0 } : null;
+    }),
+  );
+  return [...detours.filter((x): x is Candidate => !!x), ...out];
+}
+
 /* ------------------------------------ Outils ------------------------------------ */
 
-/** Retire les petits allers-retours vers un point de passage (impasse, petite rue). */
-function clean(res: RouteResult): RouteResult {
-  const { coords, profile } = removeSpurs(res.coords, res.profile);
+/** Retire les petits allers-retours vers un point de passage (impasse, petite rue), sauf vers ceux imposés. */
+function clean(res: RouteResult, keep: LngLat[] = []): RouteResult {
+  const { coords, profile } = removeSpurs(res.coords, res.profile, 450, keep);
   if (coords === res.coords) return res;
   return { ...res, coords, profile, lengthM: lengthOf(coords) };
 }
 
 async function routeWithFallback(c: Ctx, pts: LngLat[]): Promise<RouteResult | null> {
+  const keep = c.via ? [c.via] : [];
   const through = pts.map((coord, i) => ({ coord, through: i > 0 && i < pts.length - 1 }));
   try {
-    return clean((await route(through, c.costing, c.signal))[0]);
+    return clean((await route(through, c.costing, c.signal))[0], keep);
   } catch (e) {
     if (c.signal?.aborted) throw e;
     if (!(e instanceof RoutingError)) return null;
     if (e.code === 171 && pts.length === 2) throw new GenerateError(routingMessage(e));
     try {
-      return clean((await route(pts.map((coord) => ({ coord })), c.costing, c.signal))[0]);
+      return clean((await route(pts.map((coord) => ({ coord })), c.costing, c.signal))[0], keep);
     } catch (e2) {
       if (c.signal?.aborted) throw e2;
       return null;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import type { Place } from '../lib/types';
+  import type { PlaceKind } from '../lib/state.svelte';
 
   let {
     kind,
@@ -8,19 +9,20 @@
     busy = false,
     onclick,
     floating = false,
-  }: { kind: 'start' | 'destination'; place: Place | null; busy?: boolean; onclick: () => void; floating?: boolean } = $props();
+  }: { kind: PlaceKind; place: Place | null; busy?: boolean; onclick: () => void; floating?: boolean } = $props();
 
-  const title = $derived(kind === 'start' ? 'Départ' : 'Destination');
-  const value = $derived(
-    busy ? 'Localisation…' : place ? (place.kind === 'gps' ? 'Ma position' : place.name) : kind === 'start' ? 'Choisir un départ' : 'Choisir une destination',
-  );
+  const title = $derived(kind === 'start' ? 'Départ' : kind === 'via' ? 'Passer par' : 'Destination');
+  const EMPTY: Record<PlaceKind, string> = { start: 'Choisir un départ', destination: 'Choisir une destination', via: 'Choisir un lieu' };
+  const value = $derived(busy ? 'Localisation…' : place ? (place.kind === 'gps' ? 'Ma position' : place.name) : EMPTY[kind]);
   const detail = $derived(place?.kind === 'gps' ? place.detail : place?.detail);
 </script>
 
 <button type="button" class="place" class:glass={floating} class:floating {onclick} aria-label="{title} : {value}{detail ? ', ' + detail : ''}. Modifier">
-  <span class="dot" class:dest={kind === 'destination'} aria-hidden="true">
+  <span class="dot" class:dest={kind === 'destination'} class:via={kind === 'via'} aria-hidden="true">
     {#if kind === 'start'}
       {#if place?.kind === 'gps'}<Icon name="locate" size={15} fill />{:else}<Icon name="pin" size={15} />{/if}
+    {:else if kind === 'via'}
+      <Icon name="diamond" size={15} fill />
     {:else}
       <Icon name="flag" size={15} />
     {/if}
@@ -65,6 +67,11 @@
   .dot.dest {
     background: var(--label);
     color: var(--glass-panel);
+  }
+  .dot.via {
+    background: var(--tint-soft);
+    color: var(--tint);
+    box-shadow: none;
   }
   .txt {
     display: grid;
