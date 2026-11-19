@@ -392,18 +392,23 @@
    * il y glisse quand le panneau change de taille ou quand on finit de dézoomer.
    */
   let pendingPad: Padding | null = null;
-  function syncPadding(p: Padding) {
+  /** Vu de l'espace sur iPhone, la capsule « Revenir… » coiffe le panneau : la Terre se centre au-dessus d'elle. */
+  function spacePad(p: Padding): Padding {
+    return app.wide ? p : { ...p, bottom: p.bottom + 44 };
+  }
+  function syncPadding(given: Padding) {
+    const p = spacePad(given);
     if (!map || map.getZoom() >= SPACE_ZOOM) return;
     // Pendant un cadrage ou un geste, on attend la fin du mouvement : un saut l'interromprait.
     if (map.isMoving()) {
-      pendingPad = p;
+      pendingPad = given;
       return;
     }
     pendingPad = null;
     const cur = map.getPadding();
     if (cur.top === p.top && cur.bottom === p.bottom && cur.left === p.left && cur.right === p.right) return;
     // Vue de la Terre entière : elle garde sa taille par rapport à la nouvelle partie visible.
-    const zoom = orbit ? { zoom: orbitZoom(map.getCenter().lat, p) } : {};
+    const zoom = orbit ? { zoom: orbitZoom(map.getCenter().lat, given) } : {};
     map.easeTo({ padding: p, ...zoom, duration: reduce ? 0 : 520, easing: (t) => 1 - Math.pow(1 - t, 3) });
   }
 
@@ -448,7 +453,8 @@
    * (l'échelle au centre reste celle du plan) : on compense, perspective comprise, pour que la planète
    * garde la même taille, entière, au milieu de la partie visible, au-dessus de Nantes comme de l'équateur.
    */
-  function orbitZoom(lat = map!.getCenter().lat, p: Padding = untrack(() => app.padding)): number {
+  function orbitZoom(lat = map!.getCenter().lat, given: Padding = untrack(() => app.padding)): number {
+    const p = spacePad(given);
     const box = map!.getContainer();
     const side = Math.max(160, Math.min(box.clientWidth - p.left - p.right, box.clientHeight - p.top - p.bottom));
     const r = (ORBIT_FILL * side) / 2;
@@ -463,7 +469,7 @@
     if (!m) return;
     const target = orbitZoom();
     const span = Math.abs(m.getZoom() - target);
-    const p = untrack(() => app.padding);
+    const p = spacePad(untrack(() => app.padding));
     const cur = m.getPadding();
     const placed = cur.top === p.top && cur.bottom === p.bottom && cur.left === p.left && cur.right === p.right;
     if (span < 0.01 && Math.abs(m.getPitch()) < 0.5 && placed) return;
