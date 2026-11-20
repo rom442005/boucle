@@ -15,7 +15,9 @@
   import type { EnvClass, Route } from '../lib/types';
 
   const r = $derived(app.route);
-  const many = $derived(app.routes.length > 1);
+  /** La première proposition est là, les autres se cherchent encore. */
+  const searching = $derived(app.generating && app.phase === 'results');
+  const many = $derived(app.routes.length > 1 || searching);
 
   const envItems = (x: Route) => [
     ...ENV_ORDER.map((e) => ({ key: e, label: ENVS[e].label, color: `var(--env-${e})`, value: x.env[e] ?? 0 })),
@@ -182,7 +184,19 @@
         </span>
       </button>
     {/each}
+    {#if searching}
+      <!-- Place réservée : les autres propositions prennent sa place en arrivant, sans que rien ne saute. -->
+      <div class="card ghost" aria-hidden="true" style:--i={app.routes.length}>
+        <span class="g-glyph"></span>
+        <span class="c-txt">
+          <span class="c-name">Autres propositions…</span>
+          <span class="g-line"></span>
+          <span class="g-line short"></span>
+        </span>
+      </div>
+    {/if}
   </div>
+  {#if searching}<p class="visually-hidden" role="status">Recherche d’autres propositions</p>{/if}
 {/if}
 
 {#if r}
@@ -311,8 +325,8 @@
     {#if r.surface}
       <Breakdown title="Sols" items={surfItems(r)} note={r.busy != null ? `Grands axes : ${percent(r.busy)}` : undefined} />
     {/if}
-    {#if r.overlap > 0.12 && r.shape === 'loop'}
-      <p class="hint">{percent(r.overlap)} du tracé repasse au même endroit.</p>
+    {#if r.shape === 'loop' && r.overlap * r.lengthM >= 50}
+      <p class="hint">Repasse au même endroit sur {meters(Math.round((r.overlap * r.lengthM) / 10) * 10)}.</p>
     {/if}
   </article>
 {/if}
@@ -370,6 +384,47 @@
   }
   .strip.wide .card {
     flex: none;
+  }
+  /* Place réservée pendant la recherche : un reflet la parcourt, comme le bouton qui cherche. */
+  .card.ghost {
+    position: relative;
+    overflow: hidden;
+    pointer-events: none;
+    color: var(--label-2);
+  }
+  .card.ghost::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--label) 7%, transparent) 50%, transparent 80%);
+    translate: -100% 0;
+    animation: ghost-sheen 1.3s var(--ease-out) infinite;
+  }
+  @keyframes ghost-sheen {
+    to {
+      translate: 100% 0;
+    }
+  }
+  .g-glyph {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1.5px dashed var(--label-3);
+    opacity: 0.7;
+  }
+  .ghost .c-name {
+    font-weight: 500;
+  }
+  .g-line {
+    display: block;
+    height: 8px;
+    width: 120px;
+    border-radius: 4px;
+    background: var(--fill-2);
+  }
+  .g-line.short {
+    width: 72px;
   }
   .card:active {
     transform: scale(0.98);

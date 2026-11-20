@@ -1184,7 +1184,8 @@
     if (!ready || !map) return;
     const m = map;
     const s = app.start?.coord;
-    if (!app.generating || !s) {
+    // Le sonar s'arrête dès que la première proposition s'affiche (les autres se cherchent en silence).
+    if (!app.generating || app.phase !== 'compose' || !s) {
       fadeProp('reach-fill', 'fill-opacity', 0.035, 600);
       for (const id of ['sonar-a', 'sonar-b']) fadeProp(id, 'circle-stroke-opacity', 0, 300);
       return;
@@ -1338,6 +1339,9 @@
     setData('aim', aim && aimKind === 'destination' && s ? lineFeature([s, aim.ll]) : EMPTY);
   });
 
+  /** Tracé affiché et nombre de propositions secondaires (pour ne pas retracer quand d'autres arrivent). */
+  let lastDrawn: LngLat[] | null = null;
+  let lastAltCount = 0;
   // Propositions : alternatives discrètes, tracé choisi coloré selon la pente, qui se dessine.
   $effect(() => {
     if (!ready) return;
@@ -1346,6 +1350,8 @@
     const tick = app.drawTick;
     if (!routes.length) {
       cancelAnimationFrame(anim);
+      lastDrawn = null;
+      lastAltCount = 0;
       app.revealK = 1;
       for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen']) setData(id, EMPTY);
       if (lastTick !== -1 && app.phase === 'compose' && app.start) {
@@ -1361,21 +1367,44 @@
       type: 'FeatureCollection',
       features: routes.flatMap((x, i) => (i === sel ? [] : [lineFeature(x.coords, { idx: i })])),
     };
+    const altCount = alt.features.length;
     setData('alt', alt);
     setData('water', pointsFC(r.waterPoints));
     const fresh = tick !== lastTick;
     lastTick = tick;
+    // Le parcours affiché n'a pas changé (les autres propositions arrivent, les sols sont connus) :
+    // son tracé continue ; les nouvelles propositions apparaissent en fondu, une fois le tracé fini.
+    if (!fresh && r.coords === lastDrawn) {
+      const tracing = !!reveal && performance.now() < reveal.t0 + reveal.ms;
+      if (altCount > lastAltCount && !tracing && !reduce) {
+        for (const id of ['alt-line', 'alt-casing']) fadeProp(id, 'line-opacity', 0, 0);
+        fadeProp('alt-casing', 'line-opacity', ALT_OPACITY.casing, 520, 40);
+        fadeProp('alt-line', 'line-opacity', altLineOpacity(), 520, 40);
+      }
+      lastAltCount = altCount;
+      return;
+    }
+    lastDrawn = r.coords;
+    lastAltCount = altCount;
     draw(r, fresh, kmMarks(r));
     // Les marges dépendent du panneau, mis à jour dans le même cycle : on cadre à l'image suivante.
     if (fresh) requestAnimationFrame(() => fitCoords(r.coords));
   });
 
+  /**
+   * Le tracé affiché (son profil, objet stable) : les sols, connus après coup, remplacent l'objet parcours
+   * sans changer son tracé ; ce qui en dépend (pastilles de côtes, côte mise en avant, relief 3D) ne
+   * doit pas repartir de zéro.
+   */
+  const shownProfile = $derived(app.phase === 'results' || app.phase === 'detail' ? (app.route?.profile ?? null) : null);
+
   // Côtes et descentes du parcours sélectionné : une pastille au milieu de chacune, à toucher pour la mettre en avant.
   let climbMarkers: Marker[] = [];
   $effect(() => {
     if (!ready || !map) return;
-    const r = app.phase === 'results' || app.phase === 'detail' ? app.route : null;
+    void shownProfile;
     void app.drawTick;
+    const r = untrack(() => (app.phase === 'results' || app.phase === 'detail' ? app.route : null));
     for (const mk of climbMarkers) mk.remove();
     climbMarkers = [];
     untrack(() => (app.focusClimb = null));
@@ -1412,7 +1441,8 @@
   $effect(() => {
     if (!ready || !map) return;
     const f = app.focusClimb;
-    const r = app.route;
+    void shownProfile;
+    const r = untrack(() => app.route);
     climbMarkers.forEach((mk, i) => mk.getElement().classList.toggle('on', i === f));
     const c = r && f != null ? climbsOf(r)[f] : null;
     if (!r || !c) {
@@ -1430,7 +1460,7 @@
 
   // En 3D, l'exagération du relief suit le parcours affiché.
   $effect(() => {
-    void app.route;
+    void shownProfile;
     if (!ready || !map || !untrack(() => app.terrain3d)) return;
     untrack(() => {
       try {

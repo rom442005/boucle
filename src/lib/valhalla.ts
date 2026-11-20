@@ -1,5 +1,5 @@
 import type { LngLat, Params, Profile, Settings, SurfaceSplit } from './types';
-import { decodePolyline, encodePolyline, simplify } from './geo';
+import { decodePolyline, encodePolyline, haversine, simplify } from './geo';
 import { cleanElevation } from './elevation';
 
 const BASE = 'https://valhalla1.openstreetmap.de';
@@ -15,29 +15,78 @@ export class RoutingError extends Error {
   }
 }
 
-/* Serveur public partagé : deux requêtes à la fois au plus, espacées, avec reprise sur saturation. */
-let active = 0;
-let lastStart = 0;
-const queue: (() => void)[] = [];
-const MAX_ACTIVE = 2;
-const MIN_GAP = 90;
+/*
+ * Serveur public partagé (FOSSGIS) : au plus une requête par seconde, comme le demandent ses conditions
+ * d'utilisation. Chaque requête attend son tour ; une requête abandonnée libère le sien.
+ * Limites du serveur : 10 points par itinéraire, 50 points à éviter.
+ */
+export const MAX_LOCATIONS = 10;
+export const MAX_AVOID = 50;
+const MIN_GAP = 1000;
+let lastStart = -Infinity;
+interface Waiter {
+  go: () => void;
+  fail: (e: unknown) => void;
+  signal?: AbortSignal;
+}
+const waiting: Waiter[] = [];
+let timer: ReturnType<typeof setTimeout> | null = null;
 
-async function slot(): Promise<void> {
-  if (active >= MAX_ACTIVE) await new Promise<void>((res) => queue.push(res));
-  active++;
+function pump() {
+  timer = null;
+  if (!waiting.length) return;
   const wait = lastStart + MIN_GAP - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  if (wait > 0) {
+    timer = setTimeout(pump, wait);
+    return;
+  }
   lastStart = Date.now();
+  waiting.shift()!.go();
+  if (waiting.length) timer = setTimeout(pump, MIN_GAP);
 }
-function release() {
-  active--;
-  queue.shift()?.();
+
+/** Attente avant le prochain créneau libre (ms). */
+export function nextSlotDelay(): number {
+  return Math.max(0, lastStart + MIN_GAP - Date.now()) + waiting.length * MIN_GAP;
 }
+
+function slot(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException('aborted', 'AbortError'));
+  return new Promise<void>((go, fail) => {
+    const w: Waiter = { go, fail, signal };
+    waiting.push(w);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        const i = waiting.indexOf(w);
+        if (i >= 0) {
+          waiting.splice(i, 1);
+          fail(new DOMException('aborted', 'AbortError'));
+        }
+      },
+      { once: true },
+    );
+    if (!timer) pump();
+  });
+}
+
+const pause = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((res, rej) => {
+    const t = setTimeout(res, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        rej(new DOMException('aborted', 'AbortError'));
+      },
+      { once: true },
+    );
+  });
 
 async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   let attempt = 0;
   for (;;) {
-    await slot();
+    await slot(signal);
     let res: Response;
     try {
       res = await fetch(`${BASE}/${path}`, {
@@ -47,18 +96,16 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
         signal,
       });
     } catch (e) {
-      release();
       if (signal?.aborted) throw e;
       if (attempt++ < 2) {
-        await new Promise((r) => setTimeout(r, 700 * 2 ** attempt));
+        await pause(700 * 2 ** attempt, signal);
         continue;
       }
       throw new RoutingError('Le service d’itinéraires ne répond pas.', null, 0);
     }
-    release();
     if (res.ok) return (await res.json()) as T;
     if ([429, 502, 503, 504].includes(res.status) && attempt++ < 2) {
-      await new Promise((r) => setTimeout(r, 900 * 2 ** attempt));
+      await pause(900 * 2 ** attempt, signal);
       continue;
     }
     let code: number | null = null;
@@ -155,6 +202,12 @@ export interface Waypoint {
   coord: LngLat;
   /** passage sans demi-tour (évite les allers-retours parasites) */
   through?: boolean;
+  /**
+   * Sens de marche imposé à cet endroit (cap en degrés, ±45°). Au départ, le sens dans lequel on part ;
+   * à l'arrivée, celui dans lequel on arrive : la même valeur aux deux bouts d'une boucle la fait partir
+   * d'un côté de la rue et revenir par l'autre.
+   */
+  heading?: number;
 }
 
 export interface Maneuver {
@@ -184,11 +237,12 @@ interface VResponse {
   alternates?: { trip: VTrip }[];
 }
 
-function parseTrip(trip: VTrip): RouteResult {
+function parseLegs(legs: VLeg[]): RouteResult {
   const coords: LngLat[] = [];
   const raw: (number | null)[] = [];
   const maneuvers: Maneuver[] = [];
-  for (const leg of trip.legs) {
+  let length = 0;
+  for (const leg of legs) {
     const pts = decodePolyline(leg.shape, 6);
     coords.push(...(coords.length ? pts.slice(1) : pts));
     const e = leg.elevation ?? [];
@@ -196,13 +250,37 @@ function parseTrip(trip: VTrip): RouteResult {
     for (const m of leg.maneuvers ?? []) {
       maneuvers.push({ names: m.street_names ?? [], length: (m.length ?? 0) * 1000 });
     }
+    length += leg.summary.length * 1000;
   }
   return {
     coords,
     profile: { step: ELEV_STEP, ele: cleanElevation(raw) },
-    lengthM: trip.summary.length * 1000,
+    lengthM: length,
     maneuvers,
   };
+}
+
+const parseTrip = (trip: VTrip): RouteResult => parseLegs(trip.legs);
+
+function location(p: Waypoint, type: string) {
+  const loc: Record<string, unknown> = { lon: p.coord[0], lat: p.coord[1], type };
+  if (p.heading != null) {
+    loc.heading = Math.round(((p.heading % 360) + 360) % 360);
+    loc.heading_tolerance = 45;
+  }
+  return loc;
+}
+
+function body(points: Waypoint[], breaks: Set<number>, c: Costing, avoid: LngLat[] = []): Record<string, unknown> {
+  const b: Record<string, unknown> = {
+    locations: points.map((p, i) => location(p, breaks.has(i) ? 'break' : p.through ? 'through' : 'via')),
+    costing: c.costing,
+    costing_options: { [c.costing]: c.options },
+    elevation_interval: ELEV_STEP,
+    directions_options: { units: 'kilometers', language: 'fr-FR', directions_type: 'maneuvers' },
+  };
+  if (avoid.length) b.exclude_locations = avoid.map(([lon, lat]) => ({ lon, lat }));
+  return b;
 }
 
 export async function route(
@@ -211,22 +289,77 @@ export async function route(
   signal?: AbortSignal,
   alternates = 0,
 ): Promise<RouteResult[]> {
-  const last = points.length - 1;
-  const body: Record<string, unknown> = {
-    locations: points.map((p, i) => ({
-      lon: p.coord[0],
-      lat: p.coord[1],
-      type: i === 0 || i === last ? 'break' : p.through ? 'through' : 'via',
-    })),
-    costing: c.costing,
-    costing_options: { [c.costing]: c.options },
-    elevation_interval: ELEV_STEP,
-    directions_options: { units: 'kilometers', language: 'fr-FR', directions_type: 'maneuvers' },
-  };
-  if (alternates > 0) body.alternates = alternates;
-  const d = await post<VResponse>('route', body, signal);
+  const b = body(points, new Set([0, points.length - 1]), c);
+  if (alternates > 0) b.alternates = alternates;
+  const d = await post<VResponse>('route', b, signal);
   const out = [parseTrip(d.trip)];
   for (const a of d.alternates ?? []) out.push(parseTrip(a.trip));
+  return out;
+}
+
+/* ------------------------- Plusieurs itinéraires en une requête ------------------------- */
+
+/**
+ * Un itinéraire à calculer : ses points (le premier et le dernier sont des arrêts, les autres des
+ * passages) et des tronçons à éviter. Plusieurs se calculent en une seule requête, à la suite :
+ * le serveur ne compte qu'une requête, et chacun est rendu à part.
+ */
+export interface Job {
+  points: Waypoint[];
+  avoid?: LngLat[];
+}
+
+const sameStop = (a: Waypoint, b: Waypoint) => a.coord[0] === b.coord[0] && a.coord[1] === b.coord[1] && a.heading === b.heading;
+
+/**
+ * Enchaîne des itinéraires : quand l'un finit là où le suivant part (une boucle et la suivante), l'arrêt
+ * est partagé ; sinon un trajet de liaison les relie (calculé puis ignoré).
+ */
+export function chainJobs(jobs: Job[]): { points: Waypoint[]; breaks: Set<number>; legOf: number[] } {
+  const points: Waypoint[] = [];
+  const breaks = new Set<number>();
+  const legOf: number[] = [];
+  jobs.forEach((j, idx) => {
+    const pts = j.points;
+    if (points.length && sameStop(points[points.length - 1], pts[0])) {
+      points.push(...pts.slice(1));
+    } else {
+      if (points.length) legOf.push(-1);
+      breaks.add(points.length);
+      points.push(...pts);
+    }
+    breaks.add(points.length - 1);
+    legOf.push(idx);
+  });
+  return { points, breaks, legOf };
+}
+
+/** Nombre de points d'une requête qui enchaîne ces itinéraires. */
+export const chainSize = (jobs: Job[]) => chainJobs(jobs).points.length;
+
+/**
+ * Calcule plusieurs itinéraires en une requête (au plus 10 points en tout). Les tronçons à éviter
+ * trop proches d'un point de la requête sont écartés : le serveur ne trouverait plus de chemin.
+ */
+export async function routeJobs(jobs: Job[], c: Costing, signal?: AbortSignal): Promise<RouteResult[]> {
+  const { points, breaks, legOf } = chainJobs(jobs);
+  if (points.length > MAX_LOCATIONS) throw new Error(`Trop de points (${points.length})`);
+  const avoid: LngLat[] = [];
+  for (const j of jobs) {
+    for (const q of j.avoid ?? []) {
+      if (avoid.length >= MAX_AVOID) break;
+      if (points.some((p) => haversine(p.coord, q) < 120)) continue;
+      if (avoid.some((a) => haversine(a, q) < 8)) continue;
+      avoid.push(q);
+    }
+  }
+  const d = await post<VResponse>('route', body(points, breaks, c, avoid), signal);
+  const legs = d.trip.legs;
+  if (legs.length !== legOf.length) throw new RoutingError('Réponse inattendue du service d’itinéraires.', null, 200);
+  const out: RouteResult[] = [];
+  legOf.forEach((job, i) => {
+    if (job >= 0) out[job] = parseLegs([legs[i]]);
+  });
   return out;
 }
 

@@ -49,16 +49,17 @@ Actions :
 
 Tout se passe dans le navigateur, sans compte ni serveur à nous :
 
-- **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap). Boucle place des points de passage autour du départ, choisit les directions selon le relief, les milieux et le vent, ajuste le rayon jusqu'à tomber à quelques pour cent de la distance demandée, puis garde les trois meilleures propositions. Les petits allers-retours vers un point de passage (impasse, petite rue, jusqu'à 900 m aller et retour) sont retirés du tracé, sauf celui qui mène au lieu imposé. Avec un lieu imposé, les boucles suivent deux cercles passant par le départ et ce lieu (un de chaque côté) et deux triangles, ajustés à la distance.
+- **Itinéraires** : [Valhalla](https://valhalla1.openstreetmap.de) (serveur public de FOSSGIS, données OpenStreetMap), au plus une requête par seconde comme le demandent ses conditions d'utilisation. Boucle place des points de passage autour du départ et choisit les directions selon le relief, les milieux et le vent. Chaque requête calcule plusieurs propositions à la fois (deux boucles, cinq allers) ; la suivante corrige la taille de celles qui sont trop longues ou trop courtes. Le rapport entre la longueur réelle et la figure est appris et gardé sur l'appareil, par quartier, pour viser juste dès la première requête la fois suivante. La première bonne proposition s'affiche tout de suite, les autres la rejoignent en quelques secondes.
+- **Sans repasser par les mêmes endroits** : chaque boucle est examinée avant d'être proposée. Un détour en cul-de-sac vers un point de passage est retiré du tracé. Une boucle qui part et revient par la même rue est recalculée pour revenir par l'autre côté du départ. Une portion reprise est évitée au calcul suivant, quitte à faire jusqu'à 1 km de plus. Seul le bout de rue d'un départ au fond d'une impasse est toléré, faute d'autre chemin. Avec un lieu imposé, les boucles suivent deux cercles passant par le départ et ce lieu (un de chaque côté), puis des boucles orientées autour du lieu, ajustées à la distance ; l'aller-retour qui mène au lieu lui-même reste permis. Faute de deux boucles impeccables, la liste est complétée par des boucles qui ne repassent que sur un bout de rue (moins de 100 m), signalé dans le détail.
 - **Carte et milieux** : tuiles vectorielles [OpenFreeMap](https://openfreemap.org) (OpenMapTiles). Les forêts, l'eau, les parcs, les champs, la ville et les chemins sont lus dans ces tuiles pour orienter les parcours et calculer les répartitions.
-- **Relief** : tuiles d'altitude Terrarium (Mapzen, AWS Open Data) pour l'ombrage et la 3D ; altitudes des parcours fournies par Valhalla.
+- **Relief** : tuiles d'altitude Terrarium (Mapzen, AWS Open Data) pour l'ombrage, la 3D et le choix des directions selon le dénivelé visé (lues sur l'appareil) ; altitudes des parcours fournies par Valhalla.
 - **Globe et satellite** : image de la Terre de la NASA ([GIBS](https://earthdata.nasa.gov/gibs), Blue Marble, domaine public) jusqu'au zoom 8, recolorée sur l'appareil pour le globe dessiné ; photos aériennes de l'[IGN](https://geoservices.ign.fr) (Géoplateforme, licence ouverte Etalab) en France.
 - **Lumière du jour** : lever, coucher du soleil et crépuscule calculés sur l'appareil, sans service en ligne.
 - **Adresses** : [Photon](https://photon.komoot.io) (komoot, OpenStreetMap).
 - **Météo et vent** : [Open-Meteo](https://open-meteo.com).
 - **Points d'eau** : Overpass API (OpenStreetMap).
 
-Ces services sont gratuits pour un usage raisonnable : une création de parcours envoie une dizaine de requêtes.
+Ces services sont gratuits pour un usage raisonnable : une création de parcours envoie trois à sept requêtes d'itinéraire, à une seconde d'intervalle, puis une par proposition pour la répartition des sols, qui s'affiche après coup.
 
 ## Limites connues
 
@@ -66,6 +67,7 @@ Ces services sont gratuits pour un usage raisonnable : une création de parcours
 - Le dénivelé vient d'un modèle de terrain (précision de quelques mètres) : il peut différer de celui d'une montre à baromètre.
 - Si le relief autour du départ ne permet pas le dénivelé demandé, Boucle le dit au lieu d'inventer.
 - Le suivi en direct fonctionne app ouverte ; iOS coupe la localisation des web apps en arrière-plan.
+- Création : le service d'itinéraires public n'accepte qu'une requête par seconde. La première proposition arrive en une à trois secondes, les autres dans les secondes qui suivent ; un serveur à nous irait plus vite, mais demanderait un hébergement payant.
 - Satellite : les photos détaillées couvrent la France métropolitaine (IGN). Ailleurs, on voit les images de la Terre de loin, puis le plan en s'approchant.
 - « Si tu pars maintenant » suppose un départ immédiat : pour une sortie plus tard dans la journée, l'heure de retour se décale d'autant.
 - Vibrations : Safari sur iPhone n'a pas d'API de vibration. Boucle passe par l'interrupteur du système : chaque bouton, choix ou option vibre au toucher, y compris depuis iOS 26.5. Un curseur qu'on fait glisser ne peut pas vibrer sur iPhone (il vibre sur Android) : son pouce enfle à chaque palier.

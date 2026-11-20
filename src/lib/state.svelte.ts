@@ -20,12 +20,13 @@ import {
   unpackRoute,
   type SerialRoute,
 } from './persist';
-import { generate, GenerateError } from './generator';
+import { generate, GenerateError, type GenerateResult } from './generator';
 import { reverse, weather, type Weather } from './services';
 import type { MapType } from './mapstyle';
 import { reverseRoute } from './routegeo';
 import { elevationStats } from './elevation';
-import { cumulative, overlapRatio } from './geo';
+import { cumulative } from './geo';
+import { findRetraces } from './retrace';
 import { Follower, type FollowState } from './follow';
 import { slug } from './format';
 import { ELEV_STEP, heights } from './valhalla';
@@ -324,11 +325,32 @@ class AppState {
     }
     if (reroll) this.seed += 7919;
     this.abort?.abort();
+    // La création précédente complète peut-être encore ses sols : elle laisse la place (une requête par seconde).
+    this.background?.abort();
     const ctrl = new AbortController();
     this.abort = ctrl;
+    this.background = ctrl;
+    const gen = ++this.genId;
     this.generating = true;
     this.note = null;
     this.progress = { message: 'Préparation…', ratio: 0.02 };
+    const start = this.start!.coord;
+    // La première proposition s'affiche dès qu'elle est prête ; les autres la rejoignent ensuite.
+    let first: Route | null = null;
+    const show = (res: GenerateResult) => {
+      this.routes = res.routes;
+      this.selected = 0;
+      this.scrub = null;
+      this.note = res.note;
+      if (res.weather) {
+        this.weather = res.weather;
+        this.weatherAt = { coord: start, at: Date.now() };
+      } else this.refreshWeather(start);
+      this.phase = 'results';
+      this.drawTick++;
+      this.focusRoute();
+      haptic('success');
+    };
     try {
       const res = await generate({
         start: $state.snapshot(this.start!) as Place,
@@ -341,23 +363,36 @@ class AppState {
         onProgress: (p) => {
           if (this.abort === ctrl) this.progress = p;
         },
+        onPartial: (res) => {
+          if (this.abort !== ctrl || first) return;
+          first = res.routes[0];
+          show(res);
+        },
+        onDetails: (routes) => {
+          // Sols connus après coup : ajoutés aux propositions affichées (même si le sens a été inversé).
+          if (gen !== this.genId) return;
+          const byId = new Map(routes.map((r) => [r.id, r]));
+          this.routes = this.routes.map((r) => {
+            const d = byId.get(r.id);
+            return d && (d.surface !== r.surface || d.busy !== r.busy) ? { ...r, surface: d.surface, busy: d.busy } : r;
+          });
+        },
       });
       if (ctrl.signal.aborted) return;
-      this.routes = res.routes;
-      this.selected = 0;
-      this.scrub = null;
-      this.note = res.note;
-      if (res.weather) {
-        this.weather = res.weather;
-        this.weatherAt = { coord: this.start!.coord, at: Date.now() };
-      } else this.refreshWeather(this.start!.coord);
-      this.phase = 'results';
-      this.drawTick++;
-      this.focusRoute();
-      haptic('success');
+      if (!first) show(res);
+      else {
+        // La proposition déjà affichée reste en tête (et telle que tu l'as laissée : sens inversé, nom…).
+        const cur = this.routes.find((r) => r.id === first!.id);
+        const routes = res.routes.map((r) => (r.id === first!.id && cur && cur !== first ? cur : r));
+        const sel = this.route?.id;
+        this.routes = routes;
+        this.selected = Math.max(0, routes.findIndex((r) => r.id === sel));
+        this.note = res.note;
+      }
     } catch (e) {
       if (ctrl.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return;
       console.error(e);
+      if (first) return;
       haptic('warn');
       this.error = e instanceof GenerateError ? e.message : 'La création a échoué. Vérifie ta connexion, puis réessaie.';
     } finally {
@@ -369,9 +404,17 @@ class AppState {
     }
   }
 
+  /** Numéro de la dernière création (les compléments d'une ancienne création sont ignorés). */
+  private genId = 0;
+  /** Dernière création, gardée pour arrêter ses compléments (sols) quand on passe à autre chose. */
+  private background: AbortController | null = null;
+
   cancel() {
     this.abort?.abort();
     this.abort = null;
+    this.background?.abort();
+    this.background = null;
+    this.genId++;
     this.generating = false;
     this.progress = null;
   }
@@ -386,6 +429,8 @@ class AppState {
 
   back() {
     this.scrub = null;
+    // Une recherche encore en cours (autres propositions, sols) s'arrête.
+    this.cancel();
     if (this.phase === 'detail') {
       if (this.detailFrom?.kind === 'historique') this.libTab = 'historique';
       else if (this.detailFrom?.kind === 'favori') this.libTab = 'favoris';
@@ -590,7 +635,7 @@ class AppState {
       env: {},
       surface: null,
       busy: null,
-      overlap: overlapRatio(parsed.coords),
+      overlap: lengthM > 0 ? findRetraces(parsed.coords).length / lengthM : 0,
       waterPoints: [],
       durationS: estimateDuration(this.params.sport, lengthM, st.ascent, this.settings),
       createdAt: Date.now(),

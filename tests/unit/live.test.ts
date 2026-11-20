@@ -5,6 +5,7 @@ import { defaultParams, DEFAULT_SETTINGS } from '../../src/lib/sports';
 import type { Params, Place, Route } from '../../src/lib/types';
 import { cumulative, nearestOnRoute } from '../../src/lib/geo';
 import { climbsOf } from '../../src/lib/elevation';
+import { findRetraces } from '../../src/lib/retrace';
 
 declare const process: { env: Record<string, string | undefined> };
 const live = process.env.LIVE === '1';
@@ -13,13 +14,16 @@ const start: Place = { name: 'Nantes', coord: [-1.5536, 47.2184], kind: 'map' };
 async function run(p: Partial<Params>, destination?: Place, via?: Place) {
   const params = { ...defaultParams(p.sport ?? 'run'), ...p };
   const t = Date.now();
-  const res = await generate({ start, destination, via, params, settings: DEFAULT_SETTINGS, seed: 42 });
+  let first = 0;
+  const res = await generate({ start, destination, via, params, settings: DEFAULT_SETTINGS, seed: 42, onPartial: () => (first = Date.now() - t) });
   const ms = Date.now() - t;
   console.log(
     `${params.sport}/${params.shape} ${params.distanceKm} km D+${params.elevation ?? '-'} → ${res.routes
-      .map((r) => `${(r.lengthM / 1000).toFixed(2)} km +${r.ascent} m ov ${(r.overlap * 100).toFixed(0)}% surf ${r.surface ? Math.round(r.surface.paved * 100) + '% bitume' : '?'} « ${r.name} » [${r.tags?.join(', ')}]`)
-      .join(' | ')} (${ms} ms)${res.note ? ' — ' + res.note : ''}`,
+      .map((r) => `${(r.lengthM / 1000).toFixed(2)} km +${r.ascent} m repasse ${Math.round(findRetraces(r.coords).length)} m surf ${r.surface ? Math.round(r.surface.paved * 100) + '% bitume' : '?'} « ${r.name} » [${r.tags?.join(', ')}]`)
+      .join(' | ')} (1re ${first} ms, toutes ${ms} ms)${res.note ? ' — ' + res.note : ''}`,
   );
+  // Une boucle ne repasse jamais au même endroit (au plus un bout de carrefour).
+  if (params.shape === 'loop' && !via) for (const r of res.routes) expect(findRetraces(r.coords).length).toBeLessThanOrEqual(Math.max(30, 0.0015 * r.lengthM));
   for (const r of res.routes.slice(0, 1)) {
     const cs = climbsOf(r);
     console.log(`   côtes (${cs.length}) : ` + cs.map((c) => `${c.up ? '↗' : '↘'} km ${(c.from / 1000).toFixed(1)} ${Math.round(c.to - c.from)} m ${c.gain} m ${c.avg} % (max ${c.max})`).join(' · '));

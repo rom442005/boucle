@@ -9,6 +9,8 @@ async function open(page: Page) {
 async function createLoop(page: Page) {
   await page.getByRole('button', { name: /Créer la boucle/ }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
+  // La première proposition s'affiche tout de suite ; on attend que les autres l'aient rejointe.
+  await expect(page.locator('.card.ghost')).toHaveCount(0, { timeout: 30_000 });
   // Sur iPhone, le panneau descend pour montrer tout le parcours, avec un résumé chiffré ; on le remonte pour le détail.
   const folded = page.getByRole('button', { name: /Taille du panneau : réduit/ });
   if (await folded.count()) {

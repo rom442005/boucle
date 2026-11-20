@@ -187,7 +187,8 @@ const ITAL = ['Noto Sans Italic'];
 const zw = (stops: [number, number][], base = 1.45): ExpressionSpecification =>
   ['interpolate', ['exponential', base], ['zoom'], ...stops.flat()] as unknown as ExpressionSpecification;
 
-export const DEM_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+export { DEM_TILES } from './terrain';
+import { DEM_TILES } from './terrain';
 
 export function buildStyle(theme: Theme): StyleSpecification {
   const c = theme === 'dark' ? DARK : LIGHT;

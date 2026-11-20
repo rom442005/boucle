@@ -1,12 +1,43 @@
 import type { EnvClass, GenProgress, LngLat, Params, Place, Profile, Route, Settings } from './types';
-import { bearing, cumulative, destination, haversine, localProjector, overlapRatio, resample, similarity, type BBox } from './geo';
+import { bearing, cumulative, destination, haversine, localProjector, resample, similarity, type BBox } from './geo';
 import { eleAt, elevationStats } from './elevation';
-import { costingFor, ELEV_STEP, heights, route, RoutingError, surfaceSplit, type Costing, type RouteResult } from './valhalla';
+import {
+  chainSize,
+  costingFor,
+  ELEV_STEP,
+  heights,
+  MAX_LOCATIONS,
+  nextSlotDelay,
+  route,
+  routeJobs,
+  RoutingError,
+  surfaceSplit,
+  type Costing,
+  type Job,
+  type RouteResult,
+  type Waypoint,
+} from './valhalla';
 import { buildEnvRaster, desirability, envShare, envSplit, meanDesirability, pullToward, trackShare, type Desirability, type EnvRaster } from './environment';
 import { drinkingWater, weather, type Weather } from './services';
 import { routeName } from './naming';
-import { removeSpurs } from './spurs';
+import { applyCuts, removeSpurs } from './spurs';
+import { avoidPoints, closureTrim, deadEnds, departureBearing, findRetraces, type Retrace } from './retrace';
+import { loadTerrain, type Terrain } from './terrain';
 import { estimateDuration, SPORTS } from './sports';
+
+/*
+ * Création des parcours.
+ *
+ * Le service d'itinéraires public n'accepte qu'une requête par seconde : tout l'enjeu est d'en faire
+ * peu, et de les remplir. Chaque requête calcule plusieurs propositions à la fois (deux boucles, cinq
+ * allers…), la suivante corrige la taille de celles qui sont trop longues ou trop courtes, et la
+ * recherche s'arrête dès que trois bonnes propositions sont trouvées. La première est montrée tout de
+ * suite, les autres la rejoignent.
+ *
+ * Une boucle ne repasse jamais au même endroit : chaque tracé est examiné (voir retrace.ts), et une
+ * boucle qui repasse est recalculée en partant d'un côté de la rue et en revenant par l'autre, en
+ * évitant les tronçons déjà faits, quitte à faire un peu plus long (jusqu'à 1 km).
+ */
 
 export interface GenerateOptions {
   start: Place;
@@ -18,6 +49,10 @@ export interface GenerateOptions {
   seed: number;
   signal?: AbortSignal;
   onProgress?: (p: GenProgress) => void;
+  /** première proposition, dès qu'elle est prête ; le résultat final la garde en tête, avec le même identifiant */
+  onPartial?: (res: GenerateResult) => void;
+  /** propositions complétées après coup (répartition des sols), dans le même ordre */
+  onDetails?: (routes: Route[]) => void;
 }
 
 export interface GenerateResult {
@@ -28,14 +63,6 @@ export interface GenerateResult {
 }
 
 export class GenerateError extends Error {}
-
-interface Candidate {
-  res: RouteResult;
-  /** moitié aller d'un aller-retour (sert à l'analyse des sols) */
-  half?: RouteResult;
-  far: LngLat;
-  windAlign: number;
-}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -49,6 +76,13 @@ function mulberry32(seed: number) {
 }
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** La promesse, ou `fallback` si elle tarde plus de `ms`. */
+const within = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+const aborted = () => new DOMException('aborted', 'AbortError');
+/** Journal de mise au point (tests) : globalThis.__boucleDebug = console.log */
+const debug = (msg: string) => (globalThis as { __boucleDebug?: (m: string) => void }).__boucleDebug?.(msg);
 
 /** Envie de chemins non revêtus (0 à 1) selon le sport et le sol demandés. */
 export function unpavedWeight(p: Params): number {
@@ -95,20 +129,438 @@ function pathGain(h: number[]): number {
   return g / 2;
 }
 
-/** Choisit k directions bien réparties parmi les mieux notées. */
-function pickDirections(scored: { dir: number; score: number }[], k: number, minSep: number): number[] {
+/** Ordonne les directions : les mieux notées d'abord, bien réparties autour du départ. */
+function pickDirections(scored: { dir: number; score: number }[], minSep: number): number[] {
   const sorted = [...scored].sort((a, b) => a.score - b.score);
   const out: number[] = [];
-  for (const s of sorted) {
-    if (out.every((d) => angDiff(d, s.dir) >= minSep)) out.push(s.dir);
-    if (out.length === k) break;
-  }
-  for (const s of sorted) {
-    if (out.length === k) break;
-    if (!out.includes(s.dir)) out.push(s.dir);
-  }
+  for (const s of sorted) if (out.every((d) => angDiff(d, s.dir) >= minSep)) out.push(s.dir);
+  for (const s of sorted) if (!out.includes(s.dir)) out.push(s.dir);
   return out;
 }
+
+/* ------------------------- Rapport longueur réelle / figure, appris ------------------------- */
+
+/*
+ * Un itinéraire est plus long que la figure tracée à vol d'oiseau (rues, rivières, détours). Ce
+ * rapport dépend du quartier : il est appris à chaque création et gardé sur l'appareil, par zone
+ * d'environ 5 km, pour viser juste dès la première requête la fois suivante.
+ */
+const RATIO_KEY = 'boucle.ratios';
+const ratioKey = (p: LngLat, kind: string) => `${kind}:${Math.round(p[1] * 20) / 20}:${Math.round(p[0] * 20) / 20}`;
+function loadRatio(key: string, def: number): number {
+  try {
+    const v = JSON.parse(localStorage.getItem(RATIO_KEY) ?? '{}')[key];
+    return typeof v === 'number' && v > 1 && v < 3 ? v : def;
+  } catch {
+    return def;
+  }
+}
+function saveRatio(key: string, v: number) {
+  try {
+    const m = JSON.parse(localStorage.getItem(RATIO_KEY) ?? '{}') as Record<string, number>;
+    delete m[key];
+    m[key] = Math.round(v * 1000) / 1000;
+    const keys = Object.keys(m);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 80))) delete m[k];
+    localStorage.setItem(RATIO_KEY, JSON.stringify(m));
+  } catch {
+    /* sans mémoire : on repart du rapport par défaut */
+  }
+}
+
+/* ------------------------------------ Contexte ------------------------------------ */
+
+interface Ctx {
+  p: Params;
+  start: LngLat;
+  D: number;
+  costing: Costing;
+  des: Desirability | null;
+  rnd: () => number;
+  wx: Weather | null;
+  signal?: AbortSignal;
+  report: (m: string, r: number) => void;
+  /** point de passage imposé */
+  via: LngLat | null;
+  /** lieux à ne jamais couper ni rendre inaccessibles (point de passage) */
+  keep: LngLat[];
+  /** altitudes de points (relief de la carte 3D, sinon service d'itinéraires) */
+  heightsOf: (pts: LngLat[]) => Promise<number[] | null>;
+  /** rapport longueur réelle / figure, appris au fil des requêtes */
+  ratio: number;
+  /** une boucle au moins part et revient par des chemins différents : le départ n'est pas une impasse */
+  cleanStart: boolean;
+  /** plus court bout commun au départ et au retour vu jusqu'ici (m), et essais avec sens imposé */
+  minStem: number;
+  headingTries: number;
+  /** une proposition jugée bonne vient d'être trouvée */
+  onGood?: (c: Cand) => void;
+  /** heure limite de la recherche */
+  deadline: number;
+  /** dernière erreur du service, pour l'expliquer si rien n'est trouvé */
+  lastError: RoutingError | null;
+}
+
+/* ------------------------------ Recherche par lots ------------------------------ */
+
+/** Corrections d'une figure entre deux essais. */
+interface Fix {
+  /** tronçons à éviter (déjà parcourus par un essai précédent) */
+  avoid: LngLat[];
+  /** rotation de la figure (degrés) */
+  turn: number;
+  /** points de passage simples (sans interdiction de demi-tour), après un échec */
+  plain: boolean;
+  /** boucle : partir dans ce sens et revenir en marchant dans le même sens, donc par l'autre côté */
+  heading: number | null;
+  headingTried: boolean;
+  /** éviter des tronçons a coupé un passage obligé : on n'en évite plus */
+  noAvoid: boolean;
+}
+
+interface Built {
+  job: Job;
+  size: number;
+  far: LngLat;
+  /** points de la figure (on n'évite aucun tronçon tout près) */
+  anchors: LngLat[];
+  /** sens de départ imposé à cet essai */
+  heading?: number | null;
+}
+
+/** Une proposition en cours de mise au point : une direction, un côté, une forme. */
+interface Plan {
+  rank: number;
+  /** taille de la figure (rayon, distance du demi-tour…) ; calculée au premier envoi */
+  size: number | null;
+  initSize: () => number;
+  build: (size: number, fix: Fix) => Built;
+  /** longueur visée pour le trajet calculé (m) */
+  target: number;
+  /** le trajet calculé est l'aller d'un aller-retour */
+  mirror?: boolean;
+  /** longueur fixe du trajet, que la taille ne change pas (jusqu'au point de passage) */
+  offset?: number;
+  samples: [number, number][];
+  tries: number;
+  maxTries: number;
+  fix: Fix;
+  solo: boolean;
+  status: 'reserve' | 'wait' | 'busy' | 'done' | 'dead';
+  best: Cand | null;
+  windAlign: number;
+  /** apprend du résultat (rapport longueur / figure) */
+  observe?: (size: number, part: number) => void;
+}
+
+interface Cand {
+  res: RouteResult;
+  /** moitié aller d'un aller-retour (sert à l'analyse des sols) */
+  half?: RouteResult;
+  far: LngLat;
+  windAlign: number;
+  /** longueur totale (m) */
+  L: number;
+  /** écart relatif à la distance demandée (signé) */
+  err: number;
+  rt: Retrace | null;
+  plan: Plan;
+  built: Built;
+  heading: number | null;
+}
+
+interface SearchOpts {
+  /** nombre de bonnes propositions voulues */
+  want: number;
+  maxRequests: number;
+  good: (c: Cand) => boolean;
+  /**
+   * Assez bonne pour être montrée tout de suite, en première (sans attendre une distance au plus juste) ;
+   * elle compte alors parmi les propositions.
+   */
+  usable?: (c: Cand) => boolean;
+  /** réparations après un essai (tronçons à éviter, sens de départ) */
+  repair?: (plan: Plan, cand: Cand) => void;
+  /** progression affichée de `from` à `to` */
+  from: number;
+  to: number;
+}
+
+const newFix = (): Fix => ({ avoid: [], turn: 0, plain: false, heading: null, headingTried: false, noAvoid: false });
+
+function makePlan(o: Omit<Plan, 'samples' | 'tries' | 'fix' | 'solo' | 'status' | 'best' | 'size' | 'maxTries'> & { maxTries?: number; status?: Plan['status'] }): Plan {
+  return { samples: [], tries: 0, fix: newFix(), solo: false, best: null, size: null, maxTries: 3, status: 'wait', ...o };
+}
+
+/**
+ * Taille suivante : sécante sur les deux derniers essais (longueur ≈ a·taille^b). Quand la longueur ne
+ * suit pas la taille (une figure plus grande a pris un autre chemin, plus court), on repart de l'essai
+ * le plus proche de la cible, par petits pas.
+ */
+function nextSize(plan: Plan): number {
+  const s = plan.samples;
+  const target = Math.max(1, plan.target - (plan.offset ?? 0));
+  const [s2, l2] = s[s.length - 1];
+  if (s.length >= 2) {
+    const [s1, l1] = s[s.length - 2];
+    const b = Math.abs(s2 / s1 - 1) < 0.03 || l1 <= 0 || l2 <= 0 ? 1 : Math.log(l2 / l1) / Math.log(s2 / s1);
+    if (Number.isFinite(b) && b > 0.3) return s2 * clamp(Math.pow(target / Math.max(1, l2), 1 / clamp(b, 0.5, 1.6)), 0.6, 1.6);
+    const [sb, lb] = s.reduce((a, x) => (Math.abs(x[1] - target) < Math.abs(a[1] - target) ? x : a));
+    return sb * clamp(Math.pow(target / Math.max(1, lb), 0.95), 0.75, 1.3);
+  }
+  return s2 * clamp(Math.pow(target / Math.max(1, l2), 0.95), 0.6, 1.6);
+}
+
+/**
+ * Ce qui repasse au même endroit. L'aller-retour qui mène au point de passage imposé est voulu
+ * (il est souvent au fond d'un parc ou d'une impasse) : il ne compte pas.
+ */
+function retracesOf(c: Ctx, coords: LngLat[]): Retrace | null {
+  if (c.p.shape === 'outback') return null;
+  const rt = findRetraces(coords);
+  if (!c.via || !rt.stretches.length) return rt;
+  const r = viaRadius(coords, c.via);
+  const stretches = rt.stretches.filter((s) => !nearPoint(coords, s, c.via!, r));
+  if (stretches.length === rt.stretches.length) return rt;
+  const length = stretches.reduce((a, s) => a + (s.to - s.from), 0);
+  const total = lengthOf(coords);
+  const stem = stretches.reduce((m, s) => (s.to >= total - 40 && s.firstFrom <= 40 ? Math.max(m, s.to - s.from) : m), 0);
+  return { stretches, length, stem };
+}
+
+/**
+ * Retire les détours en cul-de-sac : un point de passage tombé dans une impasse, un demi-tour au bout
+ * d'une petite rue ou d'un rond de parking. Ceux qui mènent au point de passage imposé restent.
+ */
+function clean(res: RouteResult, keep: LngLat[] = [], loop = false): RouteResult {
+  let cur = removeSpurs(res.coords, res.profile, 5000, keep);
+  for (let pass = 0; pass < 3; pass++) {
+    // Une boucle perd aussi les grands détours qui reviennent sur eux-mêmes ; un trajet vers un lieu,
+    // seulement les petits culs-de-sac (son détour est voulu pour allonger, il sera recalculé s'il repasse).
+    const cuts = deadEnds(cur.coords, findRetraces(cur.coords), keep, loop ? 0.35 : 0, keep.length ? viaRadius(cur.coords, keep[0]) : 60);
+    if (!cuts.length) break;
+    cur = applyCuts(cur.coords, cur.profile, cuts);
+  }
+  // Boucle : sans crochet au départ ni à l'arrivée ; elle part et revient au même point.
+  const trim = loop ? closureTrim(cur.coords) : null;
+  if (trim) {
+    const S = cur.coords[0];
+    const total = lengthOf(cur.coords);
+    const cuts = [...(trim.from > 1 ? [{ from: 0, to: trim.from }] : []), ...(trim.to < total - 1 ? [{ from: trim.to, to: total }] : [])];
+    cur = applyCuts(cur.coords, cur.profile, cuts);
+    const last = cur.coords[cur.coords.length - 1];
+    if (last[0] !== S[0] || last[1] !== S[1]) cur = { ...cur, coords: [...cur.coords, S] };
+  }
+  if (cur.coords === res.coords) return res;
+  return { ...res, coords: cur.coords, profile: cur.profile, lengthM: lengthOf(cur.coords) };
+}
+
+function mirror(res: RouteResult): RouteResult {
+  const L = lengthOf(res.coords);
+  const coords = [...res.coords, ...res.coords.slice(0, -1).reverse()];
+  const profile = profileFrom((s) => eleAt(res.profile, s <= L ? s : 2 * L - s), 2 * L);
+  return { coords, profile, lengthM: 2 * L, maneuvers: res.maneuvers };
+}
+
+/**
+ * Bout commun au départ et au retour qu'on ne peut pas éviter : le départ est au fond d'une impasse.
+ * On le sait quand aucune boucle, même partie dans un sens et revenue en marchant dans le même sens
+ * (donc par l'autre côté), n'a pu partir et revenir par des chemins différents.
+ */
+function stemFloor(c: Ctx): number {
+  return c.cleanStart || c.headingTries === 0 || c.minStem === Infinity ? 0 : c.minStem;
+}
+
+/** Longueur qui repasse au même endroit, sans compter le départ au fond d'une impasse (inévitable). */
+function retraceOf(c: Ctx, cand: Cand): number {
+  if (!cand.rt) return 0;
+  return Math.max(0, cand.rt.length - Math.min(cand.rt.stem, stemFloor(c)));
+}
+
+/** Rang d'un essai au sein de sa figure : sans repasser d'abord, puis la distance. */
+const candRank = (c: Ctx, x: Cand) => Math.abs(x.err) + (retraceOf(c, x) / Math.max(1, x.L)) * 20;
+
+/**
+ * Met au point plusieurs figures en même temps : à chaque créneau (une requête par seconde), les
+ * figures qui attendent sont regroupées dans une requête d'au plus 10 points, construites avec ce que
+ * l'on sait à cet instant (rapport appris, corrections). S'arrête dès qu'il y a assez de bonnes
+ * propositions, différentes entre elles.
+ */
+async function runSearch(c: Ctx, plans: Plan[], o: SearchOpts): Promise<Cand[]> {
+  const all: Cand[] = [];
+  const goods: Cand[] = [];
+  let requests = 0;
+  /** une proposition a déjà été montrée */
+  let shown = false;
+  const inflight = new Set<Promise<void>>();
+  const local = new AbortController();
+  const onAbort = () => local.abort();
+  c.signal?.addEventListener('abort', onAbort, { once: true });
+
+  const distinct = () => {
+    const kept: Cand[] = [];
+    for (const g of goods) if (kept.every((k) => similarity(k.res.coords, g.res.coords) < 0.7)) kept.push(g);
+    return kept.length;
+  };
+  // Assez : toutes les propositions voulues ; ou une de moins passé 3,5 s, et au moins une passé 5,5 s
+  // (mieux vaut deux parcours impeccables tout de suite que trois dont un qui repasse, plus tard).
+  const t0 = Date.now();
+  const enough = () => {
+    const d = distinct();
+    const t = Date.now() - t0;
+    return d >= o.want || (d >= o.want - 1 && t > 3500) || (d >= 1 && t > 5500);
+  };
+  const progress = () => c.report('Recherche des chemins…', o.from + (o.to - o.from) * Math.min(1, distinct() / o.want));
+
+  const handle = (plan: Plan, built: Built, raw: RouteResult) => {
+    const cleaned = clean(raw, c.keep, c.p.shape === 'loop');
+    const part = lengthOf(cleaned.coords);
+    const full = plan.mirror ? mirror(cleaned) : cleaned;
+    const L = plan.mirror ? 2 * part : part;
+    plan.samples.push([built.size, part - (plan.offset ?? 0)]);
+    plan.observe?.(built.size, part);
+    const cand: Cand = {
+      res: full,
+      half: plan.mirror ? cleaned : undefined,
+      far: built.far,
+      windAlign: plan.windAlign,
+      L,
+      err: (L - c.D) / c.D,
+      rt: retracesOf(c, full.coords),
+      plan,
+      built,
+      heading: built.heading ?? null,
+    };
+    all.push(cand);
+    if (!plan.best || candRank(c, cand) < candRank(c, plan.best)) plan.best = cand;
+    o.repair?.(plan, cand);
+    debug?.(
+      `#${plan.rank} essai ${plan.tries} taille ${Math.round(built.size)} → ${(L / 1000).toFixed(2)} km (${(cand.err * 100).toFixed(1)} %) repasse ${Math.round(cand.rt?.length ?? 0)} m tronc ${Math.round(cand.rt?.stem ?? 0)} cap ${cand.heading ?? '-'} évite ${built.job.avoid?.length ?? 0}${o.good(cand) ? ' BON' : ''}`,
+    );
+    const s = plan.samples;
+    // La taille ne change plus rien (figure à sa taille minimale, point de passage lointain) : inutile d'insister.
+    const stuck = s.length >= 2 && Math.abs(s[s.length - 1][1] - s[s.length - 2][1]) < 0.01 * plan.target && !plan.fix.avoid.length;
+    const good = o.good(cand);
+    const first = !shown && !good && !!o.usable?.(cand);
+    if (good || first) {
+      shown = true;
+      plan.status = 'done';
+      goods.push(cand);
+      c.onGood?.(cand);
+    } else if (plan.tries >= plan.maxTries || stuck) plan.status = 'done';
+    else {
+      plan.size = nextSize(plan);
+      plan.status = 'wait';
+    }
+    progress();
+  };
+
+  const failed = (batch: { plan: Plan; built: Built }[], e: unknown) => {
+    if (e instanceof RoutingError) c.lastError = e;
+    // Pas de réseau, ou service saturé (déjà réessayé) : inutile d'insister, on s'arrête là.
+    if (e instanceof RoutingError && (e.status === 0 || e.status === 429)) {
+      for (const p of plans) if (p.status !== 'done') p.status = 'dead';
+      return;
+    }
+    const avoided = batch.some((x) => x.built.job.avoid?.length);
+    for (const { plan } of batch) {
+      if (avoided) {
+        // Des tronçons évités ont coupé un passage obligé (seul pont, seule rue du départ) : on les
+        // oublie, sans perdre d'essai, et on n'en évite plus pour ces figures.
+        plan.fix.avoid = [];
+        plan.fix.noAvoid = true;
+        plan.tries--;
+        plan.status = 'wait';
+      } else if (batch.length > 1) {
+        // Une figure du lot a fait échouer la requête : chacune repart seule, sans perdre d'essai.
+        plan.solo = true;
+        plan.tries--;
+        plan.status = 'wait';
+      } else if (!plan.fix.plain && e instanceof RoutingError && e.code !== 171) {
+        plan.fix.plain = true;
+        plan.status = 'wait';
+      } else plan.status = 'dead';
+    }
+  };
+
+  const pick = (): { plan: Plan; built: Built }[] => {
+    let ready = plans.filter((p) => p.status === 'wait');
+    const busy = plans.filter((p) => p.status === 'busy').length;
+    if (!ready.length && distinct() + busy < o.want) {
+      // Les premières figures n'ont pas suffi : on en essaie d'autres.
+      const reserve = plans.filter((p) => p.status === 'reserve').slice(0, 2);
+      for (const p of reserve) p.status = 'wait';
+      ready = reserve;
+    }
+    ready.sort((a, b) => a.tries - b.tries || a.rank - b.rank);
+    const batch: { plan: Plan; built: Built }[] = [];
+    for (const plan of ready) {
+      if (batch.length && (plan.solo || batch[0].plan.solo)) continue;
+      const size = plan.size ?? plan.initSize();
+      const built = plan.build(size, plan.fix);
+      if (chainSize([...batch.map((x) => x.built.job), built.job]) > MAX_LOCATIONS) continue;
+      batch.push({ plan, built });
+      if (plan.solo) break;
+    }
+    return batch;
+  };
+
+  const send = (batch: { plan: Plan; built: Built }[]) => {
+    requests++;
+    for (const x of batch) {
+      x.plan.status = 'busy';
+      x.plan.tries++;
+    }
+    const pr: Promise<void> = routeJobs(
+      batch.map((x) => x.built.job),
+      c.costing,
+      local.signal,
+    )
+      .then((results) => results.forEach((res, i) => handle(batch[i].plan, batch[i].built, res)))
+      .catch((e) => {
+        if (local.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) {
+          for (const x of batch) if (x.plan.status === 'busy') x.plan.status = 'dead';
+          return;
+        }
+        failed(batch, e);
+      })
+      .finally(() => inflight.delete(pr));
+    inflight.add(pr);
+  };
+
+  try {
+    for (;;) {
+      if (c.signal?.aborted) throw aborted();
+      if (enough()) break;
+      const waitAny = () => (inflight.size ? Promise.race(inflight) : Promise.resolve());
+      if (requests >= o.maxRequests || Date.now() > c.deadline) {
+        if (!inflight.size) break;
+        await waitAny();
+        continue;
+      }
+      const delay = nextSlotDelay();
+      if (delay > 15) {
+        await Promise.race([sleep(delay), ...inflight]);
+        continue;
+      }
+      const batch = pick();
+      if (!batch.length) {
+        if (!inflight.size) break;
+        await waitAny();
+        continue;
+      }
+      send(batch);
+    }
+  } finally {
+    // Assez de propositions : les requêtes encore en route sont abandonnées.
+    local.abort();
+    c.signal?.removeEventListener('abort', onAbort);
+  }
+  if (c.signal?.aborted) throw aborted();
+  return all;
+}
+
+/* ----------------------------------- Point d'entrée ----------------------------------- */
 
 export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   const { params: p, start, settings, signal } = o;
@@ -140,59 +592,136 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   if (via) areaR = Math.max(areaR, haversine(center, via) + 800);
   areaR = Math.min(areaR, 45000);
 
+  // Tout ce qui ne dépend pas du service d'itinéraires part en même temps ; la recherche n'attend
+  // que ce dont elle a besoin pour orienter les figures (milieux voulus, vent, relief).
   report('Lecture du terrain autour du départ…', 0.06);
-  const [raster, wx, water] = await Promise.all([
-    buildEnvRaster(center, areaR, signal, unpavedWeight(p) > 0 || wantsPaved(p)).catch(() => null),
-    p.headwind && sport.bike && p.shape !== 'oneway' ? weather(start.coord, signal) : Promise.resolve(null),
-    p.water ? drinkingWater(bboxAround(center, areaR), signal).catch(() => [] as LngLat[]) : Promise.resolve([] as LngLat[]),
+  const rasterP = buildEnvRaster(center, areaR, signal, unpavedWeight(p) > 0 || wantsPaved(p)).catch(() => null);
+  const wxP = p.headwind && sport.bike && p.shape !== 'oneway' ? weather(start.coord, signal) : Promise.resolve(null);
+  const waterP = p.water ? drinkingWater(bboxAround(center, areaR), signal).catch(() => [] as LngLat[]) : Promise.resolve([] as LngLat[]);
+  const needRelief = p.elevation != null && p.shape !== 'oneway' && !via;
+  const terrainP: Promise<Terrain | null> = needRelief ? loadTerrain(start.coord, p.shape === 'outback' ? D / 2 : D / 2.6, signal).catch(() => null) : Promise.resolve(null);
+  const needDes = p.envs.length > 0 || unpavedWeight(p) > 0;
+  const [raster0, wx, terrain] = await Promise.all([
+    needDes ? within(rasterP, 3500, null) : Promise.resolve(null),
+    within(wxP, 1500, null),
+    within(terrainP, 2500, null),
   ]);
-  if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
-  const des = raster ? desirability(raster, p.envs, unpavedWeight(p)) : null;
+  if (signal?.aborted) throw aborted();
+  const des = raster0 ? desirability(raster0, p.envs, unpavedWeight(p)) : null;
 
-  let candidates: Candidate[] = [];
-  const ctx: Ctx = { p, start: start.coord, D, costing, des, rnd, wx, signal, report, via };
+  const bike = sport.bike;
+  const kind = `${p.shape}:${bike ? 'b' : 'f'}`;
+  const rKey = ratioKey(start.coord, kind);
+  const defRatio = p.shape === 'outback' ? (bike ? 1.22 : 1.28) : bike ? 1.25 : 1.32;
+  const ctx: Ctx = {
+    p,
+    start: start.coord,
+    D,
+    costing,
+    des,
+    rnd,
+    wx,
+    signal,
+    report,
+    via,
+    keep: via ? [via] : [],
+    heightsOf: async (pts) => {
+      if (terrain) {
+        const h = pts.map((q) => terrain.heightAt(q));
+        if (h.every((x) => x != null)) return h as number[];
+      }
+      try {
+        return await heights(pts, signal);
+      } catch {
+        return null;
+      }
+    },
+    ratio: loadRatio(rKey, defRatio),
+    cleanStart: false,
+    minStem: Infinity,
+    headingTries: 0,
+    deadline: Date.now() + 9000,
+    lastError: null,
+  };
+
+  // Première bonne proposition : analysée et montrée tout de suite, elle restera en tête.
+  let pinned: { cand: Cand; route: Route } | null = null;
+  let partial: Promise<void> = Promise.resolve();
+  if (o.onPartial) {
+    ctx.onGood = (cand) => {
+      if (pinned) return;
+      pinned = { cand, route: null as unknown as Route };
+      const pin = pinned;
+      partial = (async () => {
+        const raster = await within(rasterP, 400, null);
+        const water = p.water ? await within(waterP, 1500, [] as LngLat[]) : [];
+        if (signal?.aborted) return;
+        const a = analyse(cand, ctx, raster, water, settings);
+        a.route.name = routeName((cand.half ?? cand.res).maneuvers, p.shape, start.coord, cand.far, o.destination?.name);
+        if (o.via) a.route.via = { name: o.via.name, coord: o.via.coord };
+        pin.route = a.route;
+        o.onPartial!({ routes: [a.route], note: null, weather: wx });
+      })();
+    };
+  }
+
+  let candidates: Cand[] = [];
   if (p.shape === 'loop') candidates = via ? await viaLoops(ctx, via) : await loops(ctx);
   else if (p.shape === 'outback') candidates = via ? await viaOutbacks(ctx, via) : await outbacks(ctx);
   else candidates = await oneways(ctx, o.destination!.coord);
+  if (signal?.aborted) throw aborted();
 
   if (!candidates.length) {
-    throw new GenerateError('Aucun parcours trouvé autour de ce départ. Essaie une distance plus courte ou un autre point de départ.');
+    const e = ctx.lastError;
+    throw new GenerateError(
+      e && (e.code === 171 || e.status === 0 || e.code === 154)
+        ? routingMessage(e)
+        : 'Aucun parcours trouvé autour de ce départ. Essaie une distance plus courte ou un autre point de départ.',
+    );
   }
 
-  report('Comparaison des propositions…', 0.86);
-  const analysed = candidates.map((c) => analyse(c, ctx, raster, water, settings));
-  analysed.sort((a, b) => a.route.match!.score - b.route.match!.score);
+  // Rapport longueur / figure de ce quartier, pour la prochaine fois.
+  if (!via && p.shape !== 'oneway') saveRatio(rKey, ctx.ratio);
+
+  report('Comparaison des propositions…', 0.9);
+  await partial;
+  const [raster, water] = await Promise.all([within(rasterP, 2500, null), within(waterP, 2500, [] as LngLat[])]);
+  if (signal?.aborted) throw aborted();
+  const all = candidates.map((cand) => analyse(cand, ctx, raster, water, settings));
+  all.sort((a, b) => a.route.match!.score - b.route.match!.score);
+  // Jamais une proposition qui repasse au même endroit, ni très loin de la distance, s'il y a mieux.
+  // Faute de deux boucles impeccables, on complète avec celles qui ne repassent que sur un bout de rue
+  // (moins de 100 m, souvent la rue du départ) : elles viennent après, et le détail le signale.
+  const near = (a: (typeof all)[number]) => a.cand.err >= -0.12 && a.cand.err <= Math.max(0.12, Math.min(1000, 0.15 * D) / D);
+  const fine = all.filter((a) => near(a) && retraceOf(ctx, a.cand) <= retraceOk(a.cand.L));
+  const almost = all.filter((a) => near(a) && !fine.includes(a) && retraceOf(ctx, a.cand) <= Math.max(100, 0.006 * a.cand.L));
+  const pool = fine.length >= 2 ? fine : [...fine, ...almost];
+  const analysed = pool.length ? pool : all;
   const picked: typeof analysed = [];
+  const pin = pinned as { cand: Cand; route: Route | null } | null;
+  if (pin?.route) {
+    // La proposition déjà montrée reste en tête, quoi qu'on ait appris depuis.
+    const a = all.find((x) => x.cand === pin.cand);
+    if (a) {
+      a.route.id = pin.route.id;
+      a.route.createdAt = pin.route.createdAt;
+      picked.push(a);
+    }
+  }
   for (const a of analysed) {
     if (picked.length === 3) break;
-    if (picked.every((q) => similarity(q.route.coords, a.route.coords) < 0.7)) picked.push(a);
+    if (!picked.includes(a) && picked.every((q) => similarity(q.route.coords, a.route.coords) < 0.7)) picked.push(a);
   }
   for (const a of analysed) {
     if (picked.length === 3) break;
     if (!picked.includes(a) && picked.every((q) => similarity(q.route.coords, a.route.coords) < 0.92)) picked.push(a);
   }
-
-  report('Analyse des sols…', 0.93);
-  await Promise.all(
-    picked.map(async (a) => {
-      try {
-        const s = await surfaceSplit((a.cand.half ?? a.cand.res).coords, costing, signal);
-        if (s) {
-          a.route.surface = s.surface;
-          a.route.busy = s.busy;
-        }
-      } catch {
-        /* répartition des sols indisponible : la carte reste utilisable */
-      }
-      a.route.name = routeName(
-        (a.cand.half ?? a.cand.res).maneuvers,
-        p.shape,
-        start.coord,
-        a.cand.far,
-        o.destination?.name,
-      );
-    }),
-  );
+  for (const a of picked) {
+    a.route.name =
+      pin?.route && a.cand === pin.cand
+        ? pin.route.name
+        : routeName((a.cand.half ?? a.cand.res).maneuvers, p.shape, start.coord, a.cand.far, o.destination?.name);
+  }
 
   const routes = picked.map((a) => a.route);
   if (o.via) for (const r of routes) r.via = { name: o.via.name, coord: o.via.coord };
@@ -214,38 +743,139 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   if (p.water && routes.every((r) => !r.waterPoints.length)) {
     note = (note ? note + ' ' : '') + 'Aucun point d’eau connu sur ces parcours.';
   }
+
+  // Répartition des sols : après coup, une proposition après l'autre, sans retarder l'affichage.
+  if (o.onDetails) {
+    const halves = picked.map((a) => (a.cand.half ?? a.cand.res).coords);
+    void (async () => {
+      let cur = routes;
+      for (let i = 0; i < cur.length; i++) {
+        try {
+          const s = await surfaceSplit(halves[i], costing, signal);
+          if (signal?.aborted) return;
+          if (s) {
+            cur = cur.map((r, k) => (k === i ? { ...r, surface: s.surface, busy: s.busy } : r));
+            o.onDetails!(cur);
+          }
+        } catch {
+          if (signal?.aborted) return;
+          /* répartition des sols indisponible : la carte reste utilisable */
+        }
+      }
+    })();
+  } else {
+    await Promise.all(
+      picked.map(async (a) => {
+        try {
+          const s = await surfaceSplit((a.cand.half ?? a.cand.res).coords, costing, signal);
+          if (s) {
+            a.route.surface = s.surface;
+            a.route.busy = s.busy;
+          }
+        } catch {
+          /* répartition des sols indisponible */
+        }
+      }),
+    );
+  }
+
   report('Terminé', 1);
   return { routes, note, weather: wx };
 }
 
-interface Ctx {
-  p: Params;
-  start: LngLat;
-  D: number;
-  costing: Costing;
-  des: Desirability | null;
-  rnd: () => number;
-  wx: Weather | null;
-  signal?: AbortSignal;
-  report: (m: string, r: number) => void;
-  /** point de passage imposé */
-  via: LngLat | null;
-}
-
 /* ---------------------------------- Boucles ---------------------------------- */
 
-async function loops(c: Ctx): Promise<Candidate[]> {
-  const { p, start, D } = c;
-  const bike = SPORTS[p.sport].bike;
-  const n = D <= 8000 ? 3 : 4;
+/** Une boucle ne repasse pas au même endroit : au plus un bout de carrefour (30 m, 0,15 % d'une longue sortie). */
+const RETRACE_OK = 30;
+const retraceOk = (L: number) => Math.max(RETRACE_OK, 0.0015 * L);
+
+/**
+ * Distance tenue : à 5 % près du premier coup ; ensuite à 6 % près, ou jusqu'à 1 km de plus quand
+ * c'est le prix pour ne pas repasser au même endroit.
+ */
+function distanceOk(c: Ctx, cand: Cand, relaxed: boolean): boolean {
+  if (!relaxed) return Math.abs(cand.err) <= 0.05;
+  return cand.err >= -0.06 && cand.err <= Math.max(0.06, Math.min(1000, 0.1 * c.D) / c.D);
+}
+
+/** Distance à 8 % près (ou jusqu'à 1 km de plus) : assez pour montrer une première proposition. */
+function roughDistance(c: Ctx, cand: Cand): boolean {
+  return cand.err >= -0.08 && cand.err <= Math.max(0.08, Math.min(1000, 0.1 * c.D) / c.D);
+}
+
+/**
+ * Réparations d'une boucle qui repasse :
+ * - départ et retour par la même rue : l'essai suivant part dans le même sens, et doit arriver en marchant
+ *   dans ce sens, donc par l'autre côté du départ ; si cela ne suffit pas (impasse), la rue est évitée
+ *   au-delà de 150 m ;
+ * - portion reprise ailleurs : ses tronçons sont évités au prochain essai (loin des points de la figure),
+ *   ou la figure tourne un peu quand c'est trop près de ses points.
+ */
+function repairLoop(c: Ctx, plan: Plan, cand: Cand) {
+  const rt = cand.rt;
+  if (!rt) return;
+  const loop = c.p.shape === 'loop';
+  if (loop) {
+    if (cand.heading != null) c.headingTries++;
+    if (rt.stem <= RETRACE_OK) c.cleanStart = true;
+    else c.minStem = Math.min(c.minStem, rt.stem);
+  }
+  if (!rt.stretches.length) return;
+  const keepAway = [c.start, ...cand.built.anchors, ...c.keep];
+  const add = (pts: LngLat[]) => {
+    if (!plan.fix.noAvoid) plan.fix.avoid = [...plan.fix.avoid, ...pts].slice(-24);
+  };
+  for (const s of rt.stretches) {
+    const isStem = loop && s.to >= cand.L - 40 && s.firstFrom <= 40;
+    if (isStem) {
+      if (s.to - s.from <= RETRACE_OK) continue;
+      // Partir dans le même sens et revenir en marchant dans ce sens, donc par l'autre côté du départ.
+      // Quand une autre boucle y est arrivée (le départ n'est pas une impasse), la rue commune est aussi
+      // évitée au-delà de 150 m ; dans une impasse, l'éviter couperait le départ du reste du monde.
+      if (cand.heading == null && !plan.fix.headingTried) {
+        plan.fix.heading = departureBearing(cand.res.coords);
+        plan.fix.headingTried = true;
+      }
+      if (c.cleanStart) add(avoidPoints(cand.res.coords, s, keepAway));
+      continue;
+    }
+    const pts = avoidPoints(cand.res.coords, s, keepAway);
+    if (pts.length) add(pts);
+    else plan.fix.turn += (c.rnd() < 0.5 ? -1 : 1) * 14;
+  }
+}
+
+/**
+ * Rayon autour du point de passage imposé où un aller-retour est permis : le lieu lui-même, souvent
+ * au milieu d'un parc, à quelques dizaines de mètres du chemin le plus proche.
+ */
+function viaRadius(coords: LngLat[], v: LngLat): number {
+  let d = Infinity;
+  for (const q of coords) d = Math.min(d, haversine(q, v));
+  return Math.max(60, Math.min(400, d + 40));
+}
+
+/** La portion passe-t-elle à moins de `d` m de ce point ? */
+function nearPoint(coords: LngLat[], s: { from: number; to: number }, q: LngLat, d: number): boolean {
+  const cum = cumulative(coords);
+  for (let i = 0; i < coords.length; i++) {
+    if (cum[i] < s.from - d || cum[i] > s.to + d) continue;
+    if (haversine(coords[i], q) <= d) return true;
+  }
+  return false;
+}
+
+async function loops(c: Ctx): Promise<Cand[]> {
+  const { p, start: S, D } = c;
+  // Trois points de passage : deux boucles tiennent dans une requête (10 points au plus).
+  const n = 3;
   const poly = 2 * (n + 1) * Math.sin(Math.PI / (n + 1));
-  const ratio = { v: bike ? 1.25 : 1.32 };
-  const r0 = D / (ratio.v * poly);
+  const r0 = D / (c.ratio * poly);
   const K = 8;
   const offset = c.rnd() * 45;
   const dirs = Array.from({ length: K }, (_, i) => (offset + i * 45) % 360);
   const circle = (theta: number, r: number, m: number) => {
-    const ctr = destination(start, theta, r);
+    const ctr = destination(S, theta, r);
     const back = (theta + 180) % 360;
     return Array.from({ length: m }, (_, j) => destination(ctr, back + (j * 360) / m, r));
   };
@@ -253,58 +883,58 @@ async function loops(c: Ctx): Promise<Candidate[]> {
   let relief: number[] | null = null;
   if (p.elevation != null) {
     const M = 20;
-    try {
-      const h = await heights(dirs.flatMap((t) => circle(t, r0, M)), c.signal);
-      relief = dirs.map((_, i) => cyclicGain(h.slice(i * M, i * M + M)));
-    } catch {
-      relief = null;
-    }
+    const h = await c.heightsOf(dirs.flatMap((t) => circle(t, r0, M)));
+    if (h) relief = dirs.map((_, i) => cyclicGain(h.slice(i * M, i * M + M)));
   }
-
+  if (c.signal?.aborted) throw aborted();
   const scored = dirs.map((dir, i) => ({ dir, score: directionScore(c, dir, circle(dir, r0, 24), relief?.[i] ?? null, 1.7) }));
-  const chosen = pickDirections(scored, 4, 60);
+  const order = pickDirections(scored, 60);
 
-  let done = 0;
-  const results = await Promise.all(
-    chosen.map(async (theta): Promise<Candidate | null> => {
-      const cw = c.rnd() < 0.5;
-      let r = D / (ratio.v * poly);
-      let best: { res: RouteResult; err: number } | null = null;
-      for (let it = 0; it < 3; it++) {
-        const ctr = destination(start, theta, r);
-        const back = (theta + 180) % 360;
+  const plans = order.map((theta, rank) => {
+    const cw = c.rnd() < 0.5;
+    return makePlan({
+      rank,
+      status: rank < 4 ? 'wait' : 'reserve',
+      target: D,
+      windAlign: windAlign(c.wx, theta),
+      initSize: () => D / (c.ratio * poly),
+      observe: (size, part) => {
+        c.ratio = clamp(c.ratio * 0.55 + (part / (poly * size)) * 0.45, 1.02, 2.6);
+      },
+      build: (r, fix) => {
+        const th = theta + fix.turn;
+        const ctr = destination(S, th, r);
+        const back = (th + 180) % 360;
         const wps: LngLat[] = [];
         for (let j = 1; j <= n; j++) {
           let w = destination(ctr, back + (cw ? 1 : -1) * ((j * 360) / (n + 1)), r);
           if (c.des) w = pullToward(c.des, w, Math.max(250, r * 0.38));
           wps.push(w);
         }
-        const res = await routeWithFallback(c, [start, ...wps, start]);
-        if (!res) break;
-        const L = lengthOf(res.coords);
-        ratio.v = ratio.v * 0.6 + (L / (poly * r)) * 0.4;
-        const err = Math.abs(L - D) / D;
-        if (!best || err < best.err) best = { res, err };
-        if (err <= 0.04) break;
-        r *= clamp(Math.pow(D / L, 0.95), 0.6, 1.6);
-      }
-      done++;
-      c.report('Recherche des chemins…', 0.15 + (0.68 * done) / chosen.length);
-      if (!best || best.err > 0.25) return null;
-      return { res: best.res, far: destination(start, theta, r * 2), windAlign: windAlign(c.wx, theta) };
-    }),
-  );
-  return results.filter((x): x is Candidate => !!x);
+        const h = fix.heading ?? undefined;
+        const points: Waypoint[] = [{ coord: S, heading: h }, ...wps.map((coord) => ({ coord, through: !fix.plain })), { coord: S, heading: h }];
+        return { job: { points, avoid: fix.avoid }, size: r, far: destination(S, th, r * 2), anchors: wps, heading: h ?? null };
+      },
+    });
+  });
+
+  return runSearch(c, plans, {
+    want: 3,
+    maxRequests: 7,
+    from: 0.15,
+    to: 0.85,
+    good: (x) => retraceOf(c, x) <= retraceOk(x.L) && distanceOk(c, x, x.plan.tries >= 2),
+    usable: (x) => retraceOf(c, x) <= retraceOk(x.L) && roughDistance(c, x),
+    repair: (plan, x) => repairLoop(c, plan, x),
+  });
 }
 
 /* ------------------------------- Allers-retours ------------------------------ */
 
-async function outbacks(c: Ctx): Promise<Candidate[]> {
+async function outbacks(c: Ctx): Promise<Cand[]> {
   const { p, start, D } = c;
-  const bike = SPORTS[p.sport].bike;
   const half = D / 2;
-  const ratio = { v: bike ? 1.22 : 1.28 };
-  const d0 = half / ratio.v;
+  const d0 = half / c.ratio;
   const K = 8;
   const offset = c.rnd() * 45;
   const dirs = Array.from({ length: K }, (_, i) => (offset + i * 45) % 360);
@@ -313,55 +943,47 @@ async function outbacks(c: Ctx): Promise<Candidate[]> {
   let relief: number[] | null = null;
   if (p.elevation != null) {
     const M = 14;
-    try {
-      const h = await heights(dirs.flatMap((t) => [start, ...ray(t, d0, M - 1)]), c.signal);
-      relief = dirs.map((_, i) => pathGain(h.slice(i * M, i * M + M)) * 2);
-    } catch {
-      relief = null;
-    }
+    const h = await c.heightsOf(dirs.flatMap((t) => [start, ...ray(t, d0, M - 1)]));
+    if (h) relief = dirs.map((_, i) => pathGain(h.slice(i * M, i * M + M)) * 2);
   }
+  if (c.signal?.aborted) throw aborted();
   const scored = dirs.map((dir, i) => ({ dir, score: directionScore(c, dir, ray(dir, d0, 16), relief?.[i] ?? null, 1.5) }));
-  const chosen = pickDirections(scored, 4, 70);
+  const order = pickDirections(scored, 70);
 
-  let done = 0;
-  const results = await Promise.all(
-    chosen.map(async (theta): Promise<Candidate | null> => {
-      let d = half / ratio.v;
-      let best: { res: RouteResult; err: number; turn: LngLat } | null = null;
-      for (let it = 0; it < 3; it++) {
-        let turn = destination(start, theta, d);
+  // Un aller-retour, c'est un aller : cinq allers tiennent dans une requête.
+  const plans = order.map((theta, rank) =>
+    makePlan({
+      rank,
+      status: rank < 5 ? 'wait' : 'reserve',
+      target: half,
+      mirror: true,
+      windAlign: windAlign(c.wx, theta),
+      initSize: () => half / c.ratio,
+      observe: (size, part) => {
+        c.ratio = clamp(c.ratio * 0.55 + (part / size) * 0.45, 1.02, 2.6);
+      },
+      build: (d, fix) => {
+        let turn = destination(start, theta + fix.turn, d);
         if (c.des) turn = pullToward(c.des, turn, Math.max(250, d * 0.3));
-        const res = await routeWithFallback(c, [start, turn]);
-        if (!res) break;
-        const L = lengthOf(res.coords);
-        ratio.v = ratio.v * 0.6 + (L / d) * 0.4;
-        const err = Math.abs(L - half) / half;
-        if (!best || err < best.err) best = { res, err, turn };
-        if (err <= 0.04) break;
-        d *= clamp(Math.pow(half / L, 0.95), 0.6, 1.6);
-      }
-      done++;
-      c.report('Recherche des chemins…', 0.15 + (0.68 * done) / chosen.length);
-      if (!best || best.err > 0.25) return null;
-      return { res: mirror(best.res), half: best.res, far: best.turn, windAlign: windAlign(c.wx, theta) };
+        return { job: { points: [{ coord: start }, { coord: turn }] }, size: d, far: turn, anchors: [turn] };
+      },
     }),
   );
-  return results.filter((x): x is Candidate => !!x);
-}
-
-function mirror(res: RouteResult): RouteResult {
-  const L = lengthOf(res.coords);
-  const coords = [...res.coords, ...res.coords.slice(0, -1).reverse()];
-  const profile = profileFrom((s) => eleAt(res.profile, s <= L ? s : 2 * L - s), 2 * L);
-  return { coords, profile, lengthM: 2 * L, maneuvers: res.maneuvers };
+  return runSearch(c, plans, {
+    want: 3,
+    maxRequests: 4,
+    from: 0.15,
+    to: 0.85,
+    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.06 : 0.045),
+    usable: (x) => Math.abs(x.err) <= 0.08,
+  });
 }
 
 /* ------------------------------ Vers un lieu (A vers B) ------------------------------ */
 
-async function oneways(c: Ctx, B: LngLat): Promise<Candidate[]> {
+async function oneways(c: Ctx, B: LngLat): Promise<Cand[]> {
   if (c.via) return viaOneways(c, B, c.via);
   const { start: A, D } = c;
-  const out: Candidate[] = [];
   let direct: RouteResult[] = [];
   try {
     direct = (await route([{ coord: A }, { coord: B }], c.costing, c.signal, 2)).map((r) => clean(r));
@@ -370,142 +992,201 @@ async function oneways(c: Ctx, B: LngLat): Promise<Candidate[]> {
     throw e;
   }
   c.report('Recherche des chemins…', 0.4);
+  const fixedPlan = makePlan({ rank: 99, status: 'done', target: D, windAlign: 0, initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: B, anchors: [] }) });
+  const out: Cand[] = direct.map((res) => fixedCand(c, res, B, fixedPlan));
   const L0 = lengthOf(direct[0].coords);
-  for (const d of direct) out.push({ res: d, far: B, windAlign: 0 });
   if (D <= L0 * 1.1) return out;
 
   const ab = haversine(A, B);
-  const brg = bearing(A, B);
-  const mid = destination(A, brg, ab / 2);
   const ratio = clamp(L0 / Math.max(ab, 1), 1.05, 1.8);
-  let done = 0;
-  const detours = await Promise.all(
-    [90, -90].map(async (side): Promise<Candidate | null> => {
-      let h = Math.sqrt(Math.max(0, (D / (2 * ratio)) ** 2 - (ab / 2) ** 2));
-      let best: { res: RouteResult; err: number } | null = null;
-      for (let it = 0; it < 3; it++) {
-        let w = destination(mid, brg + side, h);
-        if (c.des) w = pullToward(c.des, w, Math.max(250, h * 0.3));
-        const res = await routeWithFallback(c, [A, w, B]);
-        if (!res) break;
-        const L = lengthOf(res.coords);
-        const err = Math.abs(L - D) / D;
-        if (!best || err < best.err) best = { res, err };
-        if (err <= 0.05) break;
-        h *= clamp(Math.pow(D / L, 1.3), 0.5, 1.8);
-      }
-      done++;
-      c.report('Recherche des chemins…', 0.4 + (0.45 * done) / 2);
-      return best && best.err < 0.3 ? ({ res: best.res, far: B, windAlign: 0 }) : null;
+  // Détour en arc, d'un côté ou de l'autre : deux points sur une courbe qui s'écarte de h du trajet direct
+  // (un seul point au loin donnerait souvent un aller-retour vers lui).
+  const proj = localProjector(A);
+  const [bx, by] = proj.to(B);
+  const nx = -by / Math.max(1, ab);
+  const ny = bx / Math.max(1, ab);
+  const plans = [1, -1].map((side, rank) =>
+    makePlan({
+      rank,
+      target: D,
+      windAlign: 0,
+      initSize: () => Math.sqrt(Math.max(0, (D / (2 * ratio)) ** 2 - (ab / 2) ** 2)),
+      build: (h, fix) => {
+        const cx = bx / 2 + side * nx * 2 * h;
+        const cy = by / 2 + side * ny * 2 * h;
+        const at = (t: number) => proj.from(2 * (1 - t) * t * cx + t * t * bx, 2 * (1 - t) * t * cy + t * t * by);
+        const shift = fix.turn / 360;
+        const wps = [at(1 / 3 + shift), at(2 / 3 + shift)].map((w) => (c.des ? pullToward(c.des, w, Math.max(250, h * 0.3)) : w));
+        return {
+          job: { points: [{ coord: A }, ...wps.map((coord) => ({ coord, through: !fix.plain })), { coord: B }], avoid: fix.avoid },
+          size: h,
+          far: B,
+          anchors: [...wps, B],
+        };
+      },
     }),
   );
-  return [...detours.filter((x): x is Candidate => !!x), ...out];
+  const found = await runSearch(c, plans, {
+    want: 2,
+    maxRequests: 3,
+    from: 0.4,
+    to: 0.85,
+    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.07 : 0.05) && retraceOf(c, x) <= retraceOk(x.L),
+    usable: (x) => Math.abs(x.err) <= 0.1 && retraceOf(c, x) <= retraceOk(x.L),
+    repair: (plan, x) => repairLoop(c, plan, x),
+  });
+  return [...found, ...out];
+}
+
+function fixedCand(c: Ctx, res: RouteResult, far: LngLat, plan: Plan, half?: RouteResult): Cand {
+  const L = lengthOf(res.coords);
+  return {
+    res,
+    half,
+    far,
+    windAlign: 0,
+    L,
+    err: (L - c.D) / c.D,
+    rt: retracesOf(c, res.coords),
+    plan,
+    built: { job: { points: [] }, size: 0, far, anchors: [] },
+    heading: null,
+  };
 }
 
 /* -------------------------- Avec un point de passage imposé -------------------------- */
 
 /**
- * Boucles qui passent par V : deux cercles passant par le départ et V (un de chaque côté
- * de la ligne départ–V) et deux triangles départ → V → W. La taille s'ajuste à la distance.
+ * Boucles qui passent par V : deux cercles passant par le départ et V (un de chaque côté de la ligne
+ * départ–V), puis des boucles ordinaires orientées autour de V, dont le point de passage le plus proche
+ * de V est remplacé par V. La taille s'ajuste à la distance.
  */
-async function viaLoops(c: Ctx, V: LngLat): Promise<Candidate[]> {
-  const { p, start: S, D } = c;
-  const bike = SPORTS[p.sport].bike;
+async function viaLoops(c: Ctx, V: LngLat): Promise<Cand[]> {
+  const { start: S, D } = c;
   const d = Math.max(60, haversine(S, V));
   const brg = bearing(S, V);
   const M = destination(S, brg, d / 2);
-  const ratio = bike ? 1.25 : 1.32;
-  const n = D <= 8000 ? 4 : 5; // sommets du polygone, départ et V compris
+  // Quatre sommets, départ et V compris : deux boucles tiennent dans une requête.
+  const n = 4;
   const poly = 2 * n * Math.sin(Math.PI / n);
   const pull = (w: LngLat, r: number) => (c.des ? pullToward(c.des, w, Math.max(200, r * 0.3)) : w);
 
   const circle = (side: 1 | -1, r: number): LngLat[] => {
     const rr = Math.max(r, (d / 2) * 1.04);
-    const h = Math.sqrt(rr * rr - (d / 2) ** 2);
-    const C = destination(M, brg + 90 * side, h);
+    const hh = Math.sqrt(rr * rr - (d / 2) ** 2);
+    const C = destination(M, brg + 90 * side, hh);
     const aS = bearing(C, S);
     const aV = bearing(C, V);
     const span = (aV - aS + 360) % 360;
     const k1 = Math.round(((n - 2) * span) / 360);
     const k2 = n - 2 - k1;
-    const pts: LngLat[] = [];
-    for (let i = 1; i <= k1; i++) pts.push(pull(destination(C, aS + (span * i) / (k1 + 1), rr), rr));
-    pts.push(V);
-    for (let i = 1; i <= k2; i++) pts.push(pull(destination(C, aV + ((360 - span) * i) / (k2 + 1), rr), rr));
-    return [S, ...pts, S];
+    const mid: LngLat[] = [];
+    for (let i = 1; i <= k1; i++) mid.push(pull(destination(C, aS + (span * i) / (k1 + 1), rr), rr));
+    mid.push(V);
+    for (let i = 1; i <= k2; i++) mid.push(pull(destination(C, aV + ((360 - span) * i) / (k2 + 1), rr), rr));
+    return mid;
   };
-  const triangle = (side: 1 | -1, e: number): LngLat[] => [S, V, pull(destination(S, brg + 55 * side, e), e), S];
+  const around = (theta: number, cw: boolean, r: number): LngLat[] => {
+    const ctr = destination(S, theta, r);
+    const back = (theta + 180) % 360;
+    const wps = [1, 2, 3].map((j) => destination(ctr, back + (cw ? 1 : -1) * ((j * 360) / 4), r));
+    let k = 0;
+    wps.forEach((w, i) => {
+      if (haversine(w, V) < haversine(wps[k], V)) k = i;
+    });
+    return wps.map((w, i) => (i === k ? V : pull(w, r)));
+  };
 
-  const variants: { side: 1 | -1; tri: boolean }[] = [
-    { side: 1, tri: false },
-    { side: -1, tri: false },
-    { side: 1, tri: true },
-    { side: -1, tri: true },
+  const variants: { side?: 1 | -1; theta?: number; cw?: boolean; status: Plan['status'] }[] = [
+    { side: 1, status: 'wait' },
+    { side: -1, status: 'wait' },
+    { theta: brg + 45, cw: true, status: 'wait' },
+    { theta: brg - 45, cw: false, status: 'wait' },
+    { theta: brg + 100, cw: true, status: 'reserve' },
+    { theta: brg - 100, cw: false, status: 'reserve' },
   ];
-  let done = 0;
-  const results = await Promise.all(
-    variants.map(async (v): Promise<Candidate | null> => {
-      let size = v.tri ? Math.max(d * 0.6, (D / ratio - d) / 2) : D / (ratio * poly);
-      let best: { res: RouteResult; err: number } | null = null;
-      for (let it = 0; it < 3; it++) {
-        const res = await routeWithFallback(c, v.tri ? triangle(v.side, size) : circle(v.side, size));
-        if (!res) break;
-        const L = lengthOf(res.coords);
-        const err = Math.abs(L - D) / D;
-        if (!best || err < best.err) best = { res, err };
-        if (err <= 0.04) break;
-        size *= clamp(Math.pow(D / L, v.tri ? 1.1 : 0.95), 0.55, 1.7);
-      }
-      done++;
-      c.report('Recherche des chemins…', 0.15 + (0.68 * done) / variants.length);
-      // Même trop longue (point de passage loin), la boucle reste proposée : une remarque le dira.
-      return best ? { res: best.res, far: V, windAlign: windAlign(c.wx, brg) } : null;
+  const plans = variants.map((v, rank) =>
+    makePlan({
+      rank,
+      status: v.status,
+      target: D,
+      windAlign: windAlign(c.wx, v.theta ?? brg),
+      initSize: () => D / (c.ratio * poly),
+      build: (size, fix) => {
+        const mid = v.side ? circle(v.side, size) : around(v.theta! + fix.turn, v.cw!, size);
+        const h = fix.heading ?? undefined;
+        const points: Waypoint[] = [{ coord: S, heading: h }, ...mid.map((coord) => ({ coord, through: !fix.plain })), { coord: S, heading: h }];
+        return { job: { points, avoid: fix.avoid }, size, far: V, anchors: mid, heading: h ?? null };
+      },
     }),
   );
-  return results.filter((x): x is Candidate => !!x);
+  return runSearch(c, plans, {
+    want: 3,
+    maxRequests: 6,
+    from: 0.15,
+    to: 0.85,
+    // Même trop longue (point de passage loin), la boucle reste proposée : une remarque le dira.
+    good: (x) => retraceOf(c, x) <= retraceOk(x.L) && distanceOk(c, x, x.plan.tries >= 2),
+    usable: (x) => retraceOf(c, x) <= retraceOk(x.L) && roughDistance(c, x),
+    repair: (plan, x) => repairLoop(c, plan, x),
+  });
 }
 
 /** Allers-retours par V : on va jusqu'à V, puis plus loin si la distance le demande, et on revient. */
-async function viaOutbacks(c: Ctx, V: LngLat): Promise<Candidate[]> {
+async function viaOutbacks(c: Ctx, V: LngLat): Promise<Cand[]> {
   const { start: S, D } = c;
   const half = D / 2;
-  const first = await routeWithFallback(c, [S, V]);
-  if (!first) throw new GenerateError('Aucun chemin praticable ne mène à ce point de passage pour ce sport.');
+  let first: RouteResult;
+  try {
+    first = clean((await routeJobs([{ points: [{ coord: S }, { coord: V }] }], c.costing, c.signal))[0], c.keep);
+  } catch (e) {
+    if (e instanceof RoutingError) throw new GenerateError('Aucun chemin praticable ne mène à ce point de passage pour ce sport.');
+    throw e;
+  }
   const L1 = lengthOf(first.coords);
   const brg = bearing(S, V);
-  const only: Candidate = { res: mirror(first), half: first, far: V, windAlign: windAlign(c.wx, brg) };
+  const basePlan = makePlan({ rank: 99, status: 'done', target: half, windAlign: windAlign(c.wx, brg), initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: V, anchors: [] }) });
+  const only = fixedCand(c, mirror(first), V, basePlan, first);
   if (L1 >= half * 0.92) return [only];
-  let done = 0;
-  const results = await Promise.all(
-    [0, 55, -55].map(async (dev): Promise<Candidate | null> => {
-      let e = (half - L1) / 1.3;
-      let best: { res: RouteResult; err: number; turn: LngLat } | null = null;
-      for (let it = 0; it < 3; it++) {
-        let turn = destination(V, brg + dev, e);
+  // La taille se règle sur la longueur ajoutée après V (offset : l'aller jusqu'à V).
+  const plans = [0, 55, -55].map((dev, rank) =>
+    makePlan({
+      rank,
+      target: half,
+      offset: L1,
+      mirror: true,
+      windAlign: windAlign(c.wx, brg + dev),
+      initSize: () => (half - L1) / 1.3,
+      build: (e, fix) => {
+        let turn = destination(V, brg + dev + fix.turn, e);
         if (c.des) turn = pullToward(c.des, turn, Math.max(200, e * 0.3));
-        const res = await routeWithFallback(c, [S, V, turn]);
-        if (!res) break;
-        const L = lengthOf(res.coords);
-        const err = Math.abs(L - half) / half;
-        if (!best || err < best.err) best = { res, err, turn };
-        if (err <= 0.04) break;
-        e *= clamp((half - L1) / Math.max(50, L - L1), 0.5, 1.8);
-      }
-      done++;
-      c.report('Recherche des chemins…', 0.3 + (0.55 * done) / 3);
-      return best && best.err < 0.3 ? { res: mirror(best.res), half: best.res, far: best.turn, windAlign: windAlign(c.wx, brg + dev) } : null;
+        return { job: { points: [{ coord: S }, { coord: V, through: !fix.plain }, { coord: turn }] }, size: e, far: turn, anchors: [V, turn] };
+      },
     }),
   );
-  const found = results.filter((x): x is Candidate => !!x);
+  const found = await runSearch(c, plans, {
+    want: 3,
+    maxRequests: 3,
+    from: 0.3,
+    to: 0.85,
+    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.06 : 0.045),
+    usable: (x) => Math.abs(x.err) <= 0.08,
+  });
   return found.length ? found : [only];
 }
 
 /** Vers un lieu par V : le trajet direct par V, puis deux détours sur la plus longue étape si la distance le permet. */
-async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Candidate[]> {
+async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Cand[]> {
   const { start: A, D } = c;
-  const base = await routeWithFallback(c, [A, V, B]);
-  if (!base) throw new GenerateError('Aucun chemin praticable ne relie ces points pour ce sport.');
-  const out: Candidate[] = [{ res: base, far: B, windAlign: 0 }];
+  let base: RouteResult;
+  try {
+    base = clean((await routeJobs([{ points: [{ coord: A }, { coord: V, through: true }, { coord: B }] }], c.costing, c.signal))[0], c.keep);
+  } catch (e) {
+    if (e instanceof RoutingError) throw new GenerateError('Aucun chemin praticable ne relie ces points pour ce sport.');
+    throw e;
+  }
+  const basePlan = makePlan({ rank: 99, status: 'done', target: D, windAlign: 0, initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: B, anchors: [] }) });
+  const out: Cand[] = [fixedCand(c, base, B, basePlan)];
   const L0 = lengthOf(base.coords);
   c.report('Recherche des chemins…', 0.4);
   if (D <= L0 * 1.1) return out;
@@ -515,56 +1196,36 @@ async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Candidate[]> {
   const brg = bearing(P, Q);
   const mid = destination(P, brg, pq / 2);
   const extra = (D - L0) / 1.3;
-  let done = 0;
-  const detours = await Promise.all(
-    [90, -90].map(async (side): Promise<Candidate | null> => {
-      let h = Math.sqrt(Math.max(0, ((extra + pq) / 2) ** 2 - (pq / 2) ** 2));
-      let best: { res: RouteResult; err: number } | null = null;
-      for (let it = 0; it < 3; it++) {
-        let w = destination(mid, brg + side, h);
+  const plans = [90, -90].map((side, rank) =>
+    makePlan({
+      rank,
+      target: D,
+      windAlign: 0,
+      initSize: () => Math.sqrt(Math.max(0, ((extra + pq) / 2) ** 2 - (pq / 2) ** 2)),
+      build: (h, fix) => {
+        let w = destination(mid, brg + side + fix.turn, h);
         if (c.des) w = pullToward(c.des, w, Math.max(250, h * 0.3));
-        const res = await routeWithFallback(c, firstLeg ? [A, w, V, B] : [A, V, w, B]);
-        if (!res) break;
-        const L = lengthOf(res.coords);
-        const err = Math.abs(L - D) / D;
-        if (!best || err < best.err) best = { res, err };
-        if (err <= 0.05) break;
-        h *= clamp(Math.pow(D / L, 1.3), 0.5, 1.8);
-      }
-      done++;
-      c.report('Recherche des chemins…', 0.4 + (0.45 * done) / 2);
-      return best && best.err < 0.3 ? { res: best.res, far: B, windAlign: 0 } : null;
+        const t = !fix.plain;
+        const points: Waypoint[] = firstLeg
+          ? [{ coord: A }, { coord: w, through: t }, { coord: V, through: t }, { coord: B }]
+          : [{ coord: A }, { coord: V, through: t }, { coord: w, through: t }, { coord: B }];
+        return { job: { points, avoid: fix.avoid }, size: h, far: B, anchors: [w, V, B] };
+      },
     }),
   );
-  return [...detours.filter((x): x is Candidate => !!x), ...out];
+  const found = await runSearch(c, plans, {
+    want: 2,
+    maxRequests: 3,
+    from: 0.4,
+    to: 0.85,
+    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.07 : 0.05) && retraceOf(c, x) <= retraceOk(x.L),
+    usable: (x) => Math.abs(x.err) <= 0.1 && retraceOf(c, x) <= retraceOk(x.L),
+    repair: (plan, x) => repairLoop(c, plan, x),
+  });
+  return [...found, ...out];
 }
 
 /* ------------------------------------ Outils ------------------------------------ */
-
-/** Retire les petits allers-retours vers un point de passage (impasse, petite rue), sauf vers ceux imposés. */
-function clean(res: RouteResult, keep: LngLat[] = []): RouteResult {
-  const { coords, profile } = removeSpurs(res.coords, res.profile, 450, keep);
-  if (coords === res.coords) return res;
-  return { ...res, coords, profile, lengthM: lengthOf(coords) };
-}
-
-async function routeWithFallback(c: Ctx, pts: LngLat[]): Promise<RouteResult | null> {
-  const keep = c.via ? [c.via] : [];
-  const through = pts.map((coord, i) => ({ coord, through: i > 0 && i < pts.length - 1 }));
-  try {
-    return clean((await route(through, c.costing, c.signal))[0], keep);
-  } catch (e) {
-    if (c.signal?.aborted) throw e;
-    if (!(e instanceof RoutingError)) return null;
-    if (e.code === 171 && pts.length === 2) throw new GenerateError(routingMessage(e));
-    try {
-      return clean((await route(pts.map((coord) => ({ coord })), c.costing, c.signal))[0], keep);
-    } catch (e2) {
-      if (c.signal?.aborted) throw e2;
-      return null;
-    }
-  }
-}
 
 function routingMessage(e: RoutingError): string {
   if (e.code === 171) return 'Le point de départ ou d’arrivée est trop loin d’un chemin praticable.';
@@ -609,24 +1270,30 @@ function nearRoute(coords: LngLat[], pts: LngLat[], maxDist: number): LngLat[] {
   });
 }
 
-function analyse(cand: Candidate, c: Ctx, raster: EnvRaster | null, water: LngLat[], settings: Settings) {
+function analyse(cand: Cand, c: Ctx, raster: EnvRaster | null, water: LngLat[], settings: Settings) {
   const { p, D } = c;
   const res = cand.res;
   const lengthM = lengthOf(res.coords);
   const st = elevationStats(res.profile);
-  const overlap = p.shape === 'loop' ? overlapRatio(res.coords) : 0;
+  // Ce qui repasse au même endroit (hors aller-retour demandé et départ au fond d'une impasse).
+  const retrace = p.shape === 'outback' ? 0 : retraceOf(c, cand);
+  const overlap = lengthM > 0 ? retrace / lengthM : 0;
   const env = envSplit(raster, res.coords);
   const share = p.envs.length ? envShare(env, p.envs) : null;
   const waterPoints = p.water ? nearRoute(res.coords, water, 40) : [];
   const tracks = trackShare(raster, res.coords);
   const unpaved = unpavedWeight(p);
-  const distErr = Math.abs(lengthM - D) / D;
+  const signed = (lengthM - D) / D;
+  const distErr = Math.abs(signed);
+  // Une boucle un peu plus longue (jusqu'à 1 km) vaut mieux qu'une boucle qui repasse.
+  const allowance = Math.min(1000, 0.1 * D) / D;
+  const distCost = p.shape === 'loop' && signed > 0 ? (signed <= allowance ? 1.4 * signed : 1.4 * allowance + 3 * (signed - allowance)) : 3 * distErr;
   const elevErr = p.elevation != null ? Math.abs(st.ascent - p.elevation) / Math.max(p.elevation, 50) : 0;
   const score =
-    3 * distErr +
+    distCost +
     1.2 * Math.min(1.5, elevErr) +
     (share != null ? 1.1 * (1 - Math.min(1, share * 1.25)) : 0) +
-    1.6 * Math.max(0, overlap - 0.05) +
+    20 * overlap +
     (p.water && !waterPoints.length ? 0.4 : 0) +
     (tracks != null && unpaved > 0 ? 0.9 * unpaved * (1 - Math.min(1, tracks * 1.6)) : 0) +
     (tracks != null && wantsPaved(p) ? 0.6 * tracks : 0) +
@@ -674,7 +1341,10 @@ const ENV_TAG: Record<EnvClass, string> = {
 function tag(routes: Route[], p: Params) {
   if (!routes.length) return;
   routes.forEach((r) => (r.tags = []));
-  if (routes.length > 1) routes[0].tags!.push('Meilleur accord');
+  if (routes.length > 1) {
+    const best = [...routes].sort((a, b) => (a.match?.score ?? 0) - (b.match?.score ?? 0))[0];
+    best.tags!.push('Meilleur accord');
+  }
   const free = () => routes.filter((r) => r.tags!.length === 0);
   const give = (pickFn: (rs: Route[]) => Route | undefined, label: string, ok: (best: Route, others: Route[]) => boolean) => {
     const pool = free();
@@ -705,10 +1375,5 @@ function tag(routes: Route[], p: Params) {
     (rs) => [...rs].sort((a, b) => nature(b) - nature(a))[0],
     'Le plus nature',
     (b, o) => o.every((r) => nature(b) >= nature(r) + 0.1),
-  );
-  give(
-    (rs) => [...rs].sort((a, b) => a.overlap - b.overlap)[0],
-    'Sans repasser',
-    (b, o) => p.shape === 'loop' && b.overlap < 0.03 && o.every((r) => r.overlap > 0.08),
   );
 }
