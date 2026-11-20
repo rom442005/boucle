@@ -12,6 +12,9 @@ L'app est une web app installable : pas d'App Store, mises à jour automatiques.
 
 ## Utilisation
 
+Au premier lancement, Boucle propose de créer un compte ou de se connecter (un code par e-mail, sans mot de passe) ; « Plus tard » laisse créer des parcours sans compte. Ensuite, l'app s'ouvre sur la carte seule, avec trois boutons en bas : Mes parcours, **Faire une boucle** (les réglages montent du bas et prennent tout l'écran ; la flèche vers le bas les replie) et la Communauté.
+
+
 1. **Départ** : ta position, une adresse, un point touché sur la carte, ou un appui long sur la carte (clic droit sur Mac). Le point de départ se déplace aussi en le faisant glisser.
 2. **Sport** : course, trail, vélo de route, gravel ou VTT. Chaque sport utilise un réseau différent (trottoirs et parcs, sentiers, routes goudronnées, chemins).
 3. **Distance** et **dénivelé positif** : le dénivelé reste « indifférent » tant qu'on ne touche pas son curseur. Le cercle en pointillés sur la carte montre jusqu'où la boucle peut aller.

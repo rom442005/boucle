@@ -28,11 +28,34 @@
   import ReportForm from './components/ReportForm.svelte';
   import Avatar from './components/Avatar.svelte';
   import { community } from './lib/community.svelte';
+  import HomeBar from './components/HomeBar.svelte';
+  import Welcome from './components/Welcome.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
 
+  /** Premier lancement : te connecter ou créer un compte (une fois, ensuite plus jamais imposé). */
+  const WELCOME_KEY = 'boucle.bienvenue';
+  let welcome = $state(false);
+  function closeWelcome() {
+    welcome = false;
+    try {
+      localStorage.setItem(WELCOME_KEY, '1');
+    } catch {
+      /* sans mémoire */
+    }
+  }
+
   onMount(() => {
+    void community.start().then(() => {
+      let seen = false;
+      try {
+        seen = !!localStorage.getItem(WELCOME_KEY);
+      } catch {
+        seen = true;
+      }
+      if (community.available && !community.signedIn && !seen && !location.hash.startsWith('#r=')) welcome = true;
+    });
     const onWide = () => (app.wide = wideQuery.matches);
     wideQuery.addEventListener('change', onWide);
     const h = location.hash;
@@ -91,6 +114,10 @@
     const n = app.routes.length;
     if (n > 1) app.select((app.selected + dir + n) % n);
   }
+  /** Accueil : la carte seule et la barre du bas. */
+  const athome = $derived(app.phase === 'compose' && app.home);
+  /** iPhone : les réglages couvrent l'écran (pas de boutons de carte par-dessus). */
+  const fullsheet = $derived(!app.wide && app.phase === 'compose' && !app.home && app.detent === 'full');
   const canSwipe = $derived(!app.wide && app.phase === 'results' && app.routes.length > 1);
   /** Onglet actif sur Mac. */
   const tab = $derived(
@@ -133,27 +160,16 @@
 <MapView />
 
 {#if app.phase !== 'follow'}
-  {#if !app.wide && app.phase === 'compose' && !app.pickOnMap}
-    <div class="topbar">
-      <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} floating onclick={() => (app.search = 'start')} />
-      {#if community.available}
-        <button use:tactile type="button" class="round glass" aria-label="Communauté : parcours publiés" onclick={() => community.open()}>
-          <Icon name="users" />
-        </button>
-      {/if}
-      <button use:tactile type="button" class="round glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
-        <Icon name="list" />
-      </button>
-    </div>
-  {/if}
-
-  <MapControls />
+  {#if !welcome && !fullsheet}<MapControls minimal={athome && !app.wide} />{/if}
   <!-- Légende seulement quand les volumes sont visibles (à partir du zoom 13). -->
   {#if app.terrain3d && app.zoom >= 13.2 && !app.pickOnMap}
     <BuildingsLegend />
   {/if}
 
-  <Panel label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
+  {#if athome}
+    {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
+  {:else}
+  <Panel solid={fullsheet} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <div class="brand">
@@ -209,13 +225,18 @@
           {/if}
         </div>
       {:else if app.phase === 'compose'}
-        {#if app.wide}
-          <!-- Les lieux du parcours, toujours visibles en haut : départ, point de passage, destination. -->
-          <div class="start-wide">
-            <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} />
-            <Stops />
-          </div>
-        {/if}
+        <!-- Les réglages, montés du bas : un bouton pour redescendre vers la carte, puis le départ. -->
+        <div class="nav">
+          <button use:tactile type="button" class="round navbtn" aria-label="Fermer les réglages" onclick={() => app.closeComposer()}>
+            <Icon name="down" size={20} />
+          </button>
+          <h2>{headTitle}</h2>
+          <span class="navbtn-space" aria-hidden="true"></span>
+        </div>
+        <div class="start-wide">
+          <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} />
+          {#if app.wide}<Stops />{/if}
+        </div>
       {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
         <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->
         <div class="nav sum">
@@ -290,6 +311,7 @@
 
 
   </Panel>
+  {/if}
 
   {#if app.wide && app.route && (app.phase === 'results' || app.phase === 'detail')}
     <section class="dock glass glass-panel" aria-label="Profil d’altitude">
@@ -316,6 +338,8 @@
   <SearchOverlay />
 {/if}
 
+{#if welcome}<Welcome onclose={closeWelcome} />{/if}
+
 <div class="toast-zone" aria-live="polite">
   {#if app.toast}
     {#key app.toast.id}
@@ -325,25 +349,6 @@
 </div>
 
 <style>
-  .topbar {
-    position: fixed;
-    z-index: 15;
-    top: calc(var(--safe-top) + 8px);
-    left: 12px;
-    right: 12px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .topbar :global(.place) {
-    flex: 1;
-  }
-  .topbar .round {
-    width: 46px;
-    height: 46px;
-    position: relative;
-    color: var(--label);
-  }
   .brand {
     display: flex;
     align-items: center;

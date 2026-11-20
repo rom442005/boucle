@@ -1,12 +1,21 @@
 /* Parcours complets dans un vrai navigateur, contre les services publics (réseau requis). */
 import { expect, test, type Page } from '@playwright/test';
 
+/** L'app déjà ouverte une fois (l'accueil « Créer un compte » est passé) : la carte seule. */
 async function open(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('boucle.bienvenue', '1'));
   await page.goto('./');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
 }
 
+/** « Faire une boucle » : les réglages montent du bas. */
+async function compose(page: Page) {
+  await page.getByRole('button', { name: 'Faire une boucle' }).click();
+  await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
+}
+
 async function createLoop(page: Page) {
+  if (await page.getByRole('button', { name: 'Faire une boucle' }).count()) await compose(page);
   await page.getByRole('button', { name: /Créer la boucle/ }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
   // La première proposition s'affiche tout de suite ; on attend que les autres l'aient rejointe.
@@ -38,6 +47,7 @@ test('créer une boucle, comparer les propositions, parcourir le profil', async 
 
 test('changer de sport adapte les réglages', async ({ page }) => {
   await open(page);
+  await compose(page);
   await page.getByRole('radio', { name: 'Vélo' }).click();
   await expect(page.locator('#distance')).toHaveValue('50');
   await expect(page.getByRole('heading', { name: 'Sol' })).toHaveCount(0);
@@ -52,6 +62,7 @@ test('changer de sport adapte les réglages', async ({ page }) => {
 
 test('chercher un point de départ par adresse', async ({ page }) => {
   await open(page);
+  await compose(page);
   await page.getByRole('button', { name: /^Départ/ }).first().click();
   await page.getByRole('searchbox').fill('Parc de Procé Nantes');
   await page.getByRole('button', { name: /Parc de Procé/ }).first().click();
@@ -81,6 +92,8 @@ test('marquer un parcours comme fait puis le retrouver dans l’historique', asy
   await expect(page.getByText('Ajouté à l’historique')).toBeVisible();
   await expect(done).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Retour aux réglages' }).click();
+  // Sur iPhone, les réglages couvrent l'écran : on redescend vers la carte, d'où s'ouvrent Mes parcours.
+  if (!(await page.getByRole('button', { name: /Mes parcours/ }).first().isVisible())) await page.getByRole('button', { name: 'Fermer les réglages' }).click();
   await page.getByRole('button', { name: /Mes parcours/ }).first().click();
   await page.getByRole('radio', { name: /Historique/ }).click();
   await expect(page.getByText(/^En /)).toBeVisible();
@@ -142,6 +155,7 @@ test('une sortie suivie en direct rejoint l’historique', async ({ page, contex
 
 test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browserName }) => {
   await open(page);
+  await compose(page);
   if (browserName !== 'chromium') {
     // Dans Safari sur iPhone : le rappel d'installation, pas le QR code.
     await expect(page.getByRole('note').filter({ hasText: 'Comme une app' })).toBeVisible();
@@ -159,6 +173,7 @@ test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browser
   // Masqué pour de bon ; le bouton téléphone de l'en-tête garde l'accès au QR code.
   await page.reload();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await compose(page);
   await expect(page.getByRole('note').filter({ hasText: 'Sur ton iPhone' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Installer Boucle sur l’iPhone' }).click();
   await expect(page.getByRole('dialog', { name: 'Installer Boucle sur l’iPhone' }).locator('.qr svg')).toBeVisible();
@@ -166,6 +181,7 @@ test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browser
 
 test('choisir la destination en touchant la carte', async ({ page, browserName }) => {
   await open(page);
+  await compose(page);
   await page.getByRole('radio', { name: 'Vers un lieu' }).click();
   const dialog = page.getByRole('dialog', { name: 'Choisir la destination' });
   await expect(dialog).toBeVisible();
@@ -178,6 +194,7 @@ test('choisir la destination en touchant la carte', async ({ page, browserName }
   } else {
     await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Touche la carte' })).toBeVisible();
+    await page.waitForTimeout(800); // le panneau finit de descendre
     await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
   }
   await expect(dialog).toBeHidden();
@@ -196,6 +213,7 @@ test('choisir la destination en touchant la carte', async ({ page, browserName }
 
 test('imposer un point de passage dans une boucle', async ({ page, browserName }) => {
   await open(page);
+  await compose(page);
   const box = (await page.locator('.maplibregl-canvas').boundingBox())!;
   if (browserName === 'chromium') {
     // Sur Mac, le bouton est en haut de la colonne, sous le départ, toujours visible.
@@ -208,6 +226,7 @@ test('imposer un point de passage dans une boucle', async ({ page, browserName }
     // Sur iPhone, dans la section Forme du panneau.
     await page.getByRole('button', { name: /Passer par un lieu/ }).click();
     await page.getByRole('dialog', { name: 'Choisir un point de passage' }).getByRole('button', { name: /Choisir sur la carte/ }).click();
+    await page.waitForTimeout(800); // le panneau finit de descendre
     await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
   }
   await expect(page.getByText('Point de passage placé ici')).toBeVisible();
@@ -222,13 +241,22 @@ test('imposer un point de passage dans une boucle', async ({ page, browserName }
   await expect(page.getByRole('button', { name: /Passer par un lieu/ })).toBeVisible();
 });
 
-test('la 3D met la ville en volume, avec sa légende', async ({ page }) => {
+test('la 3D met la ville en volume, avec sa légende', async ({ page, browserName }) => {
   await open(page);
+  // Sur iPhone, l'accueil ne garde que « Me localiser » : la 3D se trouve avec un parcours affiché.
+  if (browserName !== 'chromium') await createLoop(page);
   const btn = page.getByRole('button', { name: 'Relief et bâtiments en 3D' });
   await btn.click();
   await expect(btn).toHaveAttribute('aria-pressed', 'true');
   // Comme dans Plans, le bouton annonce la vue vers laquelle il bascule.
   await expect(btn).toHaveText('2D');
+  // La légende vient avec les volumes, à partir du zoom de la ville.
+  const canvas = page.locator('.maplibregl-canvas');
+  for (let i = 0; i < 4 && !(await page.getByRole('note', { name: /Bâtiments en volume/ }).count()); i++) {
+    await canvas.focus();
+    await page.keyboard.press('Equal');
+    await page.waitForTimeout(700);
+  }
   await expect(page.getByRole('note', { name: /Bâtiments en volume/ })).toContainText('Immeuble');
   await btn.click();
   await expect(btn).toHaveText('3D');
@@ -256,8 +284,9 @@ test('côtes et descentes : liste, carte et profil', async ({ page }) => {
   }
 });
 
-test('fond de carte Plan ou Satellite, gardé au prochain lancement', async ({ page }) => {
+test('fond de carte Plan ou Satellite, gardé au prochain lancement', async ({ page, browserName }) => {
   await open(page);
+  if (browserName !== 'chromium') await createLoop(page);
   const type = page.getByRole('button', { name: /^Type de carte/ });
   await expect(type).toHaveAccessibleName('Type de carte : Plan');
   await type.click();
@@ -269,12 +298,13 @@ test('fond de carte Plan ou Satellite, gardé au prochain lancement', async ({ p
   await expect(type).toHaveAccessibleName('Type de carte : Satellite');
   await expect(page.getByRole('group', { name: 'Type de carte' })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Type de carte : Satellite' })).toBeVisible();
+  if (browserName === 'chromium') await expect(page.getByRole('button', { name: 'Type de carte : Satellite' })).toBeVisible();
+  else expect(await page.evaluate(() => localStorage.getItem('boucle.indicateurs.v1'))).toContain('"satellite":true');
 });
 
 test('vu de loin, la Terre est un globe, et on revient au départ', async ({ page }) => {
   await open(page);
-  await expect(page.getByRole('button', { name: /^Départ : / }).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.mk-start')).toBeVisible({ timeout: 20_000 });
   // Dézoom au clavier jusqu'à quitter le plan : la carte file seule jusqu'à la planète entière.
   await page.locator('.maplibregl-canvas').focus();
   for (let i = 0; i < 9; i++) {
@@ -293,7 +323,7 @@ test('vu de loin, la Terre est un globe, et on revient au départ', async ({ pag
 test('sur Mac, le bouton Dézoomer mène à la Terre entière, comme dans Plans', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'Boutons + et − affichés sur Mac.');
   await open(page);
-  await expect(page.getByRole('button', { name: /^Départ : / }).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.mk-start')).toBeVisible({ timeout: 20_000 });
   const out = page.getByRole('button', { name: 'Dézoomer' });
   for (let i = 0; i < 10 && !(await page.locator('.map.orbit').count()); i++) {
     await out.click();
@@ -312,10 +342,11 @@ test('si tu pars maintenant : lumière du jour au retour', async ({ page }) => {
 });
 
 test('Communauté (démonstration) : compte par code, j’aime, commentaire, abonnement, publication', async ({ page, browserName }) => {
+  await page.addInitScript(() => localStorage.setItem('boucle.bienvenue', '1'));
   await page.goto('./?demo=communaute');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
-  if (browserName === 'chromium') await page.getByRole('button', { name: 'Communauté', exact: true }).click();
-  else await page.getByRole('button', { name: /Communauté : parcours publiés/ }).click();
+  void browserName;
+  await page.getByRole('button', { name: /^Communauté/ }).click();
   const feed = page.getByRole('list', { name: 'Parcours publiés' });
   await expect(feed).toBeVisible({ timeout: 15_000 });
   // Aimer sans compte : la connexion s'ouvre dans le panneau, puis le j'aime est fait.
@@ -350,4 +381,31 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await page.getByRole('textbox', { name: 'Nom' }).fill('Ma boucle de test');
   await page.locator('form').getByRole('button', { name: 'Publier' }).click();
   await expect(page.getByText('Publié dans la Communauté')).toBeVisible();
+});
+
+test('premier lancement : créer un compte, puis la carte seule et les réglages qui montent', async ({ page }) => {
+  await page.goto('./');
+  await expect(page.getByRole('dialog', { name: 'Boucle' })).toBeVisible();
+  await page.getByRole('button', { name: 'Créer un compte' }).click();
+  await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('nouveau@exemple.fr');
+  await page.getByRole('button', { name: 'Recevoir un code' }).click();
+  await page.getByRole('textbox', { name: /Code à 6 chiffres/ }).fill('123456');
+  await page.getByRole('button', { name: 'Valider' }).click();
+  await page.getByRole('textbox', { name: 'Prénom' }).fill('Sam');
+  await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('2000');
+  await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Vélo' }).click();
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Créer mon profil' }).click();
+  await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
+  // L'accueil : la carte, et trois boutons.
+  await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Communauté — Sam/ })).toBeVisible();
+  await compose(page);
+  await page.getByRole('button', { name: 'Fermer les réglages' }).click();
+  await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+  // Au lancement suivant, plus de question.
+  await page.reload();
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await page.waitForTimeout(1500);
+  await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
 });

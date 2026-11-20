@@ -65,6 +65,8 @@ class CommunityState {
   /** la Communauté est disponible (serveur configuré, ou démonstration) */
   available = $state(false);
   demo = $state(false);
+  /** serveur en ligne configuré (sinon, tout reste sur l'appareil) */
+  configured = false;
   ready = $state(false);
   session = $state.raw<Session | null>(null);
   me = $state.raw<Profile | null>(null);
@@ -100,8 +102,10 @@ class CommunityState {
     } catch {
       this.published = {};
     }
-    this.demo = typeof window !== 'undefined' && demoRequested();
-    this.available = this.demo || communityConfigured();
+    // Tant que le serveur n'est pas branché, les comptes vivent sur l'appareil (démonstration).
+    this.configured = communityConfigured();
+    this.demo = typeof window !== 'undefined' && (demoRequested() || !this.configured);
+    this.available = this.demo || this.configured;
     app.onCommunityUse = (id) => this.used(id);
   }
 

@@ -5,6 +5,8 @@
   import { ORTHO_TILES, type MapType } from '../lib/mapstyle';
   import type { LngLat } from '../lib/types';
 
+  /** Accueil épuré : seulement « Me localiser ». */
+  let { minimal = false }: { minimal?: boolean } = $props();
   let pill: HTMLDivElement | undefined = $state();
   let open = $state(false);
 
@@ -50,6 +52,7 @@
 
 <div class="ctrls-wrap" class:wide={app.wide} bind:this={pill}>
 <div class="ctrls glass" role="toolbar" aria-label="Carte">
+  {#if !minimal}
   <!-- Comme dans Plans : le type de carte en haut de la pilule. -->
   <button use:tactile
     type="button"
@@ -65,9 +68,11 @@
     <Icon name={app.mapType === 'satellite' ? 'globe' : 'map'} size={21} />
   </button>
   <span class="sep" aria-hidden="true"></span>
+  {/if}
   <button use:tactile type="button" class="round" aria-label="Me localiser" aria-busy={app.locating} onclick={() => app.locateButton()}>
     <span class:spin={app.locating}><Icon name="locate" size={20} fill={!!app.userPos} /></span>
   </button>
+  {#if !minimal}
   <span class="sep" aria-hidden="true"></span>
   <!-- Comme dans Plans : le bouton annonce la vue vers laquelle il bascule. -->
   <button use:tactile
@@ -83,6 +88,7 @@
   >
     {#key app.terrain3d}<span class="three">{app.terrain3d ? '2D' : '3D'}</span>{/key}
   </button>
+  {/if}
   {#if Math.abs(app.bearing) > 2}
     <span class="sep" aria-hidden="true"></span>
     <button use:tactile type="button" class="round" aria-label="Remettre le nord en haut" onclick={() => app.northTick++}>
@@ -90,7 +96,7 @@
     </button>
   {/if}
 </div>
-{#if app.wide}
+{#if app.wide && !minimal}
   <!-- Comme dans Plans sur Mac : zoomer et dézoomer d'un clic ; dézoomer loin mène à la Terre entière. -->
   <div class="ctrls zoom glass" role="group" aria-label="Zoom">
     <button use:tactile type="button" class="round" aria-label="Zoomer" onclick={() => app.zoomBy(1)}><Icon name="plus" size={18} /></button>
@@ -130,7 +136,7 @@
     position: fixed;
     z-index: 15;
     right: 12px;
-    top: calc(var(--safe-top) + 72px);
+    top: calc(var(--safe-top) + 12px);
     display: grid;
     gap: 10px;
   }

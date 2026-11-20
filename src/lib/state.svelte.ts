@@ -59,6 +59,8 @@ class AppState {
   via = $state<Place | null>(null);
 
   phase = $state<Phase>('compose');
+  /** Accueil : la carte seule, les réglages repliés derrière le bouton « Faire une boucle ». */
+  home = $state(true);
   /** écran à retrouver en quittant le suivi */
   private beforeFollow: Phase = 'results';
 
@@ -299,7 +301,8 @@ class AppState {
 
   private pickPrevDetent: Detent | null = null;
   private restoreDetent() {
-    if (this.pickPrevDetent) this.detent = this.pickPrevDetent;
+    // Le point posé reste visible : les réglages remontent à mi-hauteur, pas en plein écran.
+    if (this.pickPrevDetent) this.detent = this.pickPrevDetent === 'full' ? 'half' : this.pickPrevDetent;
     this.pickPrevDetent = null;
   }
 
@@ -454,7 +457,8 @@ class AppState {
       return;
     }
     this.phase = 'compose';
-    if (!this.wide) this.detent = 'half';
+    this.home = false;
+    if (!this.wide) this.detent = 'full';
     this.routes = [];
     this.note = null;
   }
@@ -468,6 +472,23 @@ class AppState {
 
   closeLibrary() {
     this.phase = 'compose';
+    this.home = true;
+  }
+
+  /** « Faire une boucle » : les réglages montent du bas et prennent tout l'écran. */
+  openComposer() {
+    haptic('tap');
+    this.error = null;
+    this.home = false;
+    this.detent = 'full';
+  }
+
+  /** Retour à la carte seule. */
+  closeComposer() {
+    haptic('tap');
+    this.cancel();
+    this.home = true;
+    this.detent = 'half';
   }
 
   /* ------------------------------ Communauté ------------------------------ */

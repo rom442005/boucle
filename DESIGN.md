@@ -371,6 +371,11 @@ One authored moment, the rest feedback and continuity. Shared timing lives in `s
 - **Feedback:** chips and segment icons pop on a spring; Favorite and Done send a ring and a glow from their icon; proposals arrive one after another from blur to sharp, their mini routes drawing themselves; lists (library, search results) cascade in 40 ms steps; banners slide in.
 - **Reduce Motion:** no pen, no swing, no rising relief, no sonar (the zone just lights up); crossfades and colour changes stay, as they carry state.
 
+### Home and first launch
+- **First launch:** the map, veiled (78% paper, 18 px blur), and one question at the bottom: the app icon whose loop draws itself, "Boucle" in 36 px bold, one line of promise, then Créer un compte (tinted capsule), Se connecter (fill pill) and a quiet "Plus tard" (App Store rule: route creation never requires an account). The account flow (email, code, profile) happens in the same card.
+- **Home:** the map alone. Three controls float at the bottom, centred: Mes parcours (52 px glass circle), Faire une boucle (58 px tinted capsule, the logo loop turning in once), Communauté (glass circle, or the member's avatar). On iPhone the map pill keeps only Me localiser; on Mac the Plans controls stay. No reach circle until the settings are open.
+- **Settings sheet:** rises from the bottom edge with the sheet spring (640 ms) to nearly the full screen, almost opaque (94% paper), a chevron-down to fold it back; its sections arrive one after another (50 ms apart, 18 px rise). Every selection taps (segments, chips, switches, slider steps). On Mac the column slides in from the left instead.
+
 ### Community
 Strava's social layer in Boucle's vocabulary: no new visual language, the same grouped lists, pills and capsules.
 - **Navigation:** a third tab (Créer · Communauté · Mes parcours) on its own full-width segmented row under the brand on Mac; on iPhone a glass round button (three people) next to the library button. The community header carries the member's avatar (or a person icon when signed out) on the right.

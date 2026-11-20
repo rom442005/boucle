@@ -40,7 +40,7 @@
     <div class="banner demo" role="note">
       <span class="icon"><Icon name="shield" size={18} /></span>
       <span>Démonstration : membres et parcours fictifs, rien ne quitte ton appareil. Code de connexion : 123456.</span>
-      <button use:tactile type="button" class="text-btn" onclick={() => community.quitDemo()}>Quitter</button>
+      {#if community.configured}<button use:tactile type="button" class="text-btn" onclick={() => community.quitDemo()}>Quitter</button>{/if}
     </div>
   {/if}
 

@@ -270,6 +270,15 @@ textarea {
   --sat: 1.8;
   --g-shadow: var(--shadow-glass);
 }
+/* Réglages en plein écran : une feuille presque opaque, la carte devine à peine dessous. */
+.glass-panel.solid {
+  --g-bg: color-mix(in srgb, #f7f6f2 94%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .glass-panel.solid {
+    --g-bg: color-mix(in srgb, #1c1c1e 94%, transparent);
+  }
+}
 .glass-clear {
   --g-bg: var(--glass-clear);
   --blur: 3px;

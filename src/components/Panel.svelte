@@ -9,6 +9,7 @@
     footer,
     label,
     onswipe,
+    solid = false,
   }: {
     header?: Snippet;
     children: Snippet;
@@ -16,6 +17,8 @@
     label: string;
     /** balayage horizontal sur l'en-tête (iPhone) : 1 vers la gauche, -1 vers la droite */
     onswipe?: (dir: 1 | -1) => void;
+    /** feuille opaque (réglages en plein écran) */
+    solid?: boolean;
   } = $props();
 
   let vh = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -31,7 +34,8 @@
   const heights = $derived({
     peek: Math.max(110, Math.round(headH + footH)),
     half: foldH ? Math.round(Math.min(headH + foldH + footH, vh * 0.66)) : Math.round(Math.min(vh * 0.62, 600)),
-    full: Math.round(vh - safeTop - 70),
+    // Les réglages prennent tout l'écran ; un parcours ou une liste laisse voir le haut de la carte.
+    full: Math.round(vh - safeTop - (app.phase === 'compose' ? 10 : 70)),
   } satisfies Record<Detent, number>);
 
   // Mesure du repère (le contenu change selon l'étape et le sport).
@@ -184,6 +188,7 @@
 
 <section
   class="panel glass glass-panel"
+  class:solid
   class:wide={app.wide}
   class:dragging={dragH != null}
   class:is-peek={!app.wide && app.detent === 'peek' && dragH == null}
@@ -248,6 +253,22 @@
     transition: height 620ms var(--sheet-ease);
     will-change: height;
     contain: layout paint;
+    /* À l'ouverture, le panneau monte du bas de l'écran, avec un léger rebond. */
+    animation: panel-rise 640ms var(--sheet-ease) both;
+  }
+  @keyframes panel-rise {
+    from {
+      translate: 0 104%;
+    }
+  }
+  .panel.wide {
+    animation-name: panel-slide;
+  }
+  @keyframes panel-slide {
+    from {
+      translate: calc(-100% - 24px) 0;
+      opacity: 0;
+    }
   }
   .panel.dragging {
     transition: none;

@@ -1183,7 +1183,8 @@
   $effect(() => {
     if (!ready) return;
     const p = app.params;
-    const show = app.phase === 'compose' && !!app.start && p.shape !== 'oneway';
+    // Accueil épuré : la zone n'apparaît qu'avec les réglages.
+    const show = app.phase === 'compose' && !app.home && !!app.start && p.shape !== 'oneway';
     if (!show) {
       setData('reach', EMPTY);
       return;

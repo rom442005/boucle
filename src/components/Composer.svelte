@@ -193,6 +193,23 @@
     gap: 16px;
     padding-top: 4px;
   }
+  /* Les réglages arrivent l'un après l'autre, juste derrière le panneau qui monte. */
+  .composer > :global(*) {
+    animation: set-in 520ms var(--ease-out) both;
+  }
+  .composer > :global(*:nth-child(1)) { animation-delay: 140ms; }
+  .composer > :global(*:nth-child(2)) { animation-delay: 190ms; }
+  .composer > :global(*:nth-child(3)) { animation-delay: 240ms; }
+  .composer > :global(*:nth-child(4)) { animation-delay: 290ms; }
+  .composer > :global(*:nth-child(5)) { animation-delay: 340ms; }
+  .composer > :global(*:nth-child(6)) { animation-delay: 390ms; }
+  .composer > :global(*:nth-child(n + 7)) { animation-delay: 440ms; }
+  @keyframes set-in {
+    from {
+      opacity: 0;
+      translate: 0 18px;
+    }
+  }
   .block {
     display: grid;
     gap: 10px;
