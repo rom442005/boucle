@@ -75,18 +75,25 @@
         <span class="field-label">Adresse e-mail</span>
         <input class="input" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="prenom@exemple.fr" bind:value={email} use:autofocus required />
       </label>
-      <p class="hint">Pas de mot de passe : un code à 6 chiffres arrive par e-mail. Il crée ton compte la première fois.</p>
+      {#if community.demo}
+        <div class="banner" role="note"><span class="icon"><Icon name="mail" size={18} /></span><span>Pas encore d’e-mail : les comptes vivent sur cet appareil le temps que le serveur soit mis en ligne. Le code est <b>123456</b>.</span></div>
+      {:else}
+        <p class="hint">Pas de mot de passe : un code à 6 chiffres arrive par e-mail. Il crée ton compte la première fois.</p>
+      {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Envoi…' : 'Recevoir un code'}</button>
     </form>
   {:else if step === 'code'}
     <form class="step" onsubmit={verify} novalidate>
-      <p class="sent"><Icon name="mail" size={18} />Code envoyé à <b>{email}</b></p>
+      {#if community.demo}
+        <p class="sent"><Icon name="mail" size={18} />Aucun e-mail envoyé pour l’instant : saisis <b>123456</b>.</p>
+      {:else}
+        <p class="sent"><Icon name="mail" size={18} />Code envoyé à <b>{email}</b></p>
+      {/if}
       <label class="field">
         <span class="field-label">Code à 6 chiffres</span>
         <input class="input code tabular" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="000000" bind:value={code} use:autofocus required />
       </label>
-      {#if community.demo}<p class="hint">Démonstration : le code est 123456.</p>{/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Vérification…' : 'Valider'}</button>
       <div class="again">
@@ -96,7 +103,7 @@
           }}>{resent ? 'Code renvoyé' : 'Renvoyer le code'}</button>
         <button use:tactile type="button" class="text-btn" onclick={() => (step = 'email')}>Changer d’adresse</button>
       </div>
-      <p class="hint">Rien reçu ? Regarde dans les courriers indésirables.</p>
+      {#if !community.demo}<p class="hint">Rien reçu ? Regarde dans les courriers indésirables.</p>{/if}
     </form>
   {:else}
     <div class="lead">
