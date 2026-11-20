@@ -48,7 +48,7 @@
       </div>
     {:else}
       <div class="auth">
-        <AuthFlow reason={mode === 'create' ? 'Un code par e-mail suffit, sans mot de passe.' : 'Le même code par e-mail te reconnecte.'} />
+        <AuthFlow reason={mode === 'create' ? 'Un e-mail suffit, sans mot de passe.' : 'Un e-mail te reconnecte, sans mot de passe.'} />
         <button use:tactile type="button" class="later" onclick={() => (step = 'hello')}>Retour</button>
       </div>
     {/if}
