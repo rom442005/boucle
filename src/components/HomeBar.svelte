@@ -30,7 +30,7 @@
   </button>
   {#if community.available}
     <button use:tactile type="button" class="side glass me" aria-label={community.me ? `Communauté — ${community.me.firstName}` : 'Communauté'} onclick={() => community.open()}>
-      {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} size={40} />{:else}<Icon name="users" size={22} />{/if}
+      {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={40} />{:else}<Icon name="users" size={22} />{/if}
     </button>
   {/if}
 </nav>

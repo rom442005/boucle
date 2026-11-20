@@ -1466,6 +1466,52 @@
     });
   });
 
+  // Photos des sorties d'un parcours de la Communauté : des vignettes rondes posées sur le tracé.
+  let photoMarkers: { id: string; mk: Marker }[] = [];
+  $effect(() => {
+    if (!ready || !map) return;
+    const cid = app.route?.communityId;
+    const shown = (app.phase === 'results' || app.phase === 'detail') && !!cid;
+    const placed = shown ? community.photos.filter((p) => p.routeId === cid && p.at) : [];
+    for (const { mk } of photoMarkers) mk.remove();
+    photoMarkers = [];
+    placed.forEach((p, i) => {
+      const el = element('mk-photo');
+      const img = document.createElement('img');
+      img.src = p.thumb;
+      img.alt = '';
+      img.decoding = 'async';
+      el.append(img);
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.setAttribute('aria-label', `Photo de ${p.authorName} sur le parcours`);
+      el.style.animationDelay = `${Math.min(i, 10) * 50}ms`;
+      const open = (e: Event) => {
+        e.stopPropagation();
+        community.openPhotos(placed, i);
+      };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && open(e));
+      tactile(el);
+      photoMarkers.push({ id: p.id, mk: new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat(p.at!).addTo(map!) });
+    });
+  });
+
+  // « Voir sur la carte » depuis la visionneuse : la caméra rejoint la photo, qui s'anime.
+  $effect(() => {
+    const f = community.photoFocus;
+    if (!ready || !map || !f) return;
+    untrack(() => {
+      map!.easeTo({ center: f.at, zoom: Math.max(map!.getZoom(), 16), duration: reduce ? 0 : 900, padding: app.padding });
+      const hit = photoMarkers.find((x) => x.id === f.id)?.mk.getElement();
+      if (hit) {
+        hit.classList.remove('on');
+        void hit.offsetWidth;
+        hit.classList.add('on');
+      }
+    });
+  });
+
   // Mise en avant : halo sur le tronçon, caméra sur la côte, puis retour au parcours entier.
   let hadFocus = false;
   $effect(() => {
@@ -1943,6 +1989,40 @@
     }
   }
 
+  :global(.mk-photo) {
+    width: 44px;
+    height: 44px;
+    padding: 3px;
+    border-radius: 50% 50% 50% 6px;
+    rotate: -45deg;
+    background: #fff;
+    box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    animation: mk-photo-in 480ms var(--spring) both;
+  }
+  :global(.mk-photo img) {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    rotate: 45deg;
+    display: block;
+    pointer-events: none;
+  }
+  :global(.mk-photo.on) {
+    animation: mk-photo-pop 900ms var(--spring);
+  }
+  @keyframes mk-photo-in {
+    from {
+      opacity: 0;
+      scale: 0.4;
+    }
+  }
+  @keyframes mk-photo-pop {
+    40% {
+      scale: 1.35;
+    }
+  }
 :global(.mk-climb) {
     display: inline-flex;
     align-items: center;

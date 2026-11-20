@@ -29,7 +29,7 @@
       {#each community.comments as c, i (c.id)}
         <li class="cm-li li" style:--i={Math.min(i, 8)}>
           <button use:tactile type="button" class="who" aria-label="Profil de {c.authorName}" onclick={() => community.openProfile(c.authorId)}>
-            <Avatar id={c.authorId} name={c.authorName} size={30} />
+            <Avatar id={c.authorId} name={c.authorName} src={c.authorAvatar} size={30} />
           </button>
           <div class="cm-body">
             <p class="cm-head"><b>{c.authorName}</b><span>{ago(c.createdAt)}</span></p>

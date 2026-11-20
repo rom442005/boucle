@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import Segmented from './Segmented.svelte';
+  import Avatar from './Avatar.svelte';
   import { untrack } from 'svelte';
   import { community } from '../lib/community.svelte';
   import { pageUrl } from '../lib/platform';
@@ -24,6 +25,28 @@
   let level = $state<Level>(me?.level ?? 'regular');
   let years = $state<number | null>(me?.practiceYears ?? null);
   let bio = $state(me?.bio ?? '');
+  let avatar = $state<string | null>(me?.avatar ?? null);
+  let avatarBusy = $state(false);
+  let picker = $state<HTMLInputElement>();
+  const uid = community.session?.userId ?? 'moi';
+
+  async function pick(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    avatarBusy = true;
+    error = null;
+    try {
+      avatar = await community.uploadAvatar(file);
+      haptic('success');
+    } catch (err) {
+      error = err instanceof CommunityError ? err.message : 'Cette photo n’a pas pu être envoyée. Essaie une autre image.';
+      haptic('warn');
+    } finally {
+      avatarBusy = false;
+    }
+  }
   // À la création, l'accord aux conditions est à donner ; ensuite, il est acquis.
   let accept = $state(untrack(() => !creating));
   let busy = $state(false);
@@ -54,6 +77,7 @@
           level,
           practiceYears: years != null && years >= 0 ? Math.min(80, Math.round(years)) : null,
           bio: bio.trim() || null,
+          avatar,
         },
         { birthYear },
       );
@@ -68,6 +92,19 @@
 </script>
 
 <form class="pf" onsubmit={submit} novalidate>
+  <div class="ph">
+    <button use:tactile type="button" class="ph-btn" aria-label={avatar ? 'Changer la photo de profil' : 'Ajouter une photo de profil'} disabled={avatarBusy} onclick={() => picker?.click()}>
+      <Avatar id={uid} name={firstName || '?'} src={avatar} size={96} />
+      <span class="ph-badge" aria-hidden="true"><Icon name="camera" size={16} fill /></span>
+      {#if avatarBusy}<span class="ph-busy" aria-hidden="true"></span>{/if}
+    </button>
+    <div class="ph-acts">
+      <button use:tactile type="button" class="text-btn" disabled={avatarBusy} onclick={() => picker?.click()}>{avatarBusy ? 'Envoi…' : avatar ? 'Changer la photo' : 'Ajouter une photo'}</button>
+      {#if avatar && !avatarBusy}<button use:tactile type="button" class="text-btn muted" onclick={() => (avatar = null)}>Retirer</button>{/if}
+    </div>
+    <input bind:this={picker} type="file" accept="image/*" hidden onchange={pick} />
+  </div>
+
   <label class="field">
     <span class="field-label">Prénom</span>
     <input class="input" bind:value={firstName} autocomplete="given-name" maxlength="40" required />
@@ -110,7 +147,7 @@
 
   <label class="field">
     <span class="field-label">Présentation <span class="opt">facultatif</span></span>
-    <textarea class="input" rows="3" maxlength="300" placeholder="Tes sorties préférées, tes objectifs…" bind:value={bio}></textarea>
+    <textarea class="input" rows="3" maxlength="300" placeholder="Qui tu es, tes sorties préférées, tes objectifs, ton prochain dossard…" bind:value={bio}></textarea>
   </label>
 
   {#if creating}
@@ -126,6 +163,51 @@
 </form>
 
 <style>
+  .ph {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+  }
+  .ph-btn {
+    position: relative;
+    border-radius: 50%;
+    transition: transform 240ms var(--spring);
+  }
+  .ph-btn:active {
+    transform: scale(0.95);
+  }
+  .ph-badge {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--on-tint);
+    background: var(--tint);
+    box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.4);
+  }
+  .ph-busy {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.35);
+    animation: ph-pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes ph-pulse {
+    to {
+      opacity: 0.4;
+    }
+  }
+  .ph-acts {
+    display: flex;
+    gap: 16px;
+  }
+  .muted {
+    color: var(--label-2);
+  }
   .pf {
     display: grid;
     gap: 14px;

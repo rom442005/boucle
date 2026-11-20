@@ -13,8 +13,10 @@ import {
   type PrivateProfile,
   type Profile,
   type ProfileInput,
+  type PhotoInput,
   type ProfileStats,
   type PublishInput,
+  type RoutePhoto,
   type Session,
 } from './types';
 
@@ -26,6 +28,7 @@ interface RouteRow {
   author_name: string;
   author_level: Level;
   author_city: string | null;
+  author_avatar: string | null;
   name: string;
   description: string | null;
   sport: Sport;
@@ -38,6 +41,8 @@ interface RouteRow {
   likes_count: number;
   comments_count: number;
   uses_count: number;
+  photos_count: number | null;
+  cover_path: string | null;
   liked_by_me: boolean | null;
   created_at: string;
 }
@@ -49,6 +54,22 @@ interface ProfileRow {
   level: Level;
   practice_years: number | null;
   bio: string | null;
+  avatar_path: string | null;
+  created_at: string;
+}
+interface PhotoRow {
+  id: string;
+  route_id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar: string | null;
+  path: string;
+  thumb_path: string;
+  lat: number | null;
+  lng: number | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
   created_at: string;
 }
 interface CommentRow {
@@ -57,9 +78,14 @@ interface CommentRow {
   author_id: string;
   author_name: string;
   author_level: Level;
+  author_avatar: string | null;
   body: string;
   created_at: string;
 }
+
+/** Adresse publique d'une image du stockage (les dossiers « avatars » et « photos » sont publics). */
+const publicUrl = (bucket: 'avatars' | 'photos', path: string | null) => (path ? `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}` : null);
+const avatarPrefix = () => `${SUPABASE_URL}/storage/v1/object/public/avatars/`;
 
 const toRoute = (r: RouteRow): CommunityRoute => ({
   id: r.id,
@@ -67,6 +93,7 @@ const toRoute = (r: RouteRow): CommunityRoute => ({
   authorName: r.author_name,
   authorLevel: r.author_level,
   authorCity: r.author_city,
+  authorAvatar: publicUrl('avatars', r.author_avatar),
   name: r.name,
   description: r.description,
   sport: r.sport,
@@ -78,6 +105,8 @@ const toRoute = (r: RouteRow): CommunityRoute => ({
   likes: r.likes_count,
   comments: r.comments_count,
   uses: r.uses_count,
+  photos: r.photos_count ?? 0,
+  cover: publicUrl('photos', r.cover_path),
   likedByMe: !!r.liked_by_me,
   createdAt: Date.parse(r.created_at),
 });
@@ -89,6 +118,21 @@ const toProfile = (p: ProfileRow): Profile => ({
   level: p.level,
   practiceYears: p.practice_years,
   bio: p.bio,
+  avatar: publicUrl('avatars', p.avatar_path),
+  createdAt: Date.parse(p.created_at),
+});
+const toPhoto = (p: PhotoRow): RoutePhoto => ({
+  id: p.id,
+  routeId: p.route_id,
+  authorId: p.author_id,
+  authorName: p.author_name,
+  authorAvatar: publicUrl('avatars', p.author_avatar),
+  url: publicUrl('photos', p.path)!,
+  thumb: publicUrl('photos', p.thumb_path)!,
+  at: p.lat != null && p.lng != null ? [p.lng, p.lat] : null,
+  caption: p.caption,
+  width: p.width,
+  height: p.height,
   createdAt: Date.parse(p.created_at),
 });
 const toComment = (c: CommentRow): Comment => ({
@@ -97,6 +141,7 @@ const toComment = (c: CommentRow): Comment => ({
   authorId: c.author_id,
   authorName: c.author_name,
   authorLevel: c.author_level,
+  authorAvatar: publicUrl('avatars', c.author_avatar),
   body: c.body,
   createdAt: Date.parse(c.created_at),
 });
@@ -151,6 +196,15 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       await sb.auth.signOut();
     },
     async deleteAccount() {
+      // Les images d'abord (le stockage ne suit pas la suppression du compte).
+      const me = await uid();
+      if (me) {
+        for (const bucket of ['avatars', 'photos'] as const) {
+          const { data } = await sb.storage.from(bucket).list(me, { limit: 1000 });
+          const paths = (data ?? []).map((f) => `${me}/${f.name}`);
+          if (paths.length) await sb.storage.from(bucket).remove(paths);
+        }
+      }
       const { error } = await sb.rpc('delete_account');
       if (error) fail(error, 'Suppression impossible pour le moment. Réessaie.');
       await sb.auth.signOut();
@@ -167,12 +221,17 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
     },
     async saveProfile(p: ProfileInput, priv: PrivateProfile) {
       const id = await need();
+      const { data: before } = await sb.from('profiles').select('avatar_path').eq('id', id).maybeSingle();
+      const prev = (before as { avatar_path: string | null } | null)?.avatar_path ?? null;
+      const avatarPath = p.avatar?.startsWith(avatarPrefix()) ? p.avatar.slice(avatarPrefix().length) : null;
       const { data, error } = await sb
         .from('profiles')
-        .upsert({ id, first_name: p.firstName, city: p.city, sports: p.sports, level: p.level, practice_years: p.practiceYears, bio: p.bio })
+        .upsert({ id, first_name: p.firstName, city: p.city, sports: p.sports, level: p.level, practice_years: p.practiceYears, bio: p.bio, avatar_path: avatarPath })
         .select()
         .single();
       if (error) fail(error, 'Enregistrement du profil impossible.');
+      // L'ancienne photo de profil ne sert plus.
+      if (prev && prev !== avatarPath) void sb.storage.from('avatars').remove([prev]);
       const { error: e2 } = await sb.from('profiles_private').upsert({ id, birth_year: priv.birthYear });
       if (e2) fail(e2, 'Enregistrement du profil impossible.');
       return toProfile(data as ProfileRow);
@@ -305,12 +364,71 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
         route_id: target.routeId ?? null,
         comment_id: target.commentId ?? null,
         profile_id: target.profileId ?? null,
+        photo_id: target.photoId ?? null,
         reason,
       });
       if (error) fail(error, 'Signalement impossible pour le moment.');
     },
     async used(routeId) {
       if (await uid()) await sb.rpc('use_route', { rid: routeId });
+    },
+    async uploadAvatar(image) {
+      const me = await need();
+      const path = `${me}/avatar-${Date.now().toString(36)}.jpg`;
+      const { error } = await sb.storage.from('avatars').upload(path, image, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (error) fail(error, 'Envoi de la photo impossible pour le moment.');
+      return publicUrl('avatars', path)!;
+    },
+    async photos(routeId) {
+      const { data, error } = await sb.from('photos_feed').select('*').eq('route_id', routeId).order('created_at', { ascending: true }).limit(200);
+      if (error) fail(error, 'Photos indisponibles pour le moment.');
+      return (data as PhotoRow[]).map(toPhoto);
+    },
+    async photosBy(authorId) {
+      const { data, error } = await sb.from('photos_feed').select('*').eq('author_id', authorId).order('created_at', { ascending: false }).limit(120);
+      if (error) fail(error, 'Photos indisponibles pour le moment.');
+      return (data as PhotoRow[]).map(toPhoto);
+    },
+    async addPhoto(routeId, p: PhotoInput) {
+      const me = await need();
+      const base = `${me}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const files = [
+        { path: `${base}.jpg`, blob: p.full },
+        { path: `${base}-v.jpg`, blob: p.thumb },
+      ];
+      for (const f of files) {
+        const { error } = await sb.storage.from('photos').upload(f.path, f.blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+        if (error) fail(error, 'Envoi de la photo impossible pour le moment.');
+      }
+      const { data, error } = await sb
+        .from('route_photos')
+        .insert({
+          route_id: routeId,
+          author_id: me,
+          path: files[0].path,
+          thumb_path: files[1].path,
+          lat: p.at?.[1] ?? null,
+          lng: p.at?.[0] ?? null,
+          caption: p.caption,
+          width: p.width,
+          height: p.height,
+        })
+        .select('id')
+        .single();
+      if (error) {
+        void sb.storage.from('photos').remove(files.map((f) => f.path));
+        fail(error, 'Envoi de la photo impossible pour le moment.');
+      }
+      const { data: row } = await sb.from('photos_feed').select('*').eq('id', (data as { id: string }).id).single();
+      return toPhoto(row as PhotoRow);
+    },
+    async deletePhoto(id) {
+      const { data: row } = await sb.from('route_photos').select('author_id, path, thumb_path').eq('id', id).maybeSingle();
+      const { error } = await sb.from('route_photos').delete().eq('id', id);
+      if (error) fail(error, 'Suppression impossible pour le moment.');
+      // Les fichiers appartiennent à qui a posté la photo : retirés s'il s'agit de moi.
+      const r = row as { author_id: string; path: string; thumb_path: string } | null;
+      if (r && r.author_id === (await uid())) void sb.storage.from('photos').remove([r.path, r.thumb_path]);
     },
   };
   return backend;

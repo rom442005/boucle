@@ -20,6 +20,8 @@ export interface Profile {
   level: Level;
   practiceYears: number | null;
   bio: string | null;
+  /** photo de profil (adresse de l'image), sinon l'initiale */
+  avatar: string | null;
   createdAt: number;
 }
 
@@ -43,6 +45,7 @@ export interface CommunityRoute {
   authorName: string;
   authorLevel: Level;
   authorCity: string | null;
+  authorAvatar: string | null;
   name: string;
   description: string | null;
   sport: Sport;
@@ -55,9 +58,41 @@ export interface CommunityRoute {
   likes: number;
   comments: number;
   uses: number;
+  /** photos de sorties ajoutées au parcours */
+  photos: number;
+  /** vignette de la première photo */
+  cover: string | null;
   likedByMe: boolean;
   createdAt: number;
 }
+
+/** Une photo de sortie, sur un parcours publié. */
+export interface RoutePhoto {
+  id: string;
+  routeId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string | null;
+  url: string;
+  thumb: string;
+  /** position sur le tracé publié (jamais dans la zone privée) */
+  at: LngLat | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  createdAt: number;
+}
+
+export interface PhotoInput {
+  full: Blob;
+  thumb: Blob;
+  width: number;
+  height: number;
+  at: LngLat | null;
+  caption: string | null;
+}
+
+export type ReportTarget = { routeId?: string; commentId?: string; profileId?: string; photoId?: string };
 
 export interface Comment {
   id: string;
@@ -65,6 +100,7 @@ export interface Comment {
   authorId: string;
   authorName: string;
   authorLevel: Level;
+  authorAvatar: string | null;
   body: string;
   createdAt: number;
 }
@@ -129,7 +165,13 @@ export interface CommunityBackend {
   following(): Promise<string[]>;
   blocked(): Promise<string[]>;
   block(userId: string, on: boolean): Promise<void>;
-  report(target: { routeId?: string; commentId?: string; profileId?: string }, reason: string): Promise<void>;
+  report(target: ReportTarget, reason: string): Promise<void>;
+  /** dépose une photo de profil (carrée) et renvoie son adresse ; elle s'applique à l'enregistrement du profil */
+  uploadAvatar(image: Blob): Promise<string>;
+  photos(routeId: string): Promise<RoutePhoto[]>;
+  photosBy(authorId: string): Promise<RoutePhoto[]>;
+  addPhoto(routeId: string, p: PhotoInput): Promise<RoutePhoto>;
+  deletePhoto(id: string): Promise<void>;
   /** un parcours de la communauté vient d'être repris (favori, suivi, GPX) */
   used(routeId: string): Promise<void>;
 }

@@ -239,3 +239,97 @@ grant select on public.routes_feed, public.comments_feed, public.profile_stats t
 grant insert, update, delete on public.profiles, public.routes, public.likes, public.comments, public.follows to authenticated;
 grant select, insert, update, delete on public.profiles_private, public.blocks to authenticated;
 grant insert on public.reports to authenticated;
+
+-- ---------------------------------------------------------------- Photos (profil et sorties)
+
+-- Photo de profil : un fichier du dossier de la personne dans le stockage « avatars ».
+alter table public.profiles add column if not exists avatar_path text check (avatar_path is null or char_length(avatar_path) <= 200);
+
+-- Photos d'une sortie sur un parcours publié (par son auteur ou par celles et ceux qui l'ont fait).
+-- Leur position est ramenée sur le tracé publié : jamais dans la zone privée du départ.
+create table if not exists public.route_photos (
+  id uuid primary key default gen_random_uuid(),
+  route_id uuid not null references public.routes (id) on delete cascade,
+  author_id uuid not null references public.profiles (id) on delete cascade,
+  path text not null check (char_length(path) <= 200),
+  thumb_path text not null check (char_length(thumb_path) <= 200),
+  lat double precision,
+  lng double precision,
+  caption text check (caption is null or char_length(caption) <= 140),
+  width int,
+  height int,
+  created_at timestamptz not null default now()
+);
+create index if not exists route_photos_route_idx on public.route_photos (route_id, created_at);
+create index if not exists route_photos_author_idx on public.route_photos (author_id, created_at desc);
+
+alter table public.routes add column if not exists photos_count int not null default 0;
+
+create or replace function public.bump_photos() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.routes set photos_count = photos_count + 1 where id = new.route_id;
+  else
+    update public.routes set photos_count = greatest(0, photos_count - 1) where id = old.route_id;
+  end if;
+  return null;
+end $$;
+drop trigger if exists photos_count on public.route_photos;
+create trigger photos_count after insert or delete on public.route_photos for each row execute function public.bump_photos();
+
+-- Une photo se signale aussi.
+alter table public.reports add column if not exists photo_id uuid references public.route_photos (id) on delete cascade;
+alter table public.reports drop constraint if exists reports_check;
+alter table public.reports drop constraint if exists reports_one_target;
+alter table public.reports add constraint reports_one_target check (num_nonnulls(route_id, comment_id, profile_id, photo_id) = 1);
+
+alter table public.route_photos enable row level security;
+drop policy if exists "photos lisibles" on public.route_photos;
+create policy "photos lisibles" on public.route_photos for select using (true);
+drop policy if exists "ajouter ses photos" on public.route_photos;
+create policy "ajouter ses photos" on public.route_photos for insert to authenticated
+  with check (author_id = auth.uid() and path like auth.uid()::text || '/%' and thumb_path like auth.uid()::text || '/%');
+drop policy if exists "retirer une photo" on public.route_photos;
+create policy "retirer une photo" on public.route_photos for delete to authenticated using (
+  author_id = auth.uid() or exists (select 1 from public.routes r where r.id = route_id and r.author_id = auth.uid())
+);
+
+-- Vues : l'auteur avec sa photo, et la première photo d'un parcours en couverture.
+drop view if exists public.routes_feed;
+create view public.routes_feed with (security_invoker = on) as
+  select r.*, p.first_name as author_name, p.level as author_level, p.city as author_city, p.avatar_path as author_avatar,
+         exists (select 1 from public.likes l where l.route_id = r.id and l.user_id = auth.uid()) as liked_by_me,
+         (select ph.thumb_path from public.route_photos ph where ph.route_id = r.id order by ph.created_at limit 1) as cover_path
+  from public.routes r join public.profiles p on p.id = r.author_id;
+
+drop view if exists public.comments_feed;
+create view public.comments_feed with (security_invoker = on) as
+  select c.*, p.first_name as author_name, p.level as author_level, p.avatar_path as author_avatar
+  from public.comments c join public.profiles p on p.id = c.author_id;
+
+drop view if exists public.photos_feed;
+create view public.photos_feed with (security_invoker = on) as
+  select ph.*, p.first_name as author_name, p.avatar_path as author_avatar
+  from public.route_photos ph join public.profiles p on p.id = ph.author_id;
+
+grant select on public.route_photos, public.routes_feed, public.comments_feed, public.photos_feed to anon, authenticated;
+grant insert, delete on public.route_photos to authenticated;
+
+-- Stockage des images : public en lecture, chacun n'écrit que dans son dossier (son identifiant).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 1048576, array['image/jpeg', 'image/webp', 'image/png']),
+       ('photos', 'photos', true, 3145728, array['image/jpeg', 'image/webp'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "boucle lire ses images" on storage.objects;
+create policy "boucle lire ses images" on storage.objects for select to authenticated
+  using (bucket_id in ('avatars', 'photos') and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "boucle deposer ses images" on storage.objects;
+create policy "boucle deposer ses images" on storage.objects for insert to authenticated
+  with check (bucket_id in ('avatars', 'photos') and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "boucle remplacer ses images" on storage.objects;
+create policy "boucle remplacer ses images" on storage.objects for update to authenticated
+  using (bucket_id in ('avatars', 'photos') and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "boucle retirer ses images" on storage.objects;
+create policy "boucle retirer ses images" on storage.objects for delete to authenticated
+  using (bucket_id in ('avatars', 'photos') and (storage.foldername(name))[1] = auth.uid()::text);

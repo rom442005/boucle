@@ -65,8 +65,8 @@ describe('Communauté de démonstration', () => {
     await expect(b.verifyCode('moi@exemple.fr', '000000')).rejects.toThrow(/Code incorrect/);
     const s = await b.verifyCode('moi@exemple.fr', DEMO_CODE);
     expect(s.email).toBe('moi@exemple.fr');
-    await expect(b.saveProfile({ firstName: 'Ado', city: null, sports: ['run'], level: 'debut', practiceYears: null, bio: null }, { birthYear: new Date().getFullYear() - 12 })).rejects.toThrow(/15 ans/);
-    const me = await b.saveProfile({ firstName: 'Romain', city: 'Nantes', sports: ['run'], level: 'regular', practiceYears: 3, bio: null }, { birthYear: 2004 });
+    await expect(b.saveProfile({ firstName: 'Ado', city: null, sports: ['run'], level: 'debut', practiceYears: null, bio: null, avatar: null }, { birthYear: new Date().getFullYear() - 12 })).rejects.toThrow(/15 ans/);
+    const me = await b.saveProfile({ firstName: 'Romain', city: 'Nantes', sports: ['run'], level: 'regular', practiceYears: 3, bio: null, avatar: null }, { birthYear: 2004 });
 
     const r = nearby[0];
     await b.like(r.id, true);

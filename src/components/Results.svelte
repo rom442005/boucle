@@ -15,6 +15,7 @@
   import type { EnvClass, Route } from '../lib/types';
   import Avatar from './Avatar.svelte';
   import Comments from './Comments.svelte';
+  import PhotoStrip from './PhotoStrip.svelte';
   import { community } from '../lib/community.svelte';
   import { LEVELS } from '../lib/community/types';
   import { ago } from '../lib/community/time';
@@ -214,7 +215,7 @@
     {#if cr}
       <div class="author">
         <button use:tactile type="button" class="who" onclick={() => community.openProfile(cr.authorId)}>
-          <Avatar id={cr.authorId} name={cr.authorName} size={38} />
+          <Avatar id={cr.authorId} name={cr.authorName} src={cr.authorAvatar} size={38} />
           <span class="who-t"><b>{cr.authorName}</b><span>{LEVELS[cr.authorLevel]}{cr.authorCity ? ` · ${cr.authorCity}` : ''} · {ago(cr.createdAt)}</span></span>
         </button>
         {#if !crMine}
@@ -245,6 +246,7 @@
     </div>
     <p class="kind">{SPORTS[r.sport].long} · {SHAPES[r.shape].label}</p>
     {#if cr?.description}<p class="desc">{cr.description}</p>{/if}
+    {#if cr}<PhotoStrip r={cr} />{/if}
     {#if doneText}<p class="done-line"><Icon name="done" size={16} fill />{doneText}</p>{/if}
     {/if}
 

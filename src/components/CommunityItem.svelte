@@ -22,7 +22,7 @@
   <button use:tactile type="button" class="c-open" onclick={() => community.openRoute(r.id, r)}>
     {#if author}
       <span class="c-author">
-        <Avatar id={r.authorId} name={r.authorName} size={30} />
+        <Avatar id={r.authorId} name={r.authorName} src={r.authorAvatar} size={30} />
         <span class="c-who">
           <span class="c-name-a">{r.authorName}</span>
           <span class="c-sub">{LEVELS[r.authorLevel]}{r.authorCity ? ` · ${r.authorCity}` : ''} · {ago(r.createdAt)}</span>
@@ -37,6 +37,7 @@
         {#if away != null}<span class="c-meta tabular">Départ à {away < 1000 ? `${Math.round(away / 10) * 10}${NNBSP}m` : km(away)}{!author ? ` · ${ago(r.createdAt)}` : ''}</span>
         {:else if !author}<span class="c-meta">{ago(r.createdAt)}</span>{/if}
       </span>
+      {#if r.cover}<img class="c-cover" src={r.cover} alt="" width="54" height="54" loading="lazy" decoding="async" />{/if}
     </span>
   </button>
   <div class="c-foot">
@@ -46,11 +47,25 @@
     <button use:tactile type="button" class="c-act" aria-label="Commentaires ({r.comments})" onclick={() => community.openRoute(r.id, r)}>
       <Icon name="chat" size={18} /><span class="tabular">{r.comments}</span>
     </button>
+    {#if r.photos}<span class="c-act c-ph" aria-label="{r.photos} photo{r.photos > 1 ? 's' : ''}"><Icon name="images" size={18} /><span class="tabular">{r.photos}</span></span>{/if}
     {#if r.uses}<span class="c-uses tabular">Repris {r.uses}{NNBSP}fois</span>{/if}
   </div>
 </li>
 
 <style>
+  .c-cover {
+    flex: none;
+    width: 54px;
+    height: 54px;
+    margin-left: auto;
+    border-radius: 12px;
+    object-fit: cover;
+    background: var(--fill-2);
+    box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+  }
+  .c-ph {
+    pointer-events: none;
+  }
   .c-li {
     display: grid;
   }

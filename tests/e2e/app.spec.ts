@@ -1,5 +1,40 @@
 /* Parcours complets dans un vrai navigateur, contre les services publics (réseau requis). */
 import { expect, test, type Page } from '@playwright/test';
+import { deflateSync } from 'node:zlib';
+
+/** Une petite image PNG (dégradé), pour les photos de profil et de sorties. */
+function png(w = 64, h = 48): Buffer {
+  const crc = (buf: Buffer) => {
+    let c = ~0;
+    for (const b of buf) {
+      c ^= b;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return ~c >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]);
+    const c = Buffer.alloc(4);
+    c.writeUInt32BE(crc(td));
+    return Buffer.concat([len, td, c]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const o = y * (w * 3 + 1) + 1 + x * 3;
+      raw[o] = 255;
+      raw[o + 1] = (x * 4) & 255;
+      raw[o + 2] = (y * 5) & 255;
+    }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
 
 /** L'app déjà ouverte une fois (l'accueil « Créer un compte » est passé) : la carte seule. */
 async function open(page: Page) {
@@ -355,6 +390,8 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await page.getByRole('button', { name: 'Recevoir un code' }).click();
   await page.getByRole('textbox', { name: /Code à 6 chiffres/ }).fill('123456');
   await page.getByRole('button', { name: 'Valider' }).click();
+  await page.locator('.ph input[type=file]').setInputFiles({ name: 'moi.png', mimeType: 'image/png', buffer: png(80, 80) });
+  await expect(page.locator('.ph-btn img')).toBeVisible();
   await page.getByRole('textbox', { name: 'Prénom' }).fill('Camille');
   await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('1998');
   await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Course' }).click();
@@ -368,6 +405,19 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await page.getByRole('textbox', { name: 'Ton commentaire' }).fill('Fait ce matin, superbe.');
   await page.getByRole('button', { name: 'Envoyer le commentaire' }).click();
   await expect(page.getByText('Fait ce matin, superbe.')).toBeVisible();
+  // Photos de la sortie : elles rejoignent la bande du parcours et s'ouvrent en plein écran.
+  await page.locator('.photos input[type=file]').setInputFiles([
+    { name: 'sortie1.png', mimeType: 'image/png', buffer: png() },
+    { name: 'sortie2.png', mimeType: 'image/png', buffer: png(48, 64) },
+  ]);
+  await expect(page.getByText('2 photos ajoutées')).toBeVisible();
+  await page.getByRole('button', { name: /^Photo de Camille/ }).first().click();
+  const lb = page.getByRole('dialog', { name: /^Photo 1 sur 2/ });
+  await expect(lb).toBeVisible();
+  await lb.getByRole('button', { name: 'Retirer' }).click();
+  await lb.getByRole('button', { name: 'Retirer pour de bon' }).click();
+  await expect(page.getByText('Photo retirée')).toBeVisible();
+  await page.getByRole('dialog', { name: /^Photo 1 sur 1/ }).getByRole('button', { name: 'Fermer' }).click();
   await page.locator('.author .who').click();
   const profile = page.getByRole('region', { name: /^Profil de / });
   await expect(profile).toBeVisible();

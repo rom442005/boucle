@@ -30,6 +30,7 @@
   import { community } from './lib/community.svelte';
   import HomeBar from './components/HomeBar.svelte';
   import Welcome from './components/Welcome.svelte';
+  import Lightbox from './components/Lightbox.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -218,7 +219,7 @@
           <h2>{headTitle}</h2>
           {#if community.available && community.view === 'feed'}
             <button use:tactile type="button" class="round navbtn me" aria-label={community.signedIn ? 'Mon profil' : 'Se connecter'} onclick={() => community.openMyProfile()}>
-              {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} size={32} />{:else}<Icon name="user" size={22} />{/if}
+              {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={32} />{:else}<Icon name="user" size={22} />{/if}
             </button>
           {:else}
             <span class="navbtn-space" aria-hidden="true"></span>
@@ -339,6 +340,7 @@
 {/if}
 
 {#if welcome}<Welcome onclose={closeWelcome} />{/if}
+{#if community.lightbox}<Lightbox />{/if}
 
 <div class="toast-zone" aria-live="polite">
   {#if app.toast}

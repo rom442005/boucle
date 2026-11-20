@@ -10,10 +10,13 @@ import {
   type Level,
   type PrivateProfile,
   type Profile,
+  type PhotoInput,
   type ProfileInput,
   type PublishInput,
+  type RoutePhoto,
   type Session,
 } from './types';
+import { blobToDataUrl } from '../images';
 
 /*
  * Démonstration sur l'appareil (?demo=communaute) : toute la Communauté fonctionne, mais rien ne quitte
@@ -24,7 +27,8 @@ import {
 export const DEMO_CODE = '123456';
 const KEY = 'boucle.demo.communaute.v1';
 
-type StoredRoute = Omit<CommunityRoute, 'authorName' | 'authorLevel' | 'authorCity' | 'likes' | 'comments' | 'likedByMe'>;
+type StoredRoute = Omit<CommunityRoute, 'authorName' | 'authorLevel' | 'authorCity' | 'authorAvatar' | 'likes' | 'comments' | 'photos' | 'cover' | 'likedByMe'>;
+type StoredPhoto = Omit<RoutePhoto, 'authorName' | 'authorAvatar'>;
 interface StoredComment {
   id: string;
   routeId: string;
@@ -39,6 +43,7 @@ interface Db {
   routes: StoredRoute[];
   likes: [string, string][];
   comments: StoredComment[];
+  photos?: StoredPhoto[];
   follows: [string, string][];
   blocks: [string, string][];
   reports: { by: string; target: string; reason: string; at: number }[];
@@ -51,7 +56,7 @@ const wait = (ms = 140) => new Promise((r) => setTimeout(r, ms));
 const DAY = 86400000;
 
 function member(uid: string, firstName: string, city: string, sports: Sport[], level: Level, years: number, bio: string, age: number): Profile {
-  return { id: uid, firstName, city, sports, level, practiceYears: years, bio, createdAt: Date.now() - age * DAY };
+  return { id: uid, firstName, city, sports, level, practiceYears: years, bio, avatar: null, createdAt: Date.now() - age * DAY };
 }
 
 async function seed(): Promise<Db> {
@@ -104,6 +109,7 @@ async function seed(): Promise<Db> {
     routes,
     likes,
     comments,
+    photos: [],
     follows: [[ines.id, lea.id]],
     blocks: [],
     reports: [],
@@ -127,6 +133,8 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       /* mémoire pleine : la démonstration continue sans être gardée */
     }
   };
+  db.photos ??= [];
+  const photosOf = () => db.photos!;
   save();
   const listeners: ((s: Session | null) => void)[] = [];
   const setSession = (s: Session | null) => {
@@ -148,14 +156,21 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       authorName: a?.firstName ?? 'Membre',
       authorLevel: a?.level ?? 'regular',
       authorCity: a?.city ?? null,
+      authorAvatar: a?.avatar ?? null,
       likes: db.likes.filter(([rid]) => rid === r.id).length,
       comments: db.comments.filter((c) => c.routeId === r.id).length,
+      photos: photosOf().filter((p) => p.routeId === r.id).length,
+      cover: photosOf().find((p) => p.routeId === r.id)?.thumb ?? null,
       likedByMe: !!me() && db.likes.some(([rid, u]) => rid === r.id && u === me()),
     };
   };
   const viewComment = (c: StoredComment): Comment => {
     const a = db.profiles[c.authorId];
-    return { ...c, authorName: a?.firstName ?? 'Membre', authorLevel: a?.level ?? 'regular' };
+    return { ...c, authorName: a?.firstName ?? 'Membre', authorLevel: a?.level ?? 'regular', authorAvatar: a?.avatar ?? null };
+  };
+  const viewPhoto = (p: StoredPhoto): RoutePhoto => {
+    const a = db.profiles[p.authorId];
+    return { ...p, authorName: a?.firstName ?? 'Membre', authorAvatar: a?.avatar ?? null };
   };
 
   return {
@@ -199,6 +214,7 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       db.routes = db.routes.filter((r) => r.authorId !== u);
       db.likes = db.likes.filter(([rid, x]) => x !== u && !mine.has(rid));
       db.comments = db.comments.filter((c) => c.authorId !== u && !mine.has(c.routeId));
+      db.photos = photosOf().filter((p) => p.authorId !== u && !mine.has(p.routeId));
       db.follows = db.follows.filter(([a, b]) => a !== u && b !== u);
       db.blocks = db.blocks.filter(([a, b]) => a !== u && b !== u);
       setSession(null);
@@ -274,6 +290,7 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       db.routes = db.routes.filter((r) => !(r.id === rid && r.authorId === u));
       db.likes = db.likes.filter(([x]) => x !== rid);
       db.comments = db.comments.filter((c) => c.routeId !== rid);
+      db.photos = photosOf().filter((p) => p.routeId !== rid);
       save();
     },
     async like(rid, on) {
@@ -338,6 +355,36 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
         r.uses++;
         save();
       }
+    },
+    async uploadAvatar(image) {
+      await wait();
+      if (!me()) throw new CommunityError('Connecte-toi pour continuer.');
+      return blobToDataUrl(image);
+    },
+    async photos(rid) {
+      await wait(60);
+      return photosOf().filter((p) => p.routeId === rid).map(viewPhoto);
+    },
+    async photosBy(authorId) {
+      await wait(60);
+      return photosOf().filter((p) => p.authorId === authorId).sort((a, b) => b.createdAt - a.createdAt).map(viewPhoto);
+    },
+    async addPhoto(rid, p: PhotoInput) {
+      await wait(200);
+      const u = need();
+      const [url, thumb] = await Promise.all([blobToDataUrl(p.full), blobToDataUrl(p.thumb)]);
+      const stored: StoredPhoto = { id: `ph-${id()}`, routeId: rid, authorId: u, url, thumb, at: p.at, caption: p.caption, width: p.width, height: p.height, createdAt: Date.now() };
+      photosOf().push(stored);
+      save();
+      return viewPhoto(stored);
+    },
+    async deletePhoto(pid) {
+      await wait();
+      const u = need();
+      const p = photosOf().find((x) => x.id === pid);
+      const route = p && db.routes.find((r) => r.id === p.routeId);
+      if (p && (p.authorId === u || route?.authorId === u)) db.photos = photosOf().filter((x) => x.id !== pid);
+      save();
     },
   };
 }

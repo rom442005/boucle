@@ -102,18 +102,26 @@ import more from '@phosphor-icons/core/assets/regular/dots-three.svg?raw';
 import mail from '@phosphor-icons/core/assets/regular/envelope-simple.svg?raw';
 import shield from '@phosphor-icons/core/assets/regular/shield-check.svg?raw';
 import reuse from '@phosphor-icons/core/assets/regular/arrow-u-up-right.svg?raw';
+import camera from '@phosphor-icons/core/assets/regular/camera-plus.svg?raw';
+import cameraF from '@phosphor-icons/core/assets/fill/camera-plus-fill.svg?raw';
+import images from '@phosphor-icons/core/assets/regular/images.svg?raw';
+import imagesF from '@phosphor-icons/core/assets/fill/images-fill.svg?raw';
+import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
+import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw';
+import grid from '@phosphor-icons/core/assets/regular/squares-four.svg?raw';
 export const ICONS = {
   run, hike, bicycle, bike, tree, waves, park, grains, buildings, search, locate, cube, bookmark, list, back, chevron,
   down, close, again, swap, share, download, link, play, stop, trash, pencil, check, approx, warning, wind, drop, bulb, road,
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
   heart, chat, users, user, signout, report, send, prohibit, lock, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
+  camera, images, caretLeft, caretRight, grid,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {
   run: runF, hike: hikeF, bicycle: bicycleF, bike: bikeF, tree: treeF, waves: wavesF, park: parkF, grains: grainsF,
   buildings: buildingsF, locate: locateF, cube: cubeF, bookmark: bookmarkF, drop: dropF, star: starF, done: doneF, diamond: diamondF,
-  heart: heartF, chat: chatF, users: usersF, user: userF,
+  heart: heartF, chat: chatF, users: usersF, user: userF, camera: cameraF, images: imagesF,
 };
 
 export type IconName = keyof typeof ICONS;

@@ -2,9 +2,10 @@
   import Icon from './Icon.svelte';
   import { community } from '../lib/community.svelte';
   import { tactile } from '../lib/haptics';
+  import type { ReportTarget } from '../lib/community/types';
 
   /** Signaler un parcours, un commentaire ou un profil : une raison, un mot d'explication si besoin. */
-  let { target, label }: { target: { routeId?: string; commentId?: string; profileId?: string }; label: string } = $props();
+  let { target, label }: { target: ReportTarget; label: string } = $props();
 
   const REASONS = [
     'Propos insultants, haineux ou harcèlement',

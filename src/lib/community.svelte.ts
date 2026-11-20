@@ -13,11 +13,14 @@ import {
   type Profile,
   type ProfileInput,
   type ProfileStats,
+  type ReportTarget,
+  type RoutePhoto,
   type Session,
 } from './community/types';
 import { app } from './state.svelte';
 import { haptic } from './haptics';
-import { cumulative } from './geo';
+import { cumulative, nearestOnRoute, pointAt } from './geo';
+import { prepareAvatar, preparePhoto } from './images';
 import { elevationStats } from './elevation';
 
 /*
@@ -35,7 +38,7 @@ export type Sheet =
   | { kind: 'auth'; reason: string; then?: () => void }
   | { kind: 'publish' }
   | { kind: 'edit' }
-  | { kind: 'report'; target: { routeId?: string; commentId?: string; profileId?: string }; label: string };
+  | { kind: 'report'; target: ReportTarget; label: string };
 
 export type CommunityView = 'feed' | 'profile';
 
@@ -86,8 +89,17 @@ class CommunityState {
   comments = $state.raw<Comment[]>([]);
   commentsLoading = $state(false);
 
+  /** photos de sorties du parcours ouvert */
+  photos = $state.raw<RoutePhoto[]>([]);
+  /** photos en cours d'envoi */
+  uploading = $state(0);
+  /** visionneuse plein écran */
+  lightbox = $state.raw<{ list: RoutePhoto[]; index: number } | null>(null);
+  /** photo à montrer sur la carte (depuis la visionneuse) */
+  photoFocus = $state.raw<{ id: string; at: LngLat; tick: number } | null>(null);
+
   /** profil affiché */
-  viewing = $state.raw<{ profile: Profile; stats: ProfileStats; routes: CommunityRoute[] } | null>(null);
+  viewing = $state.raw<{ profile: Profile; stats: ProfileStats; routes: CommunityRoute[]; photos: RoutePhoto[] } | null>(null);
   following = $state.raw<string[]>([]);
   blocked = $state.raw<string[]>([]);
   /** parcours publiés depuis cet appareil : identifiant local → identifiant dans la communauté */
@@ -233,6 +245,7 @@ class CommunityState {
     const b = await this.api();
     this.me = await b.saveProfile(p, priv);
     this.myPrivate = priv;
+    if (this.viewing?.profile.id === this.me.id) this.viewing = { ...this.viewing, profile: this.me };
   }
 
   /** Après la connexion (et le profil) : l'action qui l'avait demandée reprend. */
@@ -330,8 +343,10 @@ class CommunityState {
       }
       this.current = r;
       this.comments = [];
+      this.photos = [];
       app.showCommunityRoute(this.toRoute(r));
       void this.loadComments(r.id);
+      void this.loadPhotos(r.id);
       // À jour (j'aime, commentaires) sans attendre pour afficher.
       if (from) void b.route(id).then((fresh) => fresh && this.current?.id === id && (this.current = fresh));
     } catch (e) {
@@ -353,6 +368,104 @@ class CommunityState {
       /* les commentaires attendront */
     } finally {
       this.commentsLoading = false;
+    }
+  }
+
+  async loadPhotos(routeId: string) {
+    try {
+      const list = await (await this.api()).photos(routeId);
+      if (this.current?.id === routeId) this.photos = list.filter((p) => !this.blocked.includes(p.authorId));
+    } catch {
+      /* les photos attendront */
+    }
+  }
+
+  /**
+   * Photos d'une sortie sur un parcours publié : réduites sur l'appareil (sans leurs métadonnées), placées sur
+   * le tracé publié si elles ont été prises à moins de 200 m de lui (jamais dans la zone privée du départ).
+   */
+  async addPhotos(files: File[], r: CommunityRoute | null = this.current) {
+    if (!r || !files.length) return;
+    const route = r;
+    await this.requireAccount('Connecte-toi pour ajouter tes photos.', async () => {
+      const list = files.filter((f) => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name)).slice(0, 10);
+      if (files.length > 10) app.showToast('10 photos au plus à la fois.');
+      const coords = this.toRoute(route).coords;
+      const cum = cumulative(coords);
+      const b = await this.api();
+      let added = 0;
+      this.uploading += list.length;
+      for (const f of list) {
+        try {
+          const prep = await preparePhoto(f);
+          let at = null;
+          if (prep.at && coords.length > 1) {
+            const near = nearestOnRoute(coords, cum, prep.at);
+            if (near.dist < 200) at = pointAt(coords, cum, near.s).coord;
+          }
+          const photo = await b.addPhoto(route.id, { full: prep.full, thumb: prep.thumb, width: prep.width, height: prep.height, at, caption: null });
+          added++;
+          if (this.current?.id === route.id) this.photos = [...this.photos, photo];
+          const base = this.current?.id === route.id ? this.current : route;
+          this.patchRoute({ ...base, photos: base.photos + 1, cover: base.cover ?? photo.thumb });
+          if (this.viewing?.profile.id === photo.authorId) this.viewing = { ...this.viewing, photos: [photo, ...this.viewing.photos] };
+        } catch (e) {
+          this.say(e, 'Cette photo n’a pas pu être ajoutée.');
+        } finally {
+          this.uploading--;
+        }
+      }
+      if (added) {
+        haptic('success');
+        app.showToast(added > 1 ? `${added} photos ajoutées` : 'Photo ajoutée');
+      }
+    });
+  }
+
+  async deletePhoto(p: RoutePhoto) {
+    try {
+      await (await this.api()).deletePhoto(p.id);
+      this.photos = this.photos.filter((x) => x.id !== p.id);
+      const r = this.current?.id === p.routeId ? this.current : this.feed.find((x) => x.id === p.routeId);
+      if (r) this.patchRoute({ ...r, photos: Math.max(0, r.photos - 1), cover: r.cover === p.thumb ? (this.photos[0]?.thumb ?? null) : r.cover });
+      if (this.viewing) this.viewing = { ...this.viewing, photos: this.viewing.photos.filter((x) => x.id !== p.id) };
+      const lb = this.lightbox;
+      if (lb) {
+        const list = lb.list.filter((x) => x.id !== p.id);
+        this.lightbox = list.length ? { list, index: Math.min(lb.index, list.length - 1) } : null;
+      }
+      app.showToast('Photo retirée');
+    } catch (e) {
+      this.say(e);
+    }
+  }
+
+  openPhotos(list: RoutePhoto[], index: number) {
+    if (!list.length) return;
+    haptic('tap');
+    this.lightbox = { list, index: Math.max(0, Math.min(index, list.length - 1)) };
+  }
+
+  /** Photo de profil : carrée, déposée, puis gardée à l'enregistrement du profil. */
+  async uploadAvatar(file: File): Promise<string> {
+    const img = await prepareAvatar(file);
+    return (await this.api()).uploadAvatar(img);
+  }
+
+  /** Changer sa photo de profil directement depuis son profil. */
+  async changeAvatar(file: File | null) {
+    const me = this.me;
+    const priv = this.myPrivate;
+    if (!me || !priv) return;
+    try {
+      const avatar = file ? await this.uploadAvatar(file) : null;
+      const { id: _id, createdAt: _c, ...input } = me;
+      await this.saveProfile({ ...input, avatar }, priv);
+      if (this.viewing?.profile.id === me.id) this.viewing = { ...this.viewing, profile: this.me! };
+      haptic('success');
+      app.showToast(file ? 'Photo de profil mise à jour' : 'Photo de profil retirée');
+    } catch (e) {
+      this.say(e, 'Envoi de la photo impossible pour le moment.');
     }
   }
 
@@ -450,7 +563,7 @@ class CommunityState {
     void this.requireAccount('Connecte-toi pour publier ce parcours.', () => (this.sheet = { kind: 'publish' }));
   }
 
-  async publish(route: Route, opts: { name: string; description: string; hideStart: boolean }): Promise<boolean> {
+  async publish(route: Route, opts: { name: string; description: string; hideStart: boolean; photos?: File[] }): Promise<boolean> {
     const name = opts.name.trim().slice(0, 80) || route.name;
     const description = opts.description.trim().slice(0, 500);
     for (const t of [name, description]) {
@@ -484,6 +597,7 @@ class CommunityState {
       this.feed = [out, ...this.feed.filter((x) => x.id !== out.id)];
       haptic('success');
       app.showToast('Publié dans la Communauté');
+      if (opts.photos?.length) void this.addPhotos(opts.photos, out);
       return true;
     } catch (e) {
       this.say(e, 'Publication impossible pour le moment.');
@@ -496,12 +610,12 @@ class CommunityState {
   async openProfile(id: string) {
     try {
       const b = await this.api();
-      const [p, routes] = await Promise.all([b.profile(id), b.routesBy(id)]);
+      const [p, routes, photos] = await Promise.all([b.profile(id), b.routesBy(id), b.photosBy(id).catch(() => [])]);
       if (!p) {
         app.showToast('Ce profil n’existe plus.');
         return;
       }
-      this.viewing = { ...p, routes };
+      this.viewing = { ...p, routes, photos };
       if (app.phase !== 'community') app.openCommunity();
       this.view = 'profile';
     } catch (e) {
@@ -539,6 +653,7 @@ class CommunityState {
         if (on) {
           this.feed = this.feed.filter((r) => r.authorId !== userId);
           this.comments = this.comments.filter((c) => c.authorId !== userId);
+          this.photos = this.photos.filter((p) => p.authorId !== userId);
           if (this.following.includes(userId)) await (await this.api()).follow(userId, false);
           this.following = this.following.filter((x) => x !== userId);
         }
@@ -550,11 +665,11 @@ class CommunityState {
     });
   }
 
-  startReport(target: { routeId?: string; commentId?: string; profileId?: string }, label: string) {
+  startReport(target: ReportTarget, label: string) {
     void this.requireAccount('Connecte-toi pour signaler un contenu.', () => (this.sheet = { kind: 'report', target, label }));
   }
 
-  async report(target: { routeId?: string; commentId?: string; profileId?: string }, reason: string) {
+  async report(target: ReportTarget, reason: string) {
     try {
       await (await this.api()).report(target, reason);
       this.sheet = null;
