@@ -670,6 +670,70 @@ textarea {
   }
 }
 
+/* Champs de saisie (Communauté) : capsule de remplissage, anneau rose au focus. */
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--fill-2);
+  color: var(--label);
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: box-shadow 200ms var(--ease-out);
+}
+.input::placeholder {
+  color: var(--label-3);
+}
+.input:focus {
+  box-shadow: inset 0 0 0 1.5px var(--tint);
+}
+
+/* Communauté : liste groupée du fil et des profils, état vide qui guide. */
+.c-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  border-radius: 20px;
+  background: var(--fill-group);
+  overflow: hidden;
+}
+.c-list > li + li {
+  border-top: 0.5px solid var(--separator);
+}
+.c-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 18px 12px 8px;
+}
+.c-empty h3 {
+  margin: 6px 0 0;
+  font-size: 1.0625rem;
+  font-weight: 650;
+}
+.c-empty .hint {
+  max-width: 34ch;
+  margin: 0;
+}
+.c-empty-ic {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--tint);
+  background: var(--tint-soft);
+}
+
 /* Une liste qui apparaît arrive en cascade (rang --i, plafonné par le composant). */
 .li,
 .cascade {

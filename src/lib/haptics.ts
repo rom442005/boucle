@@ -9,8 +9,9 @@
  *     touche en fait l'étiquette, qui bascule l'interrupteur caché (le tic), puis le clic remonte
  *     au bouton comme d'habitude. Les vrais interrupteurs (options) vibrent d'eux-mêmes.
  *   Un curseur qu'on fait glisser ne peut plus vibrer sur iPhone : son retour est visuel.
+ * - App iPhone (App Store) : le moteur de vibrations du système, partout, curseurs compris.
  */
-import { isIOS } from './platform';
+import { isIOS, isNativeApp } from './platform';
 
 export type Haptic = 'tick' | 'tap' | 'success' | 'warn';
 
@@ -21,8 +22,22 @@ const PATTERN: Record<Haptic, number | number[]> = {
   warn: [18, 50, 18],
 };
 
-/** Interrupteur natif d'iOS (vibre au toucher sur iPhone) : Safari 17.4 et suivants. */
-export const nativeSwitch = isIOS && typeof HTMLInputElement !== 'undefined' && 'switch' in HTMLInputElement.prototype;
+/** Interrupteur natif d'iOS (vibre au toucher sur iPhone) : Safari 17.4 et suivants (pas dans l'app native). */
+export const nativeSwitch = !isNativeApp && isIOS && typeof HTMLInputElement !== 'undefined' && 'switch' in HTMLInputElement.prototype;
+
+/** Vibrations de l'app native (Capacitor), chargées à la demande. */
+type NativeHaptics = typeof import('@capacitor/haptics');
+let native: Promise<NativeHaptics> | null = isNativeApp ? import('@capacitor/haptics') : null;
+function nativeHaptic(kind: Haptic) {
+  void native
+    ?.then(({ Haptics, ImpactStyle, NotificationType }) => {
+      if (kind === 'success') return Haptics.notification({ type: NotificationType.Success });
+      if (kind === 'warn') return Haptics.notification({ type: NotificationType.Warning });
+      if (kind === 'tick') return Haptics.selectionChanged();
+      return Haptics.impact({ style: ImpactStyle.Light });
+    })
+    .catch(() => (native = null));
+}
 
 const SWITCH_ID = 'haptique';
 let label: HTMLLabelElement | null = null;
@@ -62,7 +77,9 @@ export function haptic(kind: Haptic = 'tick') {
   if (kind === 'tick' && now - last < 45) return;
   last = now;
   try {
-    if (typeof navigator.vibrate === 'function' && !isIOS) {
+    if (native) {
+      nativeHaptic(kind);
+    } else if (typeof navigator.vibrate === 'function' && !isIOS) {
       navigator.vibrate(PATTERN[kind]);
     } else if (isIOS) {
       // Le doigt vient de toucher une étiquette tactile : iOS a déjà joué son tic.

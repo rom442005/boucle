@@ -82,16 +82,38 @@ import snow from '@phosphor-icons/core/assets/regular/cloud-snow.svg?raw';
 import fog from '@phosphor-icons/core/assets/regular/cloud-fog.svg?raw';
 import storm from '@phosphor-icons/core/assets/regular/cloud-lightning.svg?raw';
 
+import heart from '@phosphor-icons/core/assets/regular/heart.svg?raw';
+import heartF from '@phosphor-icons/core/assets/fill/heart-fill.svg?raw';
+import chat from '@phosphor-icons/core/assets/regular/chat-circle.svg?raw';
+import chatF from '@phosphor-icons/core/assets/fill/chat-circle-fill.svg?raw';
+import users from '@phosphor-icons/core/assets/regular/users-three.svg?raw';
+import usersF from '@phosphor-icons/core/assets/fill/users-three-fill.svg?raw';
+import user from '@phosphor-icons/core/assets/regular/user-circle.svg?raw';
+import userF from '@phosphor-icons/core/assets/fill/user-circle-fill.svg?raw';
+import signout from '@phosphor-icons/core/assets/regular/sign-out.svg?raw';
+import report from '@phosphor-icons/core/assets/regular/flag.svg?raw';
+import send from '@phosphor-icons/core/assets/fill/paper-plane-right-fill.svg?raw';
+import prohibit from '@phosphor-icons/core/assets/regular/prohibit.svg?raw';
+import lock from '@phosphor-icons/core/assets/regular/lock-simple.svg?raw';
+import eyeSlash from '@phosphor-icons/core/assets/regular/eye-slash.svg?raw';
+import userPlus from '@phosphor-icons/core/assets/regular/user-plus.svg?raw';
+import userCheck from '@phosphor-icons/core/assets/regular/user-check.svg?raw';
+import more from '@phosphor-icons/core/assets/regular/dots-three.svg?raw';
+import mail from '@phosphor-icons/core/assets/regular/envelope-simple.svg?raw';
+import shield from '@phosphor-icons/core/assets/regular/shield-check.svg?raw';
+import reuse from '@phosphor-icons/core/assets/regular/arrow-u-up-right.svg?raw';
 export const ICONS = {
   run, hike, bicycle, bike, tree, waves, park, grains, buildings, search, locate, cube, bookmark, list, back, chevron,
   down, close, again, swap, share, download, link, play, stop, trash, pencil, check, approx, warning, wind, drop, bulb, road,
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
+  heart, chat, users, user, signout, report, send, prohibit, lock, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {
   run: runF, hike: hikeF, bicycle: bicycleF, bike: bikeF, tree: treeF, waves: wavesF, park: parkF, grains: grainsF,
   buildings: buildingsF, locate: locateF, cube: cubeF, bookmark: bookmarkF, drop: dropF, star: starF, done: doneF, diamond: diamondF,
+  heart: heartF, chat: chatF, users: usersF, user: userF,
 };
 
 export type IconName = keyof typeof ICONS;

@@ -1,6 +1,7 @@
 // Génère les icônes PNG de l'app à partir d'un SVG dessiné ici : node scripts/make-icons.mjs
 import { chromium } from '@playwright/test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const LOOP =
   'M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z';
@@ -42,6 +43,20 @@ for (const [path, size, markup] of out) {
   await page.screenshot({ path, omitBackground: true });
   await page.close();
   console.log('écrit', path);
+}
+// App Store : icône carrée pleine (iOS arrondit les coins), sans transparence, exigé par Apple.
+{
+  const page = await browser.newPage({ viewport: { width: 1024, height: 1024 }, deviceScaleFactor: 1 });
+  await page.setContent(`<html><body style="margin:0">${svg({ full: true }).replace('<svg ', '<svg width="1024" height="1024" ')}</body></html>`);
+  const tmp = 'ios-icon.jpg';
+  await page.screenshot({ path: tmp, type: 'jpeg', quality: 100 });
+  await page.close();
+  const dest = 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png';
+  if (existsSync('ios/App')) {
+    execFileSync('sips', ['-s', 'format', 'png', tmp, '--out', dest], { stdio: 'ignore' });
+    console.log('écrit', dest);
+  }
+  rmSync(tmp);
 }
 await browser.close();
 

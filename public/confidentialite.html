@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Confidentialité · Boucle</title>
+<style>
+  :root { color-scheme: light dark; --tint: #ff2d55; --bg: #f2f1ed; --text: #1c1c1e; --muted: #6e6e73; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --text: #f2f2f7; --muted: #aeaeb2; --tint: #ff375f; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  main { max-width: 68ch; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 1.9rem; letter-spacing: -0.02em; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 2em 0 0.4em; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); font-size: 0.95rem; }
+  a { color: var(--tint); }
+  ::selection { background: color-mix(in srgb, var(--tint) 25%, transparent); }
+</style>
+</head>
+<body>
+<main>
+<h1>Confidentialité</h1>
+<p class="muted">Boucle · dernière mise à jour : 20 novembre 2026</p>
+
+<p>Boucle crée des parcours de course et de vélo. Ce qui se passe dans la partie « Créer » reste sur ton appareil. La Communauté, elle, demande un compte : voici ce qui est collecté, pourquoi, et comment le supprimer.</p>
+
+<h2>Responsable du traitement</h2>
+<p>[Nom de l’éditeur], [adresse e-mail de contact]. Pour toute question sur tes données, écris à cette adresse.</p>
+
+<h2>Ce qui reste sur ton appareil</h2>
+<ul>
+  <li>Ta position, le départ, les réglages et les parcours créés.</li>
+  <li>Tes favoris, ton historique et tes sorties suivies en direct.</li>
+</ul>
+<p>Pour calculer un parcours, Boucle interroge des services cartographiques publics (itinéraires Valhalla de FOSSGIS, adresses Photon, météo Open-Meteo, points d’eau OpenStreetMap). Ils reçoivent les coordonnées nécessaires au calcul, sans ton identité.</p>
+
+<h2>Ce que la Communauté enregistre</h2>
+<ul>
+  <li><b>Ton compte</b> : ton adresse e-mail (connexion par code, jamais affichée).</li>
+  <li><b>Ton profil public</b> : prénom, ville (facultatif), sports pratiqués, niveau, années de pratique, présentation.</li>
+  <li><b>Ton année de naissance</b>, privée : elle sert seulement à vérifier que tu as 15 ans ou plus.</li>
+  <li><b>Ce que tu publies</b> : parcours (tracé, distance, dénivelé, nom, description), j’aime, commentaires, abonnements, signalements.</li>
+</ul>
+<p>Un parcours publié commence et finit à 300 m de ton départ si tu laisses « Masquer mon départ » activé : ton adresse n’est pas visible.</p>
+
+<h2>Pourquoi</h2>
+<p>Pour faire fonctionner la Communauté (base légale : exécution du service que tu demandes en créant un compte) et pour la modérer (intérêt légitime : protéger ses membres). Aucune publicité, aucune revente, aucun suivi entre applications.</p>
+
+<h2>Où et combien de temps</h2>
+<p>Les données de la Communauté sont hébergées par Supabase, dans l’Union européenne. Elles sont gardées tant que ton compte existe. Un signalement traité est conservé un an au plus.</p>
+
+<h2>Tes droits</h2>
+<p>Tu peux consulter et modifier ton profil dans l’app, retirer un parcours ou un commentaire, et <b>supprimer ton compte</b> (Mon profil, puis Supprimer mon compte) : tout ce qui y est lié est effacé immédiatement. Pour exercer tes autres droits (accès, rectification, opposition, portabilité), écris à l’adresse ci-dessus. Tu peux aussi saisir la CNIL (<a href="https://www.cnil.fr">cnil.fr</a>).</p>
+
+<h2>Âge minimum</h2>
+<p>La Communauté est réservée aux personnes de 15 ans et plus.</p>
+</main>
+</body>
+</html>

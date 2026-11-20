@@ -3,10 +3,13 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // GitHub Pages sert l'app sous /boucle/ ; en local elle est à la racine.
-export default defineConfig(({ command, isPreview }) => ({
-  base: command === 'build' || isPreview ? '/boucle/' : '/',
+// App iPhone (vite build --mode native) : fichiers servis par la coque Capacitor, chemins relatifs,
+// et pas de service worker (la coque garde déjà l'app sur le téléphone).
+export default defineConfig(({ command, isPreview, mode }) => ({
+  base: mode === 'native' ? './' : command === 'build' || isPreview ? '/boucle/' : '/',
   plugins: [
     svelte(),
+    mode !== 'native' &&
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,

@@ -86,6 +86,8 @@ export interface Route {
   params?: Params;
   createdAt: number;
   saved?: boolean;
+  /** parcours de la Communauté (identifiant publié) */
+  communityId?: string;
 }
 
 export interface GenProgress {

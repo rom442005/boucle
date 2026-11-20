@@ -6,7 +6,8 @@ import { app as state } from './lib/state.svelte';
 
 const app = mount(App, { target: document.getElementById('app')! });
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+// Dans l'app iPhone (coque Capacitor), pas de service worker : les mises à jour passent par l'App Store.
+if (import.meta.env.PROD && import.meta.env.MODE !== 'native' && 'serviceWorker' in navigator) {
   void import('virtual:pwa-register').then(({ registerSW }) =>
     registerSW({
       immediate: true,

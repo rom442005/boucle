@@ -45,6 +45,39 @@ Actions :
 - **Échelle** : elle apparaît pendant qu'on zoome (pincement, molette), puis s'efface.
 - **Revenir au départ / au parcours** : quand on s'est éloigné du départ ou du parcours affiché (ou qu'on regarde le globe), une capsule permet d'y revenir d'une touche.
 
+## Communauté
+
+Comme sur Strava : un compte, puis les parcours des autres.
+
+- **Compte** sans mot de passe : une adresse e-mail, un code à 6 chiffres reçu par e-mail, puis un profil (prénom, année de naissance gardée privée, ville, sports, niveau, années de pratique, présentation). Réservé aux 15 ans et plus.
+- **Fil** : les parcours publiés autour de toi (du plus proche au plus loin), ceux des personnes que tu suis, et les plus aimés ; filtre par sport. Ils apparaissent aussi sur la carte.
+- **Un parcours** : tracé, profil, côtes, j'aime, commentaires, auteur à suivre. On le **réutilise** : le suivre en direct, l'ajouter aux favoris, l'exporter en GPX, ou reprendre ses réglages (sport, distance, dénivelé) depuis son propre départ. « Repris N fois » le compte pour son auteur.
+- **Publier** : sur un de tes parcours, touche Publier. La zone privée (activée par défaut) retire les 300 m autour de ton départ : ton adresse ne se voit pas.
+- **Modération** (exigée par l'App Store) : filtre des insultes et des liens avant l'envoi, signalement d'un parcours, d'un commentaire ou d'un profil, masquer une personne, retirer ce qu'on a publié, supprimer son compte et tout ce qui va avec.
+- **Démonstration** : `?demo=communaute` à la fin de l'adresse ouvre une Communauté fictive, sur l'appareil (membres et parcours de démonstration autour de Nantes, code 123456). « Quitter » en sort.
+
+### Mettre la Communauté en ligne (Supabase, gratuit pour commencer)
+
+1. Créer un compte sur [supabase.com](https://supabase.com), puis un projet dans la région **Paris (eu-west-3)**.
+2. SQL Editor → coller `supabase/schema.sql` → Run.
+3. Authentication → Sign In / Providers → Email : laisser activé. Authentication → Emails → modèles « Magic Link » et « Confirm signup » : remplacer le lien par le code, par exemple `Ton code Boucle : {{ .Token }}`.
+4. Le service d'e-mail fourni par Supabase est limité à quelques messages par heure : pour de vrais membres, brancher un SMTP (Authentication → Emails → SMTP Settings ; Brevo ou Resend ont une offre gratuite).
+5. Project Settings → API : copier l'URL du projet et la clé `anon`. Les déclarer dans GitHub (Settings → Secrets and variables → Actions → Variables) sous `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`, puis relancer le déploiement. Pour l'app iPhone ou un build local : fichier `.env.production.local` (voir `.env.example`).
+6. Signalements : Table Editor → `reports`. Retirer un contenu : supprimer la ligne du parcours ou du commentaire.
+
+## Publier sur l'App Store
+
+L'app iPhone est la même app, emballée par [Capacitor](https://capacitorjs.com) (dossier `ios/`), avec de vraies vibrations natives, le partage du système et le GPX vers Fichiers.
+
+1. Installer **Xcode** (Mac App Store), puis l'ouvrir une fois pour accepter la licence.
+2. S'inscrire au **programme développeur Apple** (99 € par an) : [developer.apple.com/programs](https://developer.apple.com/programs).
+3. `npm run ios` (construit l'app et la copie dans `ios/`), puis `npm run ios:ouvrir` : dans Xcode, cible App → Signing & Capabilities → choisir son équipe ; vérifier l'identifiant `fr.boucle.parcours` (à changer s'il est pris).
+4. Essayer sur l'iPhone (câble, ou Product → Run), puis Product → Archive → Distribute App → App Store Connect.
+5. Dans [App Store Connect](https://appstoreconnect.apple.com) : fiche de l'app (nom, sous-titre, description, captures 6,9 pouces), URL de confidentialité `https://rom442005.github.io/boucle/confidentialite.html`, questionnaire sur les données (e-mail, prénom, âge, contenu publié, position approximative des parcours ; pas de suivi publicitaire), classification d'âge avec contenu créé par les utilisateurs, puis Soumettre pour vérification.
+6. Pour la vérification d'Apple, donner un compte de démonstration (adresse e-mail et code), ou indiquer `?demo=communaute`.
+
+Avant la soumission : compléter l'éditeur et l'adresse de contact dans `public/confidentialite.html` et `public/conditions.html`, et vérifier que le nom « Boucle » est libre sur l'App Store.
+
 ## Comment ça marche
 
 Tout se passe dans le navigateur, sans compte ni serveur à nous :

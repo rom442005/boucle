@@ -13,8 +13,18 @@
   import { cumulative, nearestOnRoute } from '../lib/geo';
   import { daylightLine, weatherLine, type Line } from '../lib/conditions';
   import type { EnvClass, Route } from '../lib/types';
+  import Avatar from './Avatar.svelte';
+  import Comments from './Comments.svelte';
+  import { community } from '../lib/community.svelte';
+  import { LEVELS } from '../lib/community/types';
+  import { ago } from '../lib/community/time';
 
   const r = $derived(app.route);
+  /** parcours de la Communauté affiché (auteur, j'aime, commentaires) */
+  const cr = $derived(app.detailFrom?.kind === 'communaute' && community.current && community.current.id === app.route?.communityId ? community.current : null);
+  const crMine = $derived(!!cr && community.me?.id === cr.authorId);
+  /** mes parcours : on peut les publier (la Communauté est là) */
+  const canPublish = $derived(community.available && !cr && !!r && r.lengthM > 300);
   /** La première proposition est là, les autres se cherchent encore. */
   const searching = $derived(app.generating && app.phase === 'results');
   const many = $derived(app.routes.length > 1 || searching);
@@ -201,6 +211,18 @@
 
 {#if r}
   <article class="detail" aria-label="Parcours sélectionné">
+    {#if cr}
+      <div class="author">
+        <button use:tactile type="button" class="who" onclick={() => community.openProfile(cr.authorId)}>
+          <Avatar id={cr.authorId} name={cr.authorName} size={38} />
+          <span class="who-t"><b>{cr.authorName}</b><span>{LEVELS[cr.authorLevel]}{cr.authorCity ? ` · ${cr.authorCity}` : ''} · {ago(cr.createdAt)}</span></span>
+        </button>
+        {#if !crMine}
+          {@const followed = community.following.includes(cr.authorId)}
+          <button use:tactile type="button" class="pill follow" class:is-on={!followed} aria-label={followed ? `Ne plus suivre ${cr.authorName}` : `Suivre ${cr.authorName}`} onclick={() => community.toggleFollow(cr.authorId)}>{followed ? 'Abonné' : 'Suivre'}</button>
+        {/if}
+      </div>
+    {/if}
     {#if !many}
     <div class="title">
       {#if editing}
@@ -218,10 +240,11 @@
         />
       {:else}
         <h2>{r.name}</h2>
-        <button use:tactile type="button" class="round edit" aria-label="Renommer le parcours" onclick={startEdit}><Icon name="pencil" size={18} /></button>
+        {#if !cr}<button use:tactile type="button" class="round edit" aria-label="Renommer le parcours" onclick={startEdit}><Icon name="pencil" size={18} /></button>{/if}
       {/if}
     </div>
     <p class="kind">{SPORTS[r.sport].long} · {SHAPES[r.shape].label}</p>
+    {#if cr?.description}<p class="desc">{cr.description}</p>{/if}
     {#if doneText}<p class="done-line"><Icon name="done" size={16} fill />{doneText}</p>{/if}
     {/if}
 
@@ -261,7 +284,12 @@
       </section>
     {/if}
 
-    <div class="actions">
+    <div class="actions" style:--n={cr ? 6 : canPublish ? 6 : 5}>
+      {#if cr}
+        <button use:tactile type="button" class="act" aria-pressed={cr.likedByMe} aria-label="J’aime ({cr.likes})" onclick={() => community.toggleLike(cr)}>
+          <span class="act-ic like" class:on={cr.likedByMe}><Icon name="heart" fill={cr.likedByMe} /></span><span class="tabular">{cr.likes ? `${cr.likes} j’aime` : 'J’aime'}</span>
+        </button>
+      {/if}
       <button use:tactile type="button" class="act" aria-pressed={app.isSaved(r)} onclick={() => {
         const on = !app.isSaved(r);
         haptic(on ? 'success' : 'tap');
@@ -288,10 +316,32 @@
       <button use:tactile type="button" class="act" onclick={() => app.shareLink(r)}>
         <span class="act-ic"><Icon name="share" /></span>Partager
       </button>
-      <button use:tactile type="button" class="act" onclick={() => app.reverseSelected()}>
-        <span class="act-ic"><Icon name="swap" /></span>Inverser
-      </button>
+      {#if cr}
+        <button use:tactile type="button" class="act" onclick={() => community.reuseSettings(cr)}>
+          <span class="act-ic"><Icon name="reuse" /></span>Réutiliser
+        </button>
+      {:else}
+        {#if canPublish}
+          <button use:tactile type="button" class="act" onclick={() => community.startPublish()}>
+            <span class="act-ic" class:on={!!community.published[r.id]}><Icon name="users" fill={!!community.published[r.id]} /></span>{community.published[r.id] ? 'Publié' : 'Publier'}
+          </button>
+        {/if}
+        <button use:tactile type="button" class="act" onclick={() => app.reverseSelected()}>
+          <span class="act-ic"><Icon name="swap" /></span>Inverser
+        </button>
+      {/if}
     </div>
+    {#if cr}
+      <div class="cr-meta">
+        {#if cr.uses}<span class="tabular">Repris {cr.uses}{NNBSP}fois</span>{/if}
+        {#if crMine}
+          <button use:tactile type="button" class="mini" onclick={() => community.unpublish(cr)}>Retirer de la Communauté</button>
+        {:else}
+          <button use:tactile type="button" class="mini" onclick={() => community.startReport({ routeId: cr.id }, 'ce parcours')}>Signaler</button>
+          <button use:tactile type="button" class="mini" onclick={() => community.toggleBlock(cr.authorId, cr.authorName)}>Masquer {cr.authorName}</button>
+        {/if}
+      </div>
+    {/if}
 
     <section class="climbs" aria-labelledby="climbs-h">
       <div class="climbs-head">
@@ -328,6 +378,7 @@
     {#if r.shape === 'loop' && r.overlap * r.lengthM >= 50}
       <p class="hint">Repasse au même endroit sur {meters(Math.round((r.overlap * r.lengthM) / 10) * 10)}.</p>
     {/if}
+    {#if cr}<Comments r={cr} />{/if}
   </article>
 {/if}
 
@@ -624,8 +675,65 @@
   }
   .actions {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(var(--n, 5), 1fr);
     gap: 2px;
+  }
+  .act-ic.like.on,
+  .act-ic.on {
+    background: var(--tint-soft);
+  }
+  .act-ic.like.on :global(.icon) {
+    animation: act-pop 480ms var(--spring-bouncy);
+  }
+  .author {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .who {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+  }
+  .who-t {
+    display: grid;
+    min-width: 0;
+    font-size: 0.9375rem;
+  }
+  .who-t span {
+    font-size: 0.75rem;
+    color: var(--label-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .follow {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 0.875rem;
+  }
+  .desc {
+    margin: -6px 0 0;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+  .cr-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
+    margin-top: -6px;
+    font-size: 0.75rem;
+    color: var(--label-2);
+  }
+  .mini {
+    min-height: 32px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--label-2);
   }
   .done-line {
     display: flex;

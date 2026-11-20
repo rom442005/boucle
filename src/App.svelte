@@ -21,6 +21,13 @@
   import { isDesktop } from './lib/platform';
   import { SHAPES } from './lib/sports';
   import SlopeLegend from './components/SlopeLegend.svelte';
+  import Community from './components/Community.svelte';
+  import AuthFlow from './components/AuthFlow.svelte';
+  import PublishForm from './components/PublishForm.svelte';
+  import ProfileForm from './components/ProfileForm.svelte';
+  import ReportForm from './components/ReportForm.svelte';
+  import Avatar from './components/Avatar.svelte';
+  import { community } from './lib/community.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -38,17 +45,36 @@
     return () => wideQuery.removeEventListener('change', onWide);
   });
 
+  const SHEET_TITLE = { auth: 'Communauté', publish: 'Publier', edit: 'Mon profil', report: 'Signaler' } as const;
   const headTitle = $derived(
-    app.phase === 'results'
-      ? app.routes.length > 1
-        ? `${app.routes.length} propositions`
-        : '1 proposition'
-      : app.phase === 'library'
-        ? 'Mes parcours'
-        : app.phase === 'detail'
-          ? 'Parcours'
-          : 'Nouveau parcours',
+    community.sheet
+      ? SHEET_TITLE[community.sheet.kind]
+      : app.phase === 'results'
+        ? app.routes.length > 1
+          ? `${app.routes.length} propositions`
+          : '1 proposition'
+        : app.phase === 'library'
+          ? 'Mes parcours'
+          : app.phase === 'community'
+            ? community.view === 'profile' && community.viewing
+              ? community.viewing.profile.id === community.me?.id
+                ? 'Mon profil'
+                : community.viewing.profile.firstName
+              : 'Communauté'
+            : app.phase === 'detail'
+              ? app.detailFrom?.kind === 'communaute'
+                ? 'Communauté'
+                : 'Parcours'
+              : 'Nouveau parcours',
   );
+  /** Retour dans la Communauté : du profil au fil, du fil aux réglages. */
+  function communityBack() {
+    if (community.view === 'profile') {
+      community.view = 'feed';
+      community.viewing = null;
+      void community.loadFeed();
+    } else app.closeLibrary();
+  }
   const busy = $derived(app.generating);
   /** Un refus (aucun parcours possible, réseau) : le bouton tremble une fois. */
   let ctaEl: HTMLButtonElement | undefined = $state();
@@ -66,6 +92,17 @@
     if (n > 1) app.select((app.selected + dir + n) % n);
   }
   const canSwipe = $derived(!app.wide && app.phase === 'results' && app.routes.length > 1);
+  /** Onglet actif sur Mac. */
+  const tab = $derived(
+    app.phase === 'community' || (app.phase === 'detail' && app.detailFrom?.kind === 'communaute')
+      ? 'community'
+      : app.phase === 'library' || app.phase === 'detail'
+        ? 'library'
+        : 'create',
+  );
+  const backLabel = $derived(
+    app.phase === 'detail' ? (app.detailFrom?.kind === 'communaute' ? 'Retour à la Communauté' : 'Retour à mes parcours') : 'Retour aux réglages',
+  );
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && app.pickOnMap && app.cancelPick()} />
@@ -99,6 +136,11 @@
   {#if !app.wide && app.phase === 'compose' && !app.pickOnMap}
     <div class="topbar">
       <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} floating onclick={() => (app.search = 'start')} />
+      {#if community.available}
+        <button use:tactile type="button" class="round glass" aria-label="Communauté : parcours publiés" onclick={() => community.open()}>
+          <Icon name="users" />
+        </button>
+      {/if}
       <button use:tactile type="button" class="round glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
         <Icon name="list" />
       </button>
@@ -111,7 +153,7 @@
     <BuildingsLegend />
   {/if}
 
-  <Panel label={headTitle} footer={app.phase === 'library' ? undefined : footer} onswipe={canSwipe ? swipe : undefined}>
+  <Panel label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <div class="brand">
@@ -123,8 +165,18 @@
             <Icon name="phone" size={18} />
           </button>
           <nav class="tabs" aria-label="Sections">
-            <button use:tactile type="button" class="pill" class:is-on={app.phase !== 'library' && app.phase !== 'detail'} onclick={() => (app.phase === 'library' || app.phase === 'detail' ? app.closeLibrary() : null)}>Créer</button>
-            <button use:tactile type="button" class="pill" class:is-on={app.phase === 'library' || app.phase === 'detail'} onclick={() => app.openLibrary()}>
+            <button use:tactile type="button" class="pill" class:is-on={tab === 'create'} onclick={() => {
+                community.sheet = null;
+                if (tab !== 'create') app.closeLibrary();
+              }}>Créer</button>
+            <button use:tactile type="button" class="pill" class:is-on={tab === 'community'} onclick={() => {
+                community.sheet = null;
+                community.open();
+              }}>Communauté</button>
+            <button use:tactile type="button" class="pill" class:is-on={tab === 'library'} onclick={() => {
+                community.sheet = null;
+                app.openLibrary();
+              }}>
               Mes parcours{#if app.library.length}<span class="tabular dim">&nbsp;{app.library.length}</span>{/if}
             </button>
           </nav>
@@ -133,7 +185,30 @@
       {#if app.wide && showInstall}
         <InstallGuide mode="card" onclose={() => (showInstall = false)} />
       {/if}
-      {#if app.phase === 'compose'}
+      {#if community.sheet}
+        <!-- Une action de la Communauté (connexion, publication, profil, signalement) prend le panneau, sans fenêtre par-dessus. -->
+        <div class="nav">
+          <button use:tactile type="button" class="round navbtn" aria-label="Annuler" onclick={() => (community.sheet = null)}>
+            <Icon name="close" size={20} />
+          </button>
+          <h2>{headTitle}</h2>
+          <span class="navbtn-space" aria-hidden="true"></span>
+        </div>
+      {:else if app.phase === 'community'}
+        <div class="nav">
+          <button use:tactile type="button" class="round navbtn" aria-label={community.view === 'profile' ? 'Retour à la Communauté' : 'Retour aux réglages'} onclick={communityBack}>
+            <Icon name="back" size={20} />
+          </button>
+          <h2>{headTitle}</h2>
+          {#if community.available && community.view === 'feed'}
+            <button use:tactile type="button" class="round navbtn me" aria-label={community.signedIn ? 'Mon profil' : 'Se connecter'} onclick={() => community.openMyProfile()}>
+              {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} size={32} />{:else}<Icon name="user" size={22} />{/if}
+            </button>
+          {:else}
+            <span class="navbtn-space" aria-hidden="true"></span>
+          {/if}
+        </div>
+      {:else if app.phase === 'compose'}
         {#if app.wide}
           <!-- Les lieux du parcours, toujours visibles en haut : départ, point de passage, destination. -->
           <div class="start-wide">
@@ -144,7 +219,7 @@
       {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
         <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->
         <div class="nav sum">
-          <button use:tactile type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => app.back()}>
+          <button use:tactile type="button" class="round navbtn" aria-label={backLabel} onclick={() => app.back()}>
             <Icon name="back" size={20} />
           </button>
           <div class="sum-mid" data-toggle-sheet>
@@ -169,7 +244,7 @@
         </div>
       {:else}
         <div class="nav">
-          <button use:tactile type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => (app.phase === 'library' ? app.closeLibrary() : app.back())}>
+          <button use:tactile type="button" class="round navbtn" aria-label={backLabel} onclick={() => (app.phase === 'library' ? app.closeLibrary() : app.back())}>
             <Icon name="back" size={20} />
           </button>
           <h2>{headTitle}</h2>
@@ -184,10 +259,31 @@
       {/if}
     {/snippet}
 
-    {#if app.phase === 'compose'}
+    {#if community.sheet}
+      {@const sh = community.sheet}
+      {#key sh}
+        <div class="sheet">
+          {#if sh.kind === 'auth'}
+            <AuthFlow reason={sh.reason} />
+          {:else if sh.kind === 'publish'}
+            <PublishForm />
+          {:else if sh.kind === 'edit'}
+            <ProfileForm ondone={() => {
+                community.sheet = null;
+                app.showToast('Profil enregistré');
+                if (community.me) void community.openProfile(community.me.id);
+              }} />
+          {:else if sh.kind === 'report'}
+            <ReportForm target={sh.target} label={sh.label} />
+          {/if}
+        </div>
+      {/key}
+    {:else if app.phase === 'compose'}
       <Composer />
     {:else if app.phase === 'library'}
       <Library />
+    {:else if app.phase === 'community'}
+      <Community />
     {:else}
       <Results />
     {/if}
@@ -273,19 +369,32 @@
     color: var(--tint);
     background: var(--tint-soft);
   }
+  /* Trois onglets : sur leur propre ligne, sous le nom de l'app, à parts égales. */
+  .brand {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
   .tabs {
-    display: flex;
+    flex-basis: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 4px;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--fill-2);
   }
   .tabs .pill {
-    min-height: 34px;
-    padding: 0 12px;
+    min-height: 32px;
+    padding: 0 10px;
     font-size: 0.8125rem;
     background: transparent;
   }
   .tabs .pill.is-on {
-    background: var(--fill-2);
+    background: var(--thumb);
     color: var(--label);
+    box-shadow:
+      0 3px 8px rgba(0, 0, 0, 0.1),
+      0 1px 1px rgba(0, 0, 0, 0.04);
   }
   .dim {
     color: var(--label-2);
@@ -301,6 +410,13 @@
     align-items: center;
     gap: 8px;
     padding: 0 0 8px;
+  }
+  .sheet {
+    animation: cascade-in 320ms var(--ease-out) both;
+  }
+  .me {
+    padding: 0;
+    overflow: hidden;
   }
   .nav h2 {
     flex: 1;

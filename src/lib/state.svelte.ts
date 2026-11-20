@@ -31,10 +31,14 @@ import { Follower, type FollowState } from './follow';
 import { slug } from './format';
 import { ELEV_STEP, heights } from './valhalla';
 import { haptic } from './haptics';
+import { isNativeApp } from './platform';
+
+/** Adresse publique de l'app (liens de partage), aussi depuis l'app iPhone. */
+const PUBLIC_URL = 'https://rom442005.github.io/boucle/';
 
 const same = (a: LngLat, b: LngLat) => a[0] === b[0] && a[1] === b[1];
 
-export type Phase = 'compose' | 'results' | 'library' | 'detail' | 'follow';
+export type Phase = 'compose' | 'results' | 'library' | 'detail' | 'follow' | 'community';
 export type Detent = 'peek' | 'half' | 'full';
 /** Rôle d'un lieu choisi : départ, destination (« Vers un lieu ») ou point de passage imposé. */
 export type PlaceKind = 'start' | 'destination' | 'via';
@@ -75,7 +79,9 @@ class AppState {
   history = $state.raw<HistoryEntry[]>(loadHistory());
   libTab = $state<'favoris' | 'historique'>('favoris');
   /** origine du parcours affiché en détail (pour l'en-tête et le retour) */
-  detailFrom = $state<null | { kind: 'favori' | 'historique' | 'lien' | 'gpx'; id?: string }>(null);
+  detailFrom = $state<null | { kind: 'favori' | 'historique' | 'lien' | 'gpx' | 'communaute'; id?: string }>(null);
+  /** un parcours de la Communauté vient d'être repris (favori, suivi, GPX) : branché par community.svelte.ts */
+  onCommunityUse: ((id: string) => void) | null = null;
   flags = $state<Record<string, boolean>>(loadFlags());
   weather = $state.raw<Weather | null>(null);
 
@@ -431,6 +437,13 @@ class AppState {
     this.scrub = null;
     // Une recherche encore en cours (autres propositions, sols) s'arrête.
     this.cancel();
+    if (this.phase === 'detail' && this.detailFrom?.kind === 'communaute') {
+      this.detailFrom = null;
+      this.routes = [];
+      this.phase = 'community';
+      if (!this.wide) this.detent = 'half';
+      return;
+    }
     if (this.phase === 'detail') {
       if (this.detailFrom?.kind === 'historique') this.libTab = 'historique';
       else if (this.detailFrom?.kind === 'favori') this.libTab = 'favoris';
@@ -455,6 +468,48 @@ class AppState {
 
   closeLibrary() {
     this.phase = 'compose';
+  }
+
+  /* ------------------------------ Communauté ------------------------------ */
+
+  /** La Communauté occupe le panneau ; la carte se libère pour ses parcours. */
+  openCommunity() {
+    this.cancel();
+    this.scrub = null;
+    this.routes = [];
+    this.detailFrom = null;
+    this.phase = 'community';
+    if (!this.wide) this.detent = 'half';
+  }
+
+  /** Un parcours de la Communauté en détail : tracé sur la carte, comme les tiens. */
+  showCommunityRoute(r: Route) {
+    this.routes = [r];
+    this.selected = 0;
+    this.scrub = null;
+    this.detailFrom = { kind: 'communaute', id: r.communityId };
+    this.refreshWeather(r.coords[0]);
+    this.phase = 'detail';
+    this.focusRoute();
+    this.drawTick++;
+  }
+
+  /** Mêmes réglages qu'un parcours (sport, forme, distance, dénivelé), depuis ton départ. */
+  reuseSettings(r: Route) {
+    const def = SPORTS[r.sport];
+    this.setSport(r.sport);
+    const p = this.params;
+    p.shape = r.shape === 'oneway' ? 'loop' : r.shape;
+    const step = def.distance.step;
+    p.distanceKm = Math.min(def.distance.max, Math.max(def.distance.min, Math.round(r.lengthM / 1000 / step) * step));
+    const e = def.elevation;
+    p.elevation = r.ascent >= 20 ? Math.min(e.max, Math.round(r.ascent / e.step) * e.step) : null;
+    this.persist();
+    this.routes = [];
+    this.detailFrom = null;
+    this.phase = 'compose';
+    if (!this.wide) this.detent = 'half';
+    this.showToast(`Réglages repris : ${def.label.toLowerCase()}, ${p.distanceKm.toLocaleString('fr-FR')} km${p.elevation != null ? `, ${p.elevation} m D+` : ''}`);
   }
 
   reverseSelected() {
@@ -487,6 +542,7 @@ class AppState {
       return;
     }
     this.library = next;
+    if (r.communityId) this.onCommunityUse?.(r.communityId);
     this.showToast('Ajouté aux favoris');
   }
 
@@ -668,6 +724,18 @@ class AppState {
   /* ------------------------------ Export et partage ------------------------------ */
 
   async exportGPX(r: Route) {
+    if (r.communityId) this.onCommunityUse?.(r.communityId);
+    if (isNativeApp) {
+      // App iPhone : le fichier passe par la feuille de partage du système (Fichiers, Mail, Strava…).
+      try {
+        const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
+        const { uri } = await Filesystem.writeFile({ path: `${slug(r.name)}.gpx`, data: toGPX(r), directory: Directory.Cache, encoding: Encoding.UTF8 });
+        await Share.share({ title: r.name, files: [uri] });
+      } catch {
+        /* partage annulé */
+      }
+      return;
+    }
     const file = new File([toGPX(r)], `${slug(r.name)}.gpx`, { type: 'application/gpx+xml' });
     const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
     const touch = matchMedia('(pointer: coarse)').matches;
@@ -691,7 +759,16 @@ class AppState {
   }
 
   async shareLink(r: Route) {
-    const url = `${location.origin}${location.pathname}#r=${await packRoute(r)}`;
+    const url = `${isNativeApp ? PUBLIC_URL : location.origin + location.pathname}#r=${await packRoute(r)}`;
+    if (isNativeApp) {
+      try {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ title: r.name, text: `${r.name} — parcours Boucle`, url });
+      } catch {
+        /* partage annulé */
+      }
+      return;
+    }
     if (navigator.share && matchMedia('(pointer: coarse)').matches) {
       try {
         await navigator.share({ title: r.name, text: `${r.name} — parcours Boucle`, url });
@@ -713,6 +790,7 @@ class AppState {
   startFollow() {
     const r = this.route;
     if (!r) return;
+    if (r.communityId) this.onCommunityUse?.(r.communityId);
     this.beforeFollow = this.phase === 'detail' ? 'detail' : 'results';
     this.scrub = null;
     this.follower?.stop();

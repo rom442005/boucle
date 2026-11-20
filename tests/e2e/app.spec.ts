@@ -310,3 +310,44 @@ test('si tu pars maintenant : lumière du jour au retour', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Si tu pars maintenant' })).toBeAttached();
   await expect(page.locator('.conds').getByText(/^(Retour vers .+, (de jour|au crépuscule|de nuit)|Départ de nuit)/)).toBeAttached();
 });
+
+test('Communauté (démonstration) : compte par code, j’aime, commentaire, abonnement, publication', async ({ page, browserName }) => {
+  await page.goto('./?demo=communaute');
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  if (browserName === 'chromium') await page.getByRole('button', { name: 'Communauté', exact: true }).click();
+  else await page.getByRole('button', { name: /Communauté : parcours publiés/ }).click();
+  const feed = page.getByRole('list', { name: 'Parcours publiés' });
+  await expect(feed).toBeVisible({ timeout: 15_000 });
+  // Aimer sans compte : la connexion s'ouvre dans le panneau, puis le j'aime est fait.
+  await feed.getByRole('button', { name: /^J’aime/ }).first().click();
+  await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('test@exemple.fr');
+  await page.getByRole('button', { name: 'Recevoir un code' }).click();
+  await page.getByRole('textbox', { name: /Code à 6 chiffres/ }).fill('123456');
+  await page.getByRole('button', { name: 'Valider' }).click();
+  await page.getByRole('textbox', { name: 'Prénom' }).fill('Camille');
+  await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('1998');
+  await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Course' }).click();
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Créer mon profil' }).click();
+  await expect(feed.getByRole('button', { name: /^J’aime/ }).first()).toHaveAttribute('aria-pressed', 'true');
+  // Un parcours en détail : commentaire, puis l'auteur suivi.
+  await feed.getByRole('button', { name: /Jardin des Plantes|Tour de l’île/ }).first().click();
+  const fold = page.getByRole('button', { name: /Taille du panneau : réduit/ });
+  if (await fold.count()) await fold.click();
+  await page.getByRole('textbox', { name: 'Ton commentaire' }).fill('Fait ce matin, superbe.');
+  await page.getByRole('button', { name: 'Envoyer le commentaire' }).click();
+  await expect(page.getByText('Fait ce matin, superbe.')).toBeVisible();
+  await page.locator('.author .who').click();
+  const profile = page.getByRole('region', { name: /^Profil de / });
+  await expect(profile).toBeVisible();
+  await page.getByRole('button', { name: /^Suivre / }).click();
+  await expect(page.getByRole('button', { name: /^Ne plus suivre / })).toBeVisible();
+  // Publier un parcours créé.
+  await page.getByRole('button', { name: /Retour à la Communauté/ }).click();
+  await page.getByRole('button', { name: /Retour aux réglages/ }).click();
+  await createLoop(page);
+  await page.getByRole('button', { name: 'Publier' }).click();
+  await page.getByRole('textbox', { name: 'Nom' }).fill('Ma boucle de test');
+  await page.locator('form').getByRole('button', { name: 'Publier' }).click();
+  await expect(page.getByText('Publié dans la Communauté')).toBeVisible();
+});

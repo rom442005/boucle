@@ -1,0 +1,531 @@
+import type { LngLat, Route, Sport } from './types';
+import { deserialize, serialize } from './persist';
+import { hidePrivateZone } from './community/privacy';
+import { checkText } from './community/moderation';
+import { communityConfigured } from './community/config';
+import {
+  CommunityError,
+  type Comment,
+  type CommunityBackend,
+  type CommunityRoute,
+  type FeedKind,
+  type PrivateProfile,
+  type Profile,
+  type ProfileInput,
+  type ProfileStats,
+  type Session,
+} from './community/types';
+import { app } from './state.svelte';
+import { haptic } from './haptics';
+import { cumulative } from './geo';
+import { elevationStats } from './elevation';
+
+/*
+ * La Communauté, comme sur Strava : un compte (code reçu par e-mail, puis un profil), un fil des parcours
+ * publiés autour de soi, de ses abonnements ou les plus aimés, des j'aime, des commentaires, des profils
+ * à suivre, et des parcours à reprendre (suivre, favori, GPX, mêmes réglages). Modération : signaler,
+ * masquer une personne, retirer ce qu'on a publié, supprimer son compte.
+ */
+
+const DEMO_FLAG = 'boucle.demo';
+const PUBLISHED_KEY = 'boucle.publies.v1';
+
+/** Écran du panneau qui remplace le contenu habituel le temps d'une action (sans fenêtre par-dessus). */
+export type Sheet =
+  | { kind: 'auth'; reason: string; then?: () => void }
+  | { kind: 'publish' }
+  | { kind: 'edit' }
+  | { kind: 'report'; target: { routeId?: string; commentId?: string; profileId?: string }; label: string };
+
+export type CommunityView = 'feed' | 'profile';
+
+function readFlag(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeFlag(key: string, v: string | null) {
+  try {
+    if (v == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, v);
+  } catch {
+    /* sans mémoire */
+  }
+}
+
+/** Démonstration demandée (?demo=communaute), gardée d'une visite à l'autre jusqu'à « Quitter la démo ». */
+function demoRequested(): boolean {
+  if (typeof location !== 'undefined' && /[?&]demo=communaute\b/.test(location.search)) writeFlag(DEMO_FLAG, '1');
+  return readFlag(DEMO_FLAG) === '1';
+}
+
+class CommunityState {
+  /** la Communauté est disponible (serveur configuré, ou démonstration) */
+  available = $state(false);
+  demo = $state(false);
+  ready = $state(false);
+  session = $state.raw<Session | null>(null);
+  me = $state.raw<Profile | null>(null);
+  myPrivate = $state.raw<PrivateProfile | null>(null);
+
+  view = $state<CommunityView>('feed');
+  sheet = $state.raw<Sheet | null>(null);
+
+  feedKind = $state<FeedKind>('nearby');
+  sport = $state<Sport | null>(null);
+  feed = $state.raw<CommunityRoute[]>([]);
+  loading = $state(false);
+  error = $state<string | null>(null);
+
+  /** parcours de la communauté ouvert en détail */
+  current = $state.raw<CommunityRoute | null>(null);
+  comments = $state.raw<Comment[]>([]);
+  commentsLoading = $state(false);
+
+  /** profil affiché */
+  viewing = $state.raw<{ profile: Profile; stats: ProfileStats; routes: CommunityRoute[] } | null>(null);
+  following = $state.raw<string[]>([]);
+  blocked = $state.raw<string[]>([]);
+  /** parcours publiés depuis cet appareil : identifiant local → identifiant dans la communauté */
+  published = $state<Record<string, string>>({});
+
+  private backend: CommunityBackend | null = null;
+  private starting: Promise<CommunityBackend | null> | null = null;
+
+  constructor() {
+    try {
+      this.published = JSON.parse(readFlag(PUBLISHED_KEY) ?? '{}');
+    } catch {
+      this.published = {};
+    }
+    this.demo = typeof window !== 'undefined' && demoRequested();
+    this.available = this.demo || communityConfigured();
+    app.onCommunityUse = (id) => this.used(id);
+  }
+
+  get signedIn() {
+    return !!this.session && !!this.me;
+  }
+
+  /** Démarre la Communauté (chargée à la demande) et reprend la session. */
+  start(): Promise<CommunityBackend | null> {
+    this.starting ??= (async () => {
+      if (!this.available) return null;
+      try {
+        const b = this.demo ? await (await import('./community/local')).createLocalBackend() : await (await import('./community/supabase')).createSupabaseBackend();
+        this.backend = b;
+        b.onSession((s) => {
+          this.session = s;
+          if (!s) {
+            this.me = null;
+            this.myPrivate = null;
+          }
+        });
+        this.session = await b.session();
+        if (this.session) await this.loadMe();
+        this.ready = true;
+        return b;
+      } catch (e) {
+        console.error(e);
+        this.error = 'Communauté indisponible pour le moment.';
+        this.starting = null;
+        return null;
+      }
+    })();
+    return this.starting;
+  }
+
+  private async api(): Promise<CommunityBackend> {
+    const b = this.backend ?? (await this.start());
+    if (!b) throw new CommunityError('La Communauté arrive bientôt.');
+    return b;
+  }
+
+  private async loadMe() {
+    const b = await this.api();
+    const mine = await b.myProfile();
+    this.me = mine?.profile ?? null;
+    this.myPrivate = mine?.priv ?? null;
+    [this.following, this.blocked] = await Promise.all([b.following(), b.blocked()]);
+  }
+
+  /** Erreur lisible, en bandeau. */
+  private say(e: unknown, fallback = 'Action impossible pour le moment.') {
+    const msg = e instanceof CommunityError ? e.message : fallback;
+    if (!(e instanceof CommunityError)) console.error(e);
+    app.showToast(msg);
+    haptic('warn');
+  }
+
+  /**
+   * Une action qui demande un compte : faite tout de suite si l'on est connecté (profil complet),
+   * sinon après la connexion, qui s'ouvre dans le panneau.
+   */
+  async requireAccount(reason: string, then: () => void) {
+    await this.start();
+    if (this.signedIn) then();
+    else this.sheet = { kind: 'auth', reason, then };
+  }
+
+  /* ------------------------------------------ Compte ------------------------------------------ */
+
+  async sendCode(email: string) {
+    await (await this.api()).sendCode(email.trim());
+  }
+
+  /** Code reçu : connecté ; reste le profil à remplir s'il n'existe pas encore. */
+  async verifyCode(email: string, code: string): Promise<'done' | 'profile'> {
+    const b = await this.api();
+    this.session = await b.verifyCode(email.trim(), code.trim());
+    await this.loadMe();
+    if (this.me) {
+      this.finishAuth();
+      return 'done';
+    }
+    return 'profile';
+  }
+
+  async saveProfile(p: ProfileInput, priv: PrivateProfile) {
+    for (const t of [p.firstName, p.city ?? '', p.bio ?? '']) {
+      const bad = checkText(t);
+      if (bad) throw new CommunityError(bad);
+    }
+    const b = await this.api();
+    this.me = await b.saveProfile(p, priv);
+    this.myPrivate = priv;
+  }
+
+  /** Après la connexion (et le profil) : l'action qui l'avait demandée reprend. */
+  finishAuth() {
+    const s = this.sheet;
+    this.sheet = null;
+    haptic('success');
+    if (s?.kind === 'auth') s.then?.();
+  }
+
+  async signOut() {
+    await (await this.api()).signOut();
+    this.session = null;
+    this.me = null;
+    this.myPrivate = null;
+    this.following = [];
+    this.blocked = [];
+    this.view = 'feed';
+    app.showToast('Déconnecté');
+  }
+
+  async deleteAccount() {
+    try {
+      await (await this.api()).deleteAccount();
+      this.session = null;
+      this.me = null;
+      this.myPrivate = null;
+      this.published = {};
+      writeFlag(PUBLISHED_KEY, null);
+      this.view = 'feed';
+      this.sheet = null;
+      app.showToast('Compte supprimé, avec tout ce que tu avais publié.');
+      void this.loadFeed();
+    } catch (e) {
+      this.say(e, 'Suppression impossible pour le moment. Réessaie.');
+    }
+  }
+
+  quitDemo() {
+    writeFlag(DEMO_FLAG, null);
+    writeFlag('boucle.demo.communaute.v1', null);
+    location.replace(location.pathname);
+  }
+
+  /* ------------------------------------------- Fil ------------------------------------------- */
+
+  /** Point de référence du fil « Autour de toi » : ta position, sinon le départ choisi. */
+  private center(): LngLat | null {
+    return app.userPos ?? app.start?.coord ?? null;
+  }
+
+  async loadFeed() {
+    this.loading = true;
+    this.error = null;
+    try {
+      const b = await this.api();
+      const list = await b.feed({ kind: this.feedKind, center: this.center(), sport: this.sport });
+      this.feed = list.filter((r) => !this.blocked.includes(r.authorId));
+    } catch (e) {
+      this.error = e instanceof CommunityError ? e.message : 'Communauté indisponible pour le moment.';
+      this.feed = [];
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  setFeedKind(k: FeedKind) {
+    if (k === this.feedKind) return;
+    this.feedKind = k;
+    void this.loadFeed();
+  }
+
+  setSport(s: Sport | null) {
+    this.sport = this.sport === s ? null : s;
+    void this.loadFeed();
+  }
+
+  /** Ouvre la Communauté (onglet ou bouton). */
+  open() {
+    app.openCommunity();
+    this.view = 'feed';
+    void this.start().then(() => this.loadFeed());
+  }
+
+  /* ---------------------------------------- Un parcours ---------------------------------------- */
+
+  /** Un parcours de la communauté en détail : la carte le trace, comme les tiens. */
+  async openRoute(id: string, from?: CommunityRoute) {
+    try {
+      const b = await this.api();
+      const r = from ?? (await b.route(id));
+      if (!r) {
+        app.showToast('Ce parcours n’est plus publié.');
+        return;
+      }
+      this.current = r;
+      this.comments = [];
+      app.showCommunityRoute(this.toRoute(r));
+      void this.loadComments(r.id);
+      // À jour (j'aime, commentaires) sans attendre pour afficher.
+      if (from) void b.route(id).then((fresh) => fresh && this.current?.id === id && (this.current = fresh));
+    } catch (e) {
+      this.say(e);
+    }
+  }
+
+  toRoute(r: CommunityRoute): Route {
+    const route = deserialize({ ...r.data, id: `c-${r.id}`, n: r.name }, app.settings);
+    return { ...route, communityId: r.id };
+  }
+
+  async loadComments(routeId: string) {
+    this.commentsLoading = true;
+    try {
+      const list = await (await this.api()).comments(routeId);
+      if (this.current?.id === routeId) this.comments = list.filter((c) => !this.blocked.includes(c.authorId));
+    } catch {
+      /* les commentaires attendront */
+    } finally {
+      this.commentsLoading = false;
+    }
+  }
+
+  /** J'aime : immédiat à l'écran, envoyé ensuite (annulé si l'envoi échoue). */
+  toggleLike(r: CommunityRoute) {
+    void this.requireAccount('Connecte-toi pour aimer ce parcours.', async () => {
+      const on = !r.likedByMe;
+      const next = { ...r, likedByMe: on, likes: Math.max(0, r.likes + (on ? 1 : -1)) };
+      this.patchRoute(next);
+      haptic(on ? 'success' : 'tap');
+      try {
+        await (await this.api()).like(r.id, on);
+      } catch (e) {
+        this.patchRoute(r);
+        this.say(e);
+      }
+    });
+  }
+
+  private patchRoute(r: CommunityRoute) {
+    if (this.current?.id === r.id) this.current = r;
+    this.feed = this.feed.map((x) => (x.id === r.id ? r : x));
+    if (this.viewing) this.viewing = { ...this.viewing, routes: this.viewing.routes.map((x) => (x.id === r.id ? r : x)) };
+  }
+
+  async addComment(body: string): Promise<boolean> {
+    const r = this.current;
+    if (!r) return false;
+    const text = body.trim();
+    if (!text) return false;
+    const bad = checkText(text);
+    if (bad) {
+      app.showToast(bad);
+      haptic('warn');
+      return false;
+    }
+    let ok = false;
+    await this.requireAccount('Connecte-toi pour commenter.', async () => {
+      try {
+        const c = await (await this.api()).comment(r.id, text);
+        this.comments = [...this.comments, c];
+        this.patchRoute({ ...r, comments: r.comments + 1 });
+        haptic('success');
+        ok = true;
+      } catch (e) {
+        this.say(e, 'Envoi impossible pour le moment.');
+      }
+    });
+    return ok;
+  }
+
+  async deleteComment(c: Comment) {
+    try {
+      await (await this.api()).deleteComment(c.id);
+      this.comments = this.comments.filter((x) => x.id !== c.id);
+      const r = this.current;
+      if (r) this.patchRoute({ ...r, comments: Math.max(0, r.comments - 1) });
+      app.showToast('Commentaire retiré');
+    } catch (e) {
+      this.say(e);
+    }
+  }
+
+  /** Un parcours de la communauté repris (favori, suivi, GPX) : compté pour son auteur. */
+  used(routeId?: string) {
+    if (!routeId || !this.backend) return;
+    void this.backend.used(routeId).catch(() => {});
+  }
+
+  /** Mêmes réglages que ce parcours, depuis ton départ : sport, distance, dénivelé, forme. */
+  reuseSettings(r: CommunityRoute) {
+    const route = this.toRoute(r);
+    app.reuseSettings(route);
+    this.used(r.id);
+  }
+
+  async unpublish(r: CommunityRoute) {
+    try {
+      await (await this.api()).unpublish(r.id);
+      this.feed = this.feed.filter((x) => x.id !== r.id);
+      for (const [local, remote] of Object.entries(this.published)) if (remote === r.id) delete this.published[local];
+      writeFlag(PUBLISHED_KEY, JSON.stringify(this.published));
+      if (this.viewing) this.viewing = { ...this.viewing, routes: this.viewing.routes.filter((x) => x.id !== r.id) };
+      app.showToast('Parcours retiré de la Communauté');
+      if (app.detailFrom?.kind === 'communaute') app.back();
+    } catch (e) {
+      this.say(e);
+    }
+  }
+
+  /* ---------------------------------------- Publier ---------------------------------------- */
+
+  /** Publier le parcours affiché : compte d'abord, puis le formulaire dans le panneau. */
+  startPublish() {
+    void this.requireAccount('Connecte-toi pour publier ce parcours.', () => (this.sheet = { kind: 'publish' }));
+  }
+
+  async publish(route: Route, opts: { name: string; description: string; hideStart: boolean }): Promise<boolean> {
+    const name = opts.name.trim().slice(0, 80) || route.name;
+    const description = opts.description.trim().slice(0, 500);
+    for (const t of [name, description]) {
+      const bad = checkText(t);
+      if (bad) {
+        app.showToast(bad);
+        haptic('warn');
+        return false;
+      }
+    }
+    try {
+      // Zone privée : le parcours publié commence et finit à 300 m de ton départ.
+      const t = opts.hideStart ? hidePrivateZone(route.coords, route.profile, 300) : { coords: route.coords, profile: route.profile, removed: 0 };
+      const cum = cumulative(t.coords);
+      const lengthM = cum[cum.length - 1] ?? route.lengthM;
+      const shown: Route = { ...route, name, coords: t.coords, profile: t.profile, lengthM, via: undefined };
+      const data = { ...serialize(shown, true), pr: undefined };
+      const out = await (await this.api()).publish({
+        name,
+        description: description || null,
+        sport: route.sport,
+        shape: route.shape,
+        distanceM: lengthM,
+        ascentM: elevationStats(t.profile).ascent,
+        start: t.coords[0],
+        data,
+      });
+      this.published = { ...this.published, [route.id]: out.id };
+      writeFlag(PUBLISHED_KEY, JSON.stringify(this.published));
+      this.sheet = null;
+      this.feed = [out, ...this.feed.filter((x) => x.id !== out.id)];
+      haptic('success');
+      app.showToast('Publié dans la Communauté');
+      return true;
+    } catch (e) {
+      this.say(e, 'Publication impossible pour le moment.');
+      return false;
+    }
+  }
+
+  /* ---------------------------------------- Profils ---------------------------------------- */
+
+  async openProfile(id: string) {
+    try {
+      const b = await this.api();
+      const [p, routes] = await Promise.all([b.profile(id), b.routesBy(id)]);
+      if (!p) {
+        app.showToast('Ce profil n’existe plus.');
+        return;
+      }
+      this.viewing = { ...p, routes };
+      if (app.phase !== 'community') app.openCommunity();
+      this.view = 'profile';
+    } catch (e) {
+      this.say(e);
+    }
+  }
+
+  async openMyProfile() {
+    await this.requireAccount('Connecte-toi pour retrouver ton profil.', () => void this.openProfile(this.me!.id));
+  }
+
+  toggleFollow(userId: string) {
+    void this.requireAccount('Connecte-toi pour suivre cette personne.', async () => {
+      const on = !this.following.includes(userId);
+      this.following = on ? [...this.following, userId] : this.following.filter((x) => x !== userId);
+      const v = this.viewing;
+      if (v && v.profile.id === userId) this.viewing = { ...v, stats: { ...v.stats, followedByMe: on, followers: Math.max(0, v.stats.followers + (on ? 1 : -1)) } };
+      haptic(on ? 'success' : 'tap');
+      try {
+        await (await this.api()).follow(userId, on);
+      } catch (e) {
+        this.following = on ? this.following.filter((x) => x !== userId) : [...this.following, userId];
+        this.say(e);
+      }
+    });
+  }
+
+  /** Masquer une personne : ses parcours et commentaires disparaissent pour toi. */
+  toggleBlock(userId: string, name: string) {
+    void this.requireAccount('Connecte-toi pour masquer cette personne.', async () => {
+      const on = !this.blocked.includes(userId);
+      try {
+        await (await this.api()).block(userId, on);
+        this.blocked = on ? [...this.blocked, userId] : this.blocked.filter((x) => x !== userId);
+        if (on) {
+          this.feed = this.feed.filter((r) => r.authorId !== userId);
+          this.comments = this.comments.filter((c) => c.authorId !== userId);
+          if (this.following.includes(userId)) await (await this.api()).follow(userId, false);
+          this.following = this.following.filter((x) => x !== userId);
+        }
+        app.showToast(on ? `${name} est masqué : tu ne verras plus ses parcours ni ses commentaires.` : `${name} n’est plus masqué.`);
+        if (on && app.detailFrom?.kind === 'communaute' && this.current?.authorId === userId) app.back();
+      } catch (e) {
+        this.say(e);
+      }
+    });
+  }
+
+  startReport(target: { routeId?: string; commentId?: string; profileId?: string }, label: string) {
+    void this.requireAccount('Connecte-toi pour signaler un contenu.', () => (this.sheet = { kind: 'report', target, label }));
+  }
+
+  async report(target: { routeId?: string; commentId?: string; profileId?: string }, reason: string) {
+    try {
+      await (await this.api()).report(target, reason);
+      this.sheet = null;
+      haptic('success');
+      app.showToast('Merci : le signalement est transmis, il sera examiné sous 24 h.');
+    } catch (e) {
+      this.say(e, 'Signalement impossible pour le moment.');
+    }
+  }
+}
+
+export const community = new CommunityState();

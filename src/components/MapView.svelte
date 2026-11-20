@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import maplibregl from 'maplibre-gl';
   import type { GeoJSONSource, Map as MLMap, Marker } from 'maplibre-gl';
-  import type { FeatureCollection, GeoJSON, Polygon } from 'geojson';
+  import type { FeatureCollection, GeoJSON, LineString, Polygon } from 'geojson';
   import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
   import { cityDot, globeLabels, prefetchEarth, registerEarth } from '../lib/earth';
@@ -10,7 +10,8 @@
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { ICONS } from '../lib/icons';
-  import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
+  import { bbox, cumulative, decodePolyline, haversine, pointAt } from '../lib/geo';
+  import { community } from '../lib/community.svelte';
   import { km, kmValue, NNBSP } from '../lib/format';
   import { haptic, tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
@@ -164,7 +165,7 @@
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
     addCityDots();
-    for (const id of ['reach', 'aim', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar']) {
+    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -216,6 +217,10 @@
       layout: round,
       paint: { 'line-color': theme === 'dark' ? '#FFFFFF' : '#1C1C1E', 'line-opacity': 0.5, 'line-width': 1.75, 'line-dasharray': [0.1, 2.2] },
     });
+    // Communauté : les parcours publiés autour de toi, en traits fins ; un toucher en ouvre un.
+    m.addLayer({ id: 'community-casing', type: 'line', source: 'community', layout: round, paint: { 'line-color': casing, 'line-width': zw(4, 7), 'line-opacity': 0.7 } });
+    m.addLayer({ id: 'community-line', type: 'line', source: 'community', layout: round, paint: { 'line-color': tint, 'line-width': zw(2.2, 4), 'line-opacity': 0.62 } });
+    m.addLayer({ id: 'community-hit', type: 'line', source: 'community', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 22 } });
     m.addLayer({ id: 'alt-casing', type: 'line', source: 'alt', layout: round, paint: { 'line-color': casing, 'line-width': zw(5, 9), 'line-opacity': ALT_OPACITY.casing } });
     m.addLayer({ id: 'alt-line', type: 'line', source: 'alt', layout: round, paint: { 'line-color': theme === 'dark' ? '#98989D' : '#8E8E93', 'line-opacity': altLineOpacity(), 'line-width': zw(3, 5.5) } });
     m.addLayer({ id: 'alt-hit', type: 'line', source: 'alt', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 24 } });
@@ -1109,6 +1114,15 @@
       const idx = e.features?.[0]?.properties?.idx;
       if (typeof idx === 'number' && !app.pickOnMap) app.select(idx);
     });
+    map.on('click', 'community-hit', (e) => {
+      const id = e.features?.[0]?.properties?.id;
+      if (typeof id === 'string' && app.phase === 'community') {
+        haptic('tap');
+        void community.openRoute(id, community.feed.find((r) => r.id === id));
+      }
+    });
+    map.on('mouseenter', 'community-hit', () => (map!.getCanvas().style.cursor = 'pointer'));
+    map.on('mouseleave', 'community-hit', () => (map!.getCanvas().style.cursor = ''));
     map.on('mouseenter', 'alt-hit', () => (map!.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', 'alt-hit', () => (map!.getCanvas().style.cursor = ''));
     const placeStart = (ll: maplibregl.LngLat) => {
@@ -1337,6 +1351,21 @@
     if (!ready) return;
     const s = app.start?.coord;
     setData('aim', aim && aimKind === 'destination' && s ? lineFeature([s, aim.ll]) : EMPTY);
+  });
+
+  // Communauté : les parcours du fil sur la carte, cadrés à leur arrivée (les plus proches d'abord).
+  let communityKey = '';
+  $effect(() => {
+    if (!ready || !map) return;
+    const list = app.phase === 'community' && community.view === 'feed' ? community.feed : [];
+    const features = list.map((r) => lineFeature(decodePolyline(r.data.p, r.data.q), { id: r.id }));
+    setData('community', { type: 'FeatureCollection', features });
+    const key = list.map((r) => r.id).join(',');
+    if (key && key !== communityKey) {
+      const near = features.slice(0, 8).flatMap((f) => (f.geometry as LineString).coordinates as LngLat[]);
+      if (near.length) requestAnimationFrame(() => fitCoords(near));
+    }
+    communityKey = key;
   });
 
   /** Tracé affiché et nombre de propositions secondaires (pour ne pas retracer quand d'autres arrivent). */

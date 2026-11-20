@@ -371,6 +371,18 @@ One authored moment, the rest feedback and continuity. Shared timing lives in `s
 - **Feedback:** chips and segment icons pop on a spring; Favorite and Done send a ring and a glow from their icon; proposals arrive one after another from blur to sharp, their mini routes drawing themselves; lists (library, search results) cascade in 40 ms steps; banners slide in.
 - **Reduce Motion:** no pen, no swing, no rising relief, no sonar (the zone just lights up); crossfades and colour changes stay, as they carry state.
 
+### Community
+Strava's social layer in Boucle's vocabulary: no new visual language, the same grouped lists, pills and capsules.
+- **Navigation:** a third tab (Créer · Communauté · Mes parcours) on its own full-width segmented row under the brand on Mac; on iPhone a glass round button (three people) next to the library button. The community header carries the member's avatar (or a person icon when signed out) on the right.
+- **Feed item:** a row in the grouped list: avatar (initial on a habitat hue, stable per member), first name, level, city and relative date; then the route glyph (54 px), name (2 lines), stats, distance from you; a footer with the heart (count) and comments (count), and "Repris N fois" on the right. The heart fills pink and pops on a spring when liked.
+- **Feed modes:** segmented Autour de toi · Abonnements · Populaires, then sport chips (pink tint when on). Feed routes are drawn on the map as thin pink lines over a casing; touching one opens it.
+- **Loading:** a skeleton of the list (dashed glyph circles and bars) pulsing softly; never a spinner in the content.
+- **Empty states teach:** what to do next and one button to do it (create a route, see nearby).
+- **Account flow, in the panel, never a modal:** email → 6-digit code (large tabular digits, one-time-code autofill) → profile form. The action that asked for an account resumes after it (like, comment, follow, publish).
+- **Route detail (community):** author row with a Suivre pill above the title, description, actions J'aime (filled heart, count) · Favori · Fait · GPX · Partager · Réutiliser, then Signaler / Masquer as small secondary text buttons, and comments as Group Fill bubbles with a composer (pink round send button).
+- **Publish and report:** forms that replace the panel content with a close button; publish shows the route glyph, name, description and the "Masquer mon départ" switch (on by default).
+- **Profile:** 64 px avatar, name, level and city, sports in pink icons, four counts in one grouped strip, Suivre / Modifier le profil, the member's routes, and for oneself the account group (sign out, privacy, terms) with an in-page two-step account deletion in system red.
+
 ### Climbs and descents
 Notable climbs and descents ("Côtes et descentes") are found on the profile: high and low points with a 4 m hysteresis, flat ends trimmed, kept from 12 m of gain, 120 m of length and a 2 % average, at most eight, in route order. Each one is a small glass capsule on the map at its midpoint (a 18 px disc in its slope colour with a trend arrow, then "+28 m · 4 %" in rounded 11 px tabular figures), a row in the results ("Montée raide", "km 0,3 · 0,7 km à 4 % · max 7,8 %", "+28 m"), and, once touched, a halo of its colour under the route, a camera fit on it, a tinted band with its gain over the profile and a dark ring on its capsule. During live follow, the HUD announces the current or next one within 1.5 km ("Descente dans 170 m : 0,5 km à 3 %"). In 3D the terrain exaggeration follows the route's relief (2.4x under 40 m of range down to 1.3x in mountains) and the hillshade strengthens, so the hills of a flat city still read.
 
