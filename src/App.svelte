@@ -54,7 +54,7 @@
       } catch {
         seen = true;
       }
-      if (community.available && !community.signedIn && !seen && !location.hash.startsWith('#r=')) welcome = true;
+      if (community.available && !community.session && !seen && !location.hash.startsWith('#r=')) welcome = true;
     });
     const onWide = () => (app.wide = wideQuery.matches);
     wideQuery.addEventListener('change', onWide);

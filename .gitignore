@@ -9,3 +9,6 @@ playwright-report/
 # Contexte de travail local (contient des informations personnelles) : pas dans le dépôt public
 PRODUCT.md
 .impeccable/
+
+# Réglages locaux (serveur de la communauté pour la version iPhone)
+*.local

@@ -229,3 +229,13 @@ create policy "ses blocages" on public.blocks for all to authenticated using (bl
 
 drop policy if exists "signaler" on public.reports;
 create policy "signaler" on public.reports for insert to authenticated with check (reporter_id = auth.uid());
+
+-- ---------------------------------------------------------------- Droits de l'API
+
+-- Les règles d'accès ci-dessus décident ligne par ligne ; ces droits ouvrent les tables à l'API.
+grant usage on schema public to anon, authenticated;
+grant select on public.profiles, public.routes, public.likes, public.comments, public.follows to anon, authenticated;
+grant select on public.routes_feed, public.comments_feed, public.profile_stats to anon, authenticated;
+grant insert, update, delete on public.profiles, public.routes, public.likes, public.comments, public.follows to authenticated;
+grant select, insert, update, delete on public.profiles_private, public.blocks to authenticated;
+grant insert on public.reports to authenticated;

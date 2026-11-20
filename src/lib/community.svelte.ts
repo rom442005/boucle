@@ -121,15 +121,19 @@ class CommunityState {
         const b = this.demo ? await (await import('./community/local')).createLocalBackend() : await (await import('./community/supabase')).createSupabaseBackend();
         this.backend = b;
         b.onSession((s) => {
+          const fresh = !!s && s.userId !== this.session?.userId;
           this.session = s;
           if (!s) {
             this.me = null;
             this.myPrivate = null;
-          }
+          } else if (fresh && this.ready && !this.verifying) void this.arrived();
         });
+        this.linkError();
         this.session = await b.session();
         if (this.session) await this.loadMe();
         this.ready = true;
+        // Revenu par le lien de l'e-mail sans profil : dernière étape, le profil.
+        if (this.session && !this.me) this.sheet ??= { kind: 'auth', reason: 'Dernière étape : ton profil.' };
         return b;
       } catch (e) {
         console.error(e);
@@ -179,10 +183,40 @@ class CommunityState {
     await (await this.api()).sendCode(email.trim());
   }
 
+  private verifying = false;
+
+  /**
+   * Connecté par le lien de l'e-mail (dans cet onglet ou un autre) : l'action en attente reprend,
+   * ou le profil s'ouvre s'il n'existe pas encore.
+   */
+  private async arrived() {
+    try {
+      await this.loadMe();
+    } catch (e) {
+      return this.say(e);
+    }
+    if (this.me) {
+      if (this.sheet?.kind === 'auth') this.finishAuth();
+      else haptic('success');
+    } else this.sheet ??= { kind: 'auth', reason: 'Dernière étape : ton profil.' };
+  }
+
+  /** Lien de l'e-mail périmé ou déjà utilisé : on le dit, et l'adresse redevient propre. */
+  private linkError() {
+    if (typeof location === 'undefined' || !/[#&]error(_code)?=/.test(location.hash)) return;
+    app.showToast(/otp_expired/.test(location.hash) ? 'Lien expiré ou déjà utilisé : redemande un e-mail.' : 'Connexion impossible avec ce lien : redemande un e-mail.');
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+
   /** Code reçu : connecté ; reste le profil à remplir s'il n'existe pas encore. */
   async verifyCode(email: string, code: string): Promise<'done' | 'profile'> {
     const b = await this.api();
-    this.session = await b.verifyCode(email.trim(), code.trim());
+    this.verifying = true;
+    try {
+      this.session = await b.verifyCode(email.trim(), code.trim());
+    } finally {
+      this.verifying = false;
+    }
     await this.loadMe();
     if (this.me) {
       this.finishAuth();

@@ -117,7 +117,7 @@ const degSpan = (lat: number, km: number) => ({ dLat: km / 111, dLng: km / (111 
 export async function createSupabaseBackend(): Promise<CommunityBackend> {
   const { createClient } = await import('@supabase/supabase-js');
   const sb: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'boucle.compte' },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit', storageKey: 'boucle.compte' },
   });
   const uid = async () => (await sb.auth.getSession()).data.session?.user.id ?? null;
   const need = async () => {
@@ -137,7 +137,9 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       sb.auth.onAuthStateChange((_e, s) => cb(toSession(s)));
     },
     async sendCode(email) {
-      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      // L'e-mail contient un lien de connexion (et le code, si le modèle d'e-mail l'affiche) : il ramène ici.
+      const here = /^https?:$/.test(location.protocol) ? location.origin + location.pathname : undefined;
+      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: here } });
       if (error) fail(error, 'Envoi du code impossible. Vérifie l’adresse e-mail.');
     },
     async verifyCode(email, code) {
