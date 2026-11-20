@@ -17,8 +17,6 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let resent = $state(false);
-  /** en ligne, l'e-mail porte d'abord un lien ; le code reste possible */
-  let typing = $state(community.demo);
 
   // Connecté par le lien de l'e-mail (ici ou dans un autre onglet) : reste le profil.
   $effect(() => {
@@ -85,37 +83,32 @@
       {#if community.demo}
         <div class="banner" role="note"><span class="icon"><Icon name="mail" size={18} /></span><span>Pas encore d’e-mail : les comptes vivent sur cet appareil le temps que le serveur soit mis en ligne. Le code est <b>123456</b>.</span></div>
       {:else}
-        <p class="hint">Pas de mot de passe : un lien de connexion arrive par e-mail. Il crée ton compte la première fois.</p>
+        <p class="hint">Pas de mot de passe : un code à 6 chiffres arrive par e-mail. Il crée ton compte la première fois.</p>
       {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
-      <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Envoi…' : community.demo ? 'Recevoir un code' : 'Recevoir le lien'}</button>
+      <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Envoi…' : 'Recevoir un code'}</button>
     </form>
   {:else if step === 'code'}
     <form class="step" onsubmit={verify} novalidate>
       {#if community.demo}
         <p class="sent"><Icon name="mail" size={18} />Aucun e-mail envoyé pour l’instant : saisis <b>123456</b>.</p>
       {:else}
-        <p class="sent"><Icon name="mail" size={18} /><span>E-mail envoyé à <b>{email}</b></span></p>
-        <p class="hint">Ouvre-le et touche le lien de connexion : Boucle s’ouvre, connecté. Pense aux courriers indésirables.</p>
+        <p class="sent"><Icon name="mail" size={18} /><span>Code envoyé à <b>{email}</b></span></p>
       {/if}
-      {#if typing}
-        <label class="field">
-          <span class="field-label">Code à 6 chiffres</span>
-          <input class="input code tabular" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="000000" bind:value={code} use:autofocus required />
-        </label>
-        {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
-        <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Vérification…' : 'Valider'}</button>
-      {:else}
-        {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
-        <button use:tactile type="button" class="pill" onclick={() => (typing = true)}>J’ai reçu un code</button>
-      {/if}
+      <label class="field">
+        <span class="field-label">Code à 6 chiffres</span>
+        <input class="input code tabular" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="000000" bind:value={code} use:autofocus required />
+      </label>
+      {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
+      <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Vérification…' : 'Valider'}</button>
       <div class="again">
         <button use:tactile type="button" class="text-btn" disabled={busy} onclick={async () => {
             await send();
             resent = true;
-          }}>{resent ? 'E-mail renvoyé' : 'Renvoyer l’e-mail'}</button>
+          }}>{resent ? 'Code renvoyé' : 'Renvoyer le code'}</button>
         <button use:tactile type="button" class="text-btn" onclick={() => (step = 'email')}>Changer d’adresse</button>
       </div>
+      {#if !community.demo}<p class="hint">Rien reçu ? Regarde dans les courriers indésirables. Le lien de l’e-mail connecte aussi.</p>{/if}
     </form>
   {:else}
     <div class="lead">

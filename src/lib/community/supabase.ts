@@ -137,7 +137,7 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       sb.auth.onAuthStateChange((_e, s) => cb(toSession(s)));
     },
     async sendCode(email) {
-      // L'e-mail contient un lien de connexion (et le code, si le modèle d'e-mail l'affiche) : il ramène ici.
+      // L'e-mail contient le code à 6 chiffres et un lien de connexion qui ramène ici.
       const here = /^https?:$/.test(location.protocol) ? location.origin + location.pathname : undefined;
       const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: here } });
       if (error) fail(error, 'Envoi du code impossible. Vérifie l’adresse e-mail.');
