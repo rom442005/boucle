@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import { tactile } from '../lib/haptics';
   import { app } from '../lib/state.svelte';
   import { searchPlaces } from '../lib/services';
   import type { Place } from '../lib/types';
@@ -83,11 +84,11 @@
         placeholder={HINT[kind]}
       />
     </label>
-    <button type="button" class="text-btn" onclick={close}>Annuler</button>
+    <button use:tactile type="button" class="text-btn" onclick={close}>Annuler</button>
   </div>
 
   {#snippet mapRow()}
-    <button type="button" class="row" onclick={onMap}>
+    <button use:tactile type="button" class="row" onclick={onMap}>
       <span class="ic" class:map-ic={kind !== 'start'}><Icon name="crosshair" size={18} /></span>
       <span class="row-label">
         Choisir sur la carte
@@ -96,7 +97,7 @@
     </button>
   {/snippet}
   {#snippet mineRow()}
-    <button type="button" class="row" onclick={mine}>
+    <button use:tactile type="button" class="row" onclick={mine}>
       <span class="ic loc"><Icon name="locate" size={18} fill /></span>
       <span class="row-label">Ma position</span>
     </button>
@@ -124,7 +125,7 @@
     {:else if results.length}
       <div class="group">
         {#each results as p, i (i)}
-          <button type="button" class="row" onclick={() => choose(p)}>
+          <button use:tactile type="button" class="row cascade" style:--i={Math.min(i, 8)} onclick={() => choose(p)}>
             <span class="ic"><Icon name="pin" size={16} /></span>
             <span class="row-label">{p.name}{#if p.detail}<span class="row-sub">{p.detail}</span>{/if}</span>
           </button>

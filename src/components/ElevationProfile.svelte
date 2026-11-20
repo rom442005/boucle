@@ -56,6 +56,11 @@
   });
   const line = $derived(samples.map(([s, e], i) => `${i ? 'L' : 'M'}${x(s).toFixed(1)},${y(e).toFixed(1)}`).join(' '));
 
+  /** Le profil se dessine au même rythme que le parcours sur la carte (app.revealK), une pointe en tête. */
+  const clipId = `trace-${Math.random().toString(36).slice(2, 8)}`;
+  const k = $derived(app.revealK);
+  const pen = $derived(k < 1 ? { x: x(L * k), y: y(eleAt(route.profile, L * k)) } : null);
+
   function nice(span: number, target: number) {
     const raw = span / target;
     const pow = 10 ** Math.floor(Math.log10(raw));
@@ -157,13 +162,22 @@
     {#if focus}
       <rect class="focus" x={focus.x1} y={padT - 2} width={Math.max(2, focus.x2 - focus.x1)} height={innerH + 2} rx="4" fill={focus.color} />
     {/if}
-    {#each areas as a, i (i)}
-      <path d={a.d} fill={a.color} opacity={focus && (a.x2 < focus.x1 || a.x1 > focus.x2) ? 0.45 : 1} />
-    {/each}
+    <defs>
+      <clipPath id={clipId}><rect x="0" y="0" width={k < 1 ? x(L * k) : w} {height} /></clipPath>
+    </defs>
+    <g clip-path={k < 1 ? `url(#${clipId})` : undefined}>
+      {#each areas as a, i (i)}
+        <path d={a.d} fill={a.color} opacity={focus && (a.x2 < focus.x1 || a.x1 > focus.x2) ? 0.45 : 1} />
+      {/each}
+      <path class="edge" d={line} />
+    </g>
     {#if focus}
       <text class="flab tabular" x={(focus.x1 + focus.x2) / 2} y={padT - 3} text-anchor="middle">{focus.label}</text>
     {/if}
-    <path class="edge" d={line} />
+    {#if pen}
+      <circle class="pen-glow" cx={pen.x} cy={pen.y} r="9" />
+      <circle class="pen" cx={pen.x} cy={pen.y} r="4.5" />
+    {/if}
     {#each xTicks as t, i (t)}
       <text class="xlab tabular" x={x(t * 1000)} y={height - 6} text-anchor={i === 0 ? 'start' : 'middle'}>
         {t.toLocaleString('fr-FR')}{i === xTicks.length - 1 ? `${NNBSP}km` : ''}
@@ -186,6 +200,15 @@
 </div>
 
 <style>
+  .pen-glow {
+    fill: var(--tint);
+    opacity: 0.25;
+  }
+  .pen {
+    fill: #fff;
+    stroke: var(--tint);
+    stroke-width: 2.5;
+  }
   .profile {
     position: relative;
     width: 100%;

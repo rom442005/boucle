@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import RollingNumber from './RollingNumber.svelte';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
 
   let {
     id,
@@ -41,14 +41,27 @@
 
   const f = $derived((Math.min(max, Math.max(min, value)) - min) / (max - min || 1));
 
+  /** Le pouce « cogne » à chaque palier franchi : le tic qu'on sent sur Android, et qu'on voit partout. */
+  function bump(el: HTMLInputElement, strong: boolean) {
+    el.classList.remove('bump', 'bump-strong');
+    void el.offsetWidth;
+    el.classList.add(strong ? 'bump-strong' : 'bump');
+  }
   function input(e: Event) {
-    const v = Number((e.currentTarget as HTMLInputElement).value);
+    const el = e.currentTarget as HTMLInputElement;
+    const v = Number(el.value);
     const every = tickEvery ?? step;
     const before = Math.floor((off ? min : value) / every + 1e-9);
     const after = Math.floor(v / every + 1e-9);
     if (v === min || v === max) {
-      if (v !== value || off) haptic('tap');
-    } else if (after !== before) haptic('tick');
+      if (v !== value || off) {
+        haptic('tap');
+        bump(el, true);
+      }
+    } else if (after !== before) {
+      haptic('tick');
+      bump(el, false);
+    }
     onchange(v);
   }
 </script>
@@ -62,7 +75,7 @@
       {:else}
         <span class="num rounded" aria-hidden="true"><RollingNumber value={display} /></span><span class="unit" aria-hidden="true">{unit}</span>
         {#if onreset}
-          <button type="button" class="reset" onclick={onreset} aria-label="Remettre {label.toLowerCase()} sur indifférent">
+          <button use:tactile type="button" class="reset" onclick={onreset} aria-label="Remettre {label.toLowerCase()} sur indifférent">
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor" opacity=".18" /><path d="M5.5 5.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
           </button>
         {/if}

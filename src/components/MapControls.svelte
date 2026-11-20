@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
   import { ORTHO_TILES, type MapType } from '../lib/mapstyle';
@@ -51,7 +51,7 @@
 <div class="ctrls-wrap" class:wide={app.wide} bind:this={pill}>
 <div class="ctrls glass" role="toolbar" aria-label="Carte">
   <!-- Comme dans Plans : le type de carte en haut de la pilule. -->
-  <button
+  <button use:tactile
     type="button"
     class="round type-btn"
     aria-label="Type de carte : {app.mapType === 'satellite' ? 'Satellite' : 'Plan'}"
@@ -65,12 +65,12 @@
     <Icon name={app.mapType === 'satellite' ? 'globe' : 'map'} size={21} />
   </button>
   <span class="sep" aria-hidden="true"></span>
-  <button type="button" class="round" aria-label="Me localiser" aria-busy={app.locating} onclick={() => app.locateButton()}>
+  <button use:tactile type="button" class="round" aria-label="Me localiser" aria-busy={app.locating} onclick={() => app.locateButton()}>
     <span class:spin={app.locating}><Icon name="locate" size={20} fill={!!app.userPos} /></span>
   </button>
   <span class="sep" aria-hidden="true"></span>
   <!-- Comme dans Plans : le bouton annonce la vue vers laquelle il bascule. -->
-  <button
+  <button use:tactile
     type="button"
     class="round"
     aria-pressed={app.terrain3d}
@@ -85,7 +85,7 @@
   </button>
   {#if Math.abs(app.bearing) > 2}
     <span class="sep" aria-hidden="true"></span>
-    <button type="button" class="round" aria-label="Remettre le nord en haut" onclick={() => app.northTick++}>
+    <button use:tactile type="button" class="round" aria-label="Remettre le nord en haut" onclick={() => app.northTick++}>
       <span class="compass" style:transform="rotate({-app.bearing}deg)"><Icon name="compass" size={22} /></span>
     </button>
   {/if}
@@ -93,9 +93,9 @@
 {#if app.wide}
   <!-- Comme dans Plans sur Mac : zoomer et dézoomer d'un clic ; dézoomer loin mène à la Terre entière. -->
   <div class="ctrls zoom glass" role="group" aria-label="Zoom">
-    <button type="button" class="round" aria-label="Zoomer" onclick={() => app.zoomBy(1)}><Icon name="plus" size={18} /></button>
+    <button use:tactile type="button" class="round" aria-label="Zoomer" onclick={() => app.zoomBy(1)}><Icon name="plus" size={18} /></button>
     <span class="sep" aria-hidden="true"></span>
-    <button type="button" class="round" aria-label="Dézoomer" onclick={() => app.zoomBy(-1)}><Icon name="minus" size={18} /></button>
+    <button use:tactile type="button" class="round" aria-label="Dézoomer" onclick={() => app.zoomBy(-1)}><Icon name="minus" size={18} /></button>
   </div>
 {/if}
 </div>
@@ -103,7 +103,7 @@
 {#if open}
   <div class="types glass glass-panel" class:wide={app.wide} role="group" aria-label="Type de carte">
     <div class="opts">
-      <button type="button" class="opt" aria-pressed={app.mapType === 'plan'} onclick={() => choose('plan')}>
+      <button use:tactile type="button" class="opt" aria-pressed={app.mapType === 'plan'} onclick={() => choose('plan')}>
         <span class="thumb plan" aria-hidden="true">
           <svg viewBox="0 0 96 64" preserveAspectRatio="xMidYMid slice">
             <rect width="96" height="64" class="t-land" />
@@ -116,7 +116,7 @@
         </span>
         <span class="opt-label">Plan</span>
       </button>
-      <button type="button" class="opt" aria-pressed={app.mapType === 'satellite'} onclick={() => choose('satellite')}>
+      <button use:tactile type="button" class="opt" aria-pressed={app.mapType === 'satellite'} onclick={() => choose('satellite')}>
         <span class="thumb sat" aria-hidden="true" style:background-image="url({thumb})"></span>
         <span class="opt-label">Satellite</span>
       </button>

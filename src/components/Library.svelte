@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import { tactile } from '../lib/haptics';
   import RouteGlyph from './RouteGlyph.svelte';
   import Segmented from './Segmented.svelte';
   import { app } from '../lib/state.svelte';
@@ -74,15 +75,15 @@
   {#if favorites.length}
     <div class="list-head">
       <h3 class="field-label">Parcours favoris</h3>
-      <button type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
+      <button use:tactile type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
     </div>
     <ul class="list" aria-label="Parcours favoris">
-      {#each favorites as it (it.s.id)}
-        <li class="li">
+      {#each favorites as it, i (it.s.id)}
+        <li class="li" style:--i={Math.min(i, 8)}>
           {#if editing}
-            <button type="button" class="del" aria-label="Retirer {it.s.n} des favoris" onclick={() => app.removeSaved(it.s.id)}><Icon name="remove" size={24} /></button>
+            <button use:tactile type="button" class="del" aria-label="Retirer {it.s.n} des favoris" onclick={() => app.removeSaved(it.s.id)}><Icon name="remove" size={24} /></button>
           {/if}
-          <button type="button" class="item" disabled={editing} onclick={() => app.openSaved(it.s.id)}>
+          <button use:tactile type="button" class="item" disabled={editing} onclick={() => app.openSaved(it.s.id)}>
             <RouteGlyph coords={it.coords} size={48} active />
             <span class="txt">
               <span class="name">{it.s.n}</span>
@@ -93,7 +94,7 @@
         </li>
       {/each}
     </ul>
-    <button type="button" class="pill import" onclick={() => file?.click()}><Icon name="upload" size={18} />Importer un GPX</button>
+    <button use:tactile type="button" class="pill import" onclick={() => file?.click()}><Icon name="upload" size={18} />Importer un GPX</button>
     <p class="hint foot">Favoris enregistrés sur cet appareil. Pour retrouver un parcours sur ton autre appareil, ouvre-le puis touche Partager.</p>
   {:else}
     <div class="empty">
@@ -105,8 +106,8 @@
       <h3>Aucun favori</h3>
       <p class="hint">Sur un parcours, touche <b>Favori</b> : il t’attendra ici.</p>
       <div class="empty-actions">
-        <button type="button" class="pill is-on" onclick={() => app.closeLibrary()}>Créer un parcours</button>
-        <button type="button" class="pill" onclick={() => file?.click()}><Icon name="upload" size={18} />Importer un GPX</button>
+        <button use:tactile type="button" class="pill is-on" onclick={() => app.closeLibrary()}>Créer un parcours</button>
+        <button use:tactile type="button" class="pill" onclick={() => file?.click()}><Icon name="upload" size={18} />Importer un GPX</button>
       </div>
     </div>
   {/if}
@@ -121,15 +122,15 @@
   </section>
   <div class="list-head">
     <h3 class="field-label">Sorties</h3>
-    <button type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
+    <button use:tactile type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
   </div>
   <ul class="list" aria-label="Historique des sorties">
-    {#each outings as o (o.h.id)}
-      <li class="li">
+    {#each outings as o, i (o.h.id)}
+      <li class="li" style:--i={Math.min(i, 8)}>
         {#if editing}
-          <button type="button" class="del" aria-label="Supprimer la sortie du {dateLong(o.h.date)}" onclick={() => app.removeHistory(o.h.id)}><Icon name="remove" size={24} /></button>
+          <button use:tactile type="button" class="del" aria-label="Supprimer la sortie du {dateLong(o.h.date)}" onclick={() => app.removeHistory(o.h.id)}><Icon name="remove" size={24} /></button>
         {/if}
-        <button type="button" class="item" disabled={editing} onclick={() => app.openHistory(o.h.id)}>
+        <button use:tactile type="button" class="item" disabled={editing} onclick={() => app.openHistory(o.h.id)}>
           <RouteGlyph coords={o.coords} size={48} active={o.h.complete} />
           <span class="txt">
             <span class="when">{dateLong(o.h.date)}{#if !o.h.complete}<span class="partial"> · partiel</span>{/if}</span>
@@ -148,7 +149,7 @@
     <h3>Aucune sortie pour l’instant</h3>
     <p class="hint">Suis un parcours en direct, ou touche <b>Fait</b> sur un parcours que tu as couru : il apparaîtra ici avec la date, la distance et le temps.</p>
     <div class="empty-actions">
-      <button type="button" class="pill is-on" onclick={() => app.closeLibrary()}>Créer un parcours</button>
+      <button use:tactile type="button" class="pill is-on" onclick={() => app.closeLibrary()}>Créer un parcours</button>
     </div>
   </div>
 {/if}

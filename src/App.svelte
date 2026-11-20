@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tactile } from './lib/haptics';
   import MapView from './components/MapView.svelte';
   import Panel from './components/Panel.svelte';
   import Composer from './components/Composer.svelte';
@@ -49,6 +50,14 @@
           : 'Nouveau parcours',
   );
   const busy = $derived(app.generating);
+  /** Un refus (aucun parcours possible, réseau) : le bouton tremble une fois. */
+  let ctaEl: HTMLButtonElement | undefined = $state();
+  $effect(() => {
+    if (!app.error || !ctaEl) return;
+    ctaEl.classList.remove('shake');
+    void ctaEl.offsetWidth;
+    ctaEl.classList.add('shake');
+  });
   let showInstall = $state(false);
 
   /** iPhone : balayer le résumé pour passer d'une proposition à l'autre. */
@@ -67,7 +76,7 @@
           <div class="banner is-error err" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{app.error}</span></div>
         {/if}
         <div class="cta-row">
-          <button type="button" class="cta" class:is-busy={busy} aria-live="polite" onclick={() => (busy ? null : app.create())} aria-disabled={busy}>
+          <button use:tactile type="button" class="cta" class:is-busy={busy} aria-live="polite" onclick={() => (busy ? null : app.create())} aria-disabled={busy} bind:this={ctaEl}>
             {#if busy}
               <span class="bar" style:transform="scaleX({app.progress?.ratio ?? 0.05})"></span>
               <span class="busy-text">{app.progress?.message ?? 'Recherche…'}</span>
@@ -76,11 +85,11 @@
             {/if}
           </button>
           {#if busy}
-            <button type="button" class="round cancel" aria-label="Annuler la création" onclick={() => app.cancel()}><Icon name="close" size={18} /></button>
+            <button use:tactile type="button" class="round cancel" aria-label="Annuler la création" onclick={() => app.cancel()}><Icon name="close" size={18} /></button>
           {/if}
         </div>
       {:else if (app.phase === 'results' || app.phase === 'detail') && app.route}
-        <button type="button" class="cta" onclick={() => app.startFollow()}><Icon name="play" size={18} />Suivre ce parcours</button>
+        <button use:tactile type="button" class="cta" onclick={() => app.startFollow()}><Icon name="play" size={18} />Suivre ce parcours</button>
       {/if}
 {/snippet}
 
@@ -90,7 +99,7 @@
   {#if !app.wide && app.phase === 'compose' && !app.pickOnMap}
     <div class="topbar">
       <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} floating onclick={() => (app.search = 'start')} />
-      <button type="button" class="round glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
+      <button use:tactile type="button" class="round glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
         <Icon name="list" />
       </button>
     </div>
@@ -110,12 +119,12 @@
             <svg viewBox="0 0 1024 1024" width="30" height="30"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
           </span>
           <h1>Boucle</h1>
-          <button type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
+          <button use:tactile type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
             <Icon name="phone" size={18} />
           </button>
           <nav class="tabs" aria-label="Sections">
-            <button type="button" class="pill" class:is-on={app.phase !== 'library' && app.phase !== 'detail'} onclick={() => (app.phase === 'library' || app.phase === 'detail' ? app.closeLibrary() : null)}>Créer</button>
-            <button type="button" class="pill" class:is-on={app.phase === 'library' || app.phase === 'detail'} onclick={() => app.openLibrary()}>
+            <button use:tactile type="button" class="pill" class:is-on={app.phase !== 'library' && app.phase !== 'detail'} onclick={() => (app.phase === 'library' || app.phase === 'detail' ? app.closeLibrary() : null)}>Créer</button>
+            <button use:tactile type="button" class="pill" class:is-on={app.phase === 'library' || app.phase === 'detail'} onclick={() => app.openLibrary()}>
               Mes parcours{#if app.library.length}<span class="tabular dim">&nbsp;{app.library.length}</span>{/if}
             </button>
           </nav>
@@ -135,22 +144,23 @@
       {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
         <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->
         <div class="nav sum">
-          <button type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => app.back()}>
+          <button use:tactile type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => app.back()}>
             <Icon name="back" size={20} />
           </button>
           <div class="sum-mid" data-toggle-sheet>
             <h2 class="visually-hidden">{headTitle}</h2>
             <p class="sum-stats rounded">
-              <span><RollingNumber value={kmValue(app.route.lengthM)} /><small>km</small></span>
-              <span><RollingNumber value={String(Math.round(app.route.ascent))} /><small>m D+</small></span>
-              <span><RollingNumber value={duration(app.route.durationS)} /></span>
+              <!-- Pendant le tracé, les chiffres montent avec le stylo : le compteur, c'est le parcours. -->
+              <span><RollingNumber value={kmValue(app.route.lengthM * app.revealK)} /><small>km</small></span>
+              <span><RollingNumber value={String(Math.round(app.route.ascent * app.revealK))} /><small>m D+</small></span>
+              <span><RollingNumber value={duration(app.route.durationS * app.revealK)} /></span>
             </p>
             {#if app.phase === 'results' && app.routes.length > 1}
               <span class="dots" aria-hidden="true">{#each app.routes as x, i (x.id)}<i class:on={i === app.selected}></i>{/each}</span>
             {/if}
           </div>
           {#if app.phase === 'results'}
-            <button type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
+            <button use:tactile type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
               <span class:spin={busy}><Icon name="again" size={20} /></span>
             </button>
           {:else}
@@ -159,12 +169,12 @@
         </div>
       {:else}
         <div class="nav">
-          <button type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => (app.phase === 'library' ? app.closeLibrary() : app.back())}>
+          <button use:tactile type="button" class="round navbtn" aria-label={app.phase === 'detail' ? 'Retour à mes parcours' : 'Retour aux réglages'} onclick={() => (app.phase === 'library' ? app.closeLibrary() : app.back())}>
             <Icon name="back" size={20} />
           </button>
           <h2>{headTitle}</h2>
           {#if app.phase === 'results'}
-            <button type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
+            <button use:tactile type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
               <span class:spin={busy}><Icon name="again" size={20} /></span>
             </button>
           {:else}
@@ -202,7 +212,7 @@
   <div class="picker glass" role="status">
     <Icon name="crosshair" size={18} />
     <span>{isDesktop ? 'Clique sur' : 'Touche'} la carte pour placer {app.pickOnMap === 'start' ? 'le départ' : 'la destination'}</span>
-    <button type="button" class="text-btn" onclick={() => app.cancelPick()}>Annuler</button>
+    <button use:tactile type="button" class="text-btn" onclick={() => app.cancelPick()}>Annuler</button>
   </div>
 {/if}
 

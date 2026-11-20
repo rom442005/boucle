@@ -8,7 +8,7 @@
   import PlaceField from './PlaceField.svelte';
   import { app } from '../lib/state.svelte';
   import { isDesktop } from '../lib/platform';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
 
   const oneway = $derived(app.params.shape === 'oneway');
 </script>
@@ -17,7 +17,7 @@
   {#if app.via}
     <div class="via">
       <PlaceField kind="via" place={app.via} onclick={() => (app.search = 'via')} />
-      <button
+      <button use:tactile
         type="button"
         class="rm"
         aria-label="Retirer le point de passage {app.via.name}"
@@ -28,7 +28,7 @@
       >
     </div>
   {:else}
-    <button type="button" class="add" onclick={() => (app.search = 'via')}>
+    <button use:tactile type="button" class="add" onclick={() => (app.search = 'via')}>
       <span class="add-ic" aria-hidden="true"><Icon name="diamond" size={14} /></span>
       Passer par un lieu
       <span class="opt">facultatif</span>

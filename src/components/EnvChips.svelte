@@ -4,7 +4,7 @@
   import type { IconName } from '../lib/icons';
   import { ENVS, ENV_ORDER } from '../lib/sports';
   import { app } from '../lib/state.svelte';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
 
   let { selected, ontoggle }: { selected: EnvClass[]; ontoggle: (e: EnvClass) => void } = $props();
 
@@ -14,7 +14,7 @@
 <div class="chips" role="group" aria-label="Milieu traversé">
   {#each ENV_ORDER as e (e)}
     {@const on = selected.includes(e)}
-    <button type="button" class="chip" class:on aria-pressed={on} style:--c="var(--env-{e})" onclick={() => {
+    <button use:tactile type="button" class="chip" class:on aria-pressed={on} style:--c="var(--env-{e})" onclick={() => {
         haptic('tap');
         ontoggle(e);
       }}>

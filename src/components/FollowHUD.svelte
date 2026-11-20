@@ -1,5 +1,6 @@
 <script lang="ts">
   import RollingNumber from './RollingNumber.svelte';
+  import { tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
   import { duration, kmValue, km, NNBSP } from '../lib/format';
@@ -69,11 +70,11 @@
 
 <div class="dock">
   {#if !app.followCamera}
-    <button type="button" class="round glass" aria-label="Recentrer sur ma position" onclick={() => (app.followCamera = true)}>
+    <button use:tactile type="button" class="round glass" aria-label="Recentrer sur ma position" onclick={() => (app.followCamera = true)}>
       <Icon name="locate" fill />
     </button>
   {/if}
-  <button type="button" class="stop glass" onclick={() => app.stopFollow()}>
+  <button use:tactile type="button" class="stop glass" onclick={() => app.stopFollow()}>
     <Icon name="stop" size={18} />Terminer
   </button>
 </div>

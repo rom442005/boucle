@@ -6,12 +6,13 @@
   import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
   import { cityDot, globeLabels, prefetchEarth, registerEarth } from '../lib/earth';
+  import { easeInOutSine, easeOutCubic, traceEase, traceMs, traceTimeAt } from '../lib/motion';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { ICONS } from '../lib/icons';
   import { bbox, cumulative, haversine, pointAt } from '../lib/geo';
   import { km, kmValue, NNBSP } from '../lib/format';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
   import type { LngLat, Route } from '../lib/types';
 
@@ -131,6 +132,31 @@
     return ctx.getImageData(0, 0, c.width, c.height);
   }
 
+  /** Opacité des propositions non choisies (elles apparaissent en fondu une fois le parcours tracé). */
+  const ALT_OPACITY = { casing: 0.75 };
+  const altLineOpacity = () => (theme === 'dark' ? 0.7 : 0.62);
+
+  /**
+   * Fondu d'une propriété de couche : la transition est réglée juste avant la nouvelle valeur. Un délai passe
+   * par un minuteur : MapLibre ne garde que la dernière valeur posée avant une image, une valeur posée puis
+   * remplacée dans la foulée ne serait jamais affichée.
+   */
+  let fadeTimers: ReturnType<typeof setTimeout>[] = [];
+  function fadeProp(id: string, prop: string, value: unknown, ms: number, delay = 0) {
+    if (delay > 0) {
+      fadeTimers.push(setTimeout(() => fadeProp(id, prop, value, ms), delay));
+      return;
+    }
+    const m = map;
+    if (!m?.getLayer(id)) return;
+    m.setPaintProperty(id, `${prop}-transition`, { duration: ms, delay: 0 });
+    m.setPaintProperty(id, prop, value);
+  }
+  function clearFades() {
+    for (const t of fadeTimers) clearTimeout(t);
+    fadeTimers = [];
+  }
+
   function addLayers() {
     const m = map!;
     const tint = tintOf();
@@ -138,7 +164,7 @@
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
     addCityDots();
-    for (const id of ['reach', 'aim', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt']) {
+    for (const id of ['reach', 'aim', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -164,6 +190,24 @@
       source: 'reach',
       paint: { 'line-color': tint, 'line-opacity': 0.5, 'line-width': 1.5, 'line-dasharray': [2, 2.5] },
     });
+    // Sonar pendant la recherche : deux ondes partent du départ jusqu'au bord de la zone explorée.
+    for (const id of ['sonar-a', 'sonar-b']) {
+      m.addLayer({
+        id,
+        type: 'circle',
+        source: 'sonar',
+        paint: {
+          'circle-radius': 0,
+          'circle-color': tint,
+          'circle-opacity': 0,
+          'circle-stroke-color': tint,
+          'circle-stroke-width': 2,
+          'circle-stroke-opacity': 0,
+          'circle-pitch-alignment': 'map',
+          'circle-pitch-scale': 'map',
+        },
+      });
+    }
     // Aperçu au survol : ligne droite du départ vers le point visé.
     m.addLayer({
       id: 'aim-line',
@@ -172,8 +216,8 @@
       layout: round,
       paint: { 'line-color': theme === 'dark' ? '#FFFFFF' : '#1C1C1E', 'line-opacity': 0.5, 'line-width': 1.75, 'line-dasharray': [0.1, 2.2] },
     });
-    m.addLayer({ id: 'alt-casing', type: 'line', source: 'alt', layout: round, paint: { 'line-color': casing, 'line-width': zw(5, 9), 'line-opacity': 0.75 } });
-    m.addLayer({ id: 'alt-line', type: 'line', source: 'alt', layout: round, paint: { 'line-color': theme === 'dark' ? '#98989D' : '#8E8E93', 'line-opacity': theme === 'dark' ? 0.7 : 0.62, 'line-width': zw(3, 5.5) } });
+    m.addLayer({ id: 'alt-casing', type: 'line', source: 'alt', layout: round, paint: { 'line-color': casing, 'line-width': zw(5, 9), 'line-opacity': ALT_OPACITY.casing } });
+    m.addLayer({ id: 'alt-line', type: 'line', source: 'alt', layout: round, paint: { 'line-color': theme === 'dark' ? '#98989D' : '#8E8E93', 'line-opacity': altLineOpacity(), 'line-width': zw(3, 5.5) } });
     m.addLayer({ id: 'alt-hit', type: 'line', source: 'alt', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 24 } });
     // Côte ou descente mise en avant : un halo de sa couleur sous le tracé.
     m.addLayer({
@@ -182,6 +226,20 @@
       source: 'climb-hl',
       layout: round,
       paint: { 'line-color': ['get', 'color'], 'line-width': zw(16, 26), 'line-opacity': 0.34, 'line-blur': 3 },
+    });
+    // Halo du tracé : la lumière du stylo qui dessine le parcours, puis elle s'éteint doucement.
+    m.addLayer({
+      id: 'sel-glow',
+      type: 'line',
+      source: 'sel-line',
+      layout: round,
+      paint: {
+        'line-color': tint,
+        'line-width': zw(16, 28),
+        'line-blur': zw(9, 15),
+        'line-opacity': 0,
+        'line-opacity-transition': { duration: 1100, delay: 0 },
+      },
     });
     m.addLayer({ id: 'sel-casing', type: 'line', source: 'sel-line', layout: round, paint: { 'line-color': casing, 'line-width': zw(7.5, 12.5) } });
     m.addLayer({ id: 'sel-line', type: 'line', source: 'sel', layout: round, paint: { 'line-color': ['get', 'color'], 'line-width': zw(4.5, 8) } });
@@ -206,6 +264,36 @@
         'icon-ignore-placement': true,
         'icon-rotation-alignment': 'map',
         'icon-pitch-alignment': 'map',
+      },
+    });
+    // Le stylo : une pointe blanche cerclée de rose et sa lueur, en tête du tracé.
+    m.addLayer({
+      id: 'pen-glow',
+      type: 'circle',
+      source: 'pen',
+      paint: {
+        'circle-radius': 22,
+        'circle-color': tint,
+        'circle-blur': 1,
+        'circle-opacity': 0,
+        'circle-opacity-transition': { duration: 420, delay: 0 },
+        'circle-pitch-alignment': 'map',
+      },
+    });
+    m.addLayer({
+      id: 'pen-core',
+      type: 'circle',
+      source: 'pen',
+      paint: {
+        'circle-radius': 6.5,
+        'circle-color': '#FFFFFF',
+        'circle-stroke-color': tint,
+        'circle-stroke-width': 3,
+        'circle-opacity': 0,
+        'circle-stroke-opacity': 0,
+        'circle-opacity-transition': { duration: 420, delay: 0 },
+        'circle-stroke-opacity-transition': { duration: 420, delay: 0 },
+        'circle-pitch-alignment': 'map',
       },
     });
     m.addLayer({
@@ -268,13 +356,58 @@
     placeShade();
   }
 
-  /** Plan ou Satellite : les photos et les noms en blanc s'appliquent sur le style en place, sans le recharger. */
-  function applyMapType() {
+  /**
+   * Plan ou Satellite : les photos et les noms en blanc s'appliquent sur le style en place, sans le recharger.
+   * Les images (photos IGN, Terre dessinée ou photographiée) passent de l'une à l'autre en fondu enchaîné ;
+   * les couleurs des routes et des noms suivent la transition du style.
+   */
+  const RASTERS = ['earth', 'earth-sat', 'ortho'];
+  let rasterTimer: ReturnType<typeof setTimeout> | undefined;
+  function crossfadeRasters(sat: boolean, animate: boolean) {
+    const m = map;
+    if (!m) return;
+    clearTimeout(rasterTimer);
+    const motion = animate && !reduce ? 1 : 0;
+    for (const id of RASTERS) {
+      if (!m.getLayer(id)) continue;
+      const show = id === 'earth' ? !sat : sat;
+      const full = planValue(planStyle, { id, kind: 'paint', prop: 'raster-opacity', value: null });
+      if (show) {
+        // Apparition : d'abord invisible (affiché une image), puis l'opacité du style en fondu.
+        if (m.getLayoutProperty(id, 'visibility') === 'none') {
+          m.setPaintProperty(id, 'raster-opacity-transition', { duration: 0, delay: 0 });
+          m.setPaintProperty(id, 'raster-opacity', 0);
+          m.setLayoutProperty(id, 'visibility', 'visible');
+          if (motion) {
+            requestAnimationFrame(() => requestAnimationFrame(() => fadeProp(id, 'raster-opacity', full, 640)));
+            continue;
+          }
+        }
+        m.setPaintProperty(id, 'raster-opacity-transition', { duration: 640 * motion, delay: 0 });
+        m.setPaintProperty(id, 'raster-opacity', full);
+      } else if (motion) {
+        m.setPaintProperty(id, 'raster-opacity-transition', { duration: 420, delay: 0 });
+        m.setPaintProperty(id, 'raster-opacity', 0);
+      } else {
+        m.setLayoutProperty(id, 'visibility', 'none');
+      }
+    }
+    if (motion)
+      rasterTimer = setTimeout(() => {
+        for (const id of RASTERS) {
+          const show = id === 'earth' ? app.mapType !== 'satellite' : app.mapType === 'satellite';
+          if (!show && map?.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+        }
+      }, 460);
+  }
+  function applyMapType(animate = false) {
     const m = map;
     if (!m) return;
     const sat = app.mapType === 'satellite';
+    crossfadeRasters(sat, animate);
     for (const o of satelliteOverrides()) {
       if (!m.getLayer(o.id)) continue;
+      if (RASTERS.includes(o.id) && o.prop === 'visibility') continue;
       const v = sat ? o.value : planValue(planStyle, o);
       try {
         if (o.kind === 'paint') m.setPaintProperty(o.id, o.prop, v);
@@ -307,13 +440,78 @@
     return range < 40 ? 2.4 : range < 120 ? 1.9 : range < 400 ? 1.5 : 1.3;
   }
 
+  /**
+   * Le relief se lève : l'exagération du terrain monte de 0 à sa valeur (ou redescend) image par image.
+   * MapLibre la lit à chaque rendu ; rien n'est rechargé.
+   */
+  let riseAnim = 0;
+  function riseTerrain(to: number, ms: number, done?: () => void) {
+    cancelAnimationFrame(riseAnim);
+    const t = map?.terrain;
+    if (!t) return done?.();
+    const from = t.exaggeration;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const tr = map?.terrain;
+      if (!tr) return;
+      const k = Math.min(1, (now - t0) / ms);
+      tr.exaggeration = from + (to - from) * easeOutCubic(k);
+      map!.triggerRepaint();
+      if (k < 1) riseAnim = requestAnimationFrame(step);
+      else done?.();
+    };
+    riseAnim = requestAnimationFrame(step);
+  }
+
+  /**
+   * Passage en 3D, comme un survol : la caméra s'incline en pivotant d'un quart de tour léger, puis revient
+   * face au nord d'origine, pendant que le relief se lève et que les bâtiments apparaissent.
+   */
+  const SWING = 14;
+  /** Pendant le pivot, la boussole ne s'affiche pas (le nord revient tout seul). */
+  let swinging = false;
+  function swingBack(target: number, pitch: number) {
+    swinging = true;
+    map?.once('moveend', () => {
+      const m = map;
+      // Pivot interrompu (geste, autre demande) : on n'insiste pas.
+      if (!m || !app.terrain3d || m.isMoving() || Math.abs(m.getPitch() - pitch) > 2) {
+        swinging = false;
+        if (m) app.bearing = m.getBearing();
+        return;
+      }
+      m.easeTo({ bearing: target, duration: 760, easing: easeInOutSine });
+      m.once('moveend', () => {
+        swinging = false;
+        if (map) app.bearing = map.getBearing();
+      });
+    });
+  }
+
   let b3dTimer: ReturnType<typeof setTimeout> | undefined;
   function apply3D(on: boolean, animate: boolean) {
     if (!map) return;
+    const motion = animate && !reduce;
     try {
-      map.setTerrain(on ? { source: 'dem-3d', exaggeration: exaggeration() } : null);
       // Ombrage du relief plus marqué en 3D : les collines se lisent.
+      map.setPaintProperty('hillshade', 'hillshade-exaggeration-transition', { duration: motion ? 1100 : 0, delay: 0 });
       map.setPaintProperty('hillshade', 'hillshade-exaggeration', on ? (theme === 'dark' ? 0.55 : 0.5) : theme === 'dark' ? 0.35 : 0.28);
+      if (on) {
+        cancelAnimationFrame(riseAnim);
+        map.setTerrain({ source: 'dem-3d', exaggeration: exaggeration() });
+        if (motion && map.terrain) {
+          map.terrain.exaggeration = 0.01;
+          riseTerrain(exaggeration(), 1400);
+        }
+      } else if (motion && map.terrain) {
+        // Le relief redescend vite, puis la carte redevient plate.
+        riseTerrain(0.01, 480, () => {
+          if (!app.terrain3d) map?.setTerrain(null);
+        });
+      } else {
+        cancelAnimationFrame(riseAnim);
+        map.setTerrain(null);
+      }
     } catch {
       /* style pas encore prêt */
     }
@@ -322,9 +520,12 @@
     if (map.getLayer('building-3d')) {
       if (on) {
         map.setLayoutProperty('building-3d', 'visibility', 'visible');
+        // Ils apparaissent pendant que la caméra s'incline, un peu après le relief.
+        map.setPaintProperty('building-3d', 'fill-extrusion-opacity-transition', { duration: motion ? 950 : 0, delay: motion ? 260 : 0 });
         // Sur les photos, les volumes restent translucides : les toits photographiés se voient au travers.
         map.setPaintProperty('building-3d', 'fill-extrusion-opacity', app.mapType === 'satellite' ? 0.62 : theme === 'dark' ? 0.88 : 0.94);
       } else {
+        map.setPaintProperty('building-3d', 'fill-extrusion-opacity-transition', { duration: motion ? 420 : 0, delay: 0 });
         map.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0);
         b3dTimer = setTimeout(() => {
           if (map?.getLayer('building-3d') && !app.terrain3d) map.setLayoutProperty('building-3d', 'visibility', 'none');
@@ -333,9 +534,11 @@
     }
     if (animate) {
       const r = app.phase === 'results' || app.phase === 'detail' ? app.route : null;
+      const b0 = map.getBearing();
       if (r) {
-        // Un parcours affiché : on le recadre en entier, incliné en 3D, à plat sinon.
-        fitCoords(r.coords, true, on ? 52 : 0);
+        // Un parcours affiché : on le recadre en entier, incliné en 3D (en pivotant), à plat sinon.
+        fitCoords(r.coords, true, on ? 52 : 0, on && motion ? b0 - SWING : undefined);
+        if (on && motion) swingBack(b0, 52);
       } else {
         // Assez près pour que la ville se lève (les volumes montent avec le zoom jusqu'à 13,8).
         const z = map.getZoom();
@@ -345,9 +548,11 @@
           padding: untrack(() => app.padding),
           pitch: on ? 60 : 0,
           zoom: on ? Math.max(z, 14.8) : z,
-          duration: reduce ? 0 : 1200,
-          easing: (t) => 1 - Math.pow(1 - t, 3),
+          bearing: on && motion ? b0 - SWING : b0,
+          duration: reduce ? 0 : on ? 1100 : 650,
+          easing: on ? easeInOutSine : (t) => 1 - Math.pow(1 - t, 3),
         });
+        if (on && motion) swingBack(b0, 60);
       }
     }
   }
@@ -365,7 +570,9 @@
    * le globe, comme dans Plans : on s'élève, on traverse, on redescend.
    */
   const NO_PAD: Padding = { top: 0, bottom: 0, left: 0, right: 0 };
-  function fitCoords(coords: LngLat[], animate = true, pitch = app.terrain3d ? 52 : 0) {
+  /** Un peu d'air entre un parcours cadré et les bords (panneau, profil, boutons). */
+  const breathe = (p: Padding): Padding => ({ top: p.top + 18, bottom: p.bottom + 18, left: p.left + 18, right: p.right + 18 });
+  function fitCoords(coords: LngLat[], animate = true, pitch = app.terrain3d ? 52 : 0, bearing?: number) {
     if (!map || coords.length < 2) return;
     const [w, s, e, n] = bbox(coords);
     // En projection globe, MapLibre cadre d'après la seule marge passée ici : la marge propre de la carte
@@ -378,7 +585,7 @@
         [w, s],
         [e, n],
       ],
-      { padding: untrack(() => app.padding), maxZoom: 16 },
+      { padding: breathe(untrack(() => app.padding)), maxZoom: 16, ...(bearing != null ? { bearing } : {}) },
     );
     tr.setPadding(kept);
     if (!cam) return;
@@ -413,27 +620,88 @@
     map.easeTo({ padding: p, ...zoom, duration: reduce ? 0 : 520, easing: (t) => 1 - Math.pow(1 - t, 3) });
   }
 
-  function draw(r: Route, animate: boolean) {
+  /**
+   * Le tracé d'un parcours tout juste trouvé, comme au stylo : une pointe lumineuse part du départ et
+   * dessine le parcours, coloré selon la pente, avec un halo rose qui s'éteint ensuite. Les bornes
+   * kilométriques apparaissent à son passage, les autres propositions en fondu à la fin, et le départ
+   * (ou l'arrivée) « respire » une fois quand la boucle se referme. Le profil et les chiffres suivent
+   * le même avancement (app.revealK).
+   */
+  let reveal: { tick: number; t0: number; ms: number } | null = null;
+  function draw(r: Route, animate: boolean, marks: FeatureCollection) {
     cancelAnimationFrame(anim);
+    clearFades();
     const segs = slopeSegments(r);
     const total = cumOf(r)[r.coords.length - 1];
+    const allMarks = marks.features;
     if (!animate || reduce) {
+      // Tracé direct (autre proposition choisie, mouvement réduit) : un tracé en cours s'arrête net.
+      if (reveal) {
+        fadeProp('sel-glow', 'line-opacity', 0, 300);
+        for (const p of ['circle-opacity', 'circle-stroke-opacity']) fadeProp('pen-core', p, 0, 200);
+        fadeProp('pen-glow', 'circle-opacity', 0, 200);
+        fadeProp('alt-casing', 'line-opacity', ALT_OPACITY.casing, 300);
+        fadeProp('alt-line', 'line-opacity', altLineOpacity(), 300);
+      }
+      reveal = null;
       setData('sel', segmentsToGeoJSON(segs));
       setData('sel-line', lineFeature(r.coords));
+      setData('marks', marks);
+      setData('pen', EMPTY);
+      app.revealK = 1;
       return;
     }
+    const ms = traceMs(total);
     const t0 = performance.now();
-    const dur = Math.min(1400, 700 + total / 40);
+    reveal = { tick: app.drawTick, t0, ms };
+    // Le stylo s'allume, les autres propositions attendent la fin du tracé.
+    fadeProp('pen-glow', 'circle-opacity', 0.42, 160);
+    fadeProp('pen-core', 'circle-opacity', 1, 160);
+    fadeProp('pen-core', 'circle-stroke-opacity', 1, 160);
+    fadeProp('sel-glow', 'line-opacity', 0.38, 200);
+    for (const id of ['alt-line', 'alt-casing']) fadeProp(id, 'line-opacity', 0, 0);
+    fadeProp('alt-casing', 'line-opacity', ALT_OPACITY.casing, 520, Math.round(ms * 0.82));
+    fadeProp('alt-line', 'line-opacity', altLineOpacity(), 520, Math.round(ms * 0.82));
+    let shown = -1;
     const step = (t: number) => {
-      const k = Math.min(1, (t - t0) / dur);
-      const upTo = total * (1 - Math.pow(1 - k, 3));
+      const k = Math.min(1, (t - t0) / ms);
+      const e = traceEase(k);
+      const upTo = total * e;
       setData('sel', segmentsToGeoJSON(segs, upTo));
       const part = sliceRoute(r.coords, upTo);
       setData('sel-line', part.length >= 2 ? lineFeature(part) : EMPTY);
-      if (k < 1) anim = requestAnimationFrame(step);
+      setData('pen', pointsFC([part[part.length - 1] ?? r.coords[0]]));
+      // Bornes kilométriques : chacune apparaît quand le stylo l'atteint.
+      const n = allMarks.findIndex((f) => Number(f.properties?.label) * 1000 > upTo + 1);
+      const count = n < 0 ? allMarks.length : n;
+      if (count !== shown) {
+        shown = count;
+        setData('marks', { type: 'FeatureCollection', features: allMarks.slice(0, count) });
+      }
+      app.revealK = e;
+      if (k < 1) {
+        anim = requestAnimationFrame(step);
+        return;
+      }
+      // Arrivée : le stylo s'efface, le halo s'éteint, le départ (ou l'arrivée) respire une fois.
+      app.revealK = 1;
+      fadeProp('pen-glow', 'circle-opacity', 0, 420);
+      fadeProp('pen-core', 'circle-opacity', 0, 420);
+      fadeProp('pen-core', 'circle-stroke-opacity', 0, 420);
+      fadeProp('sel-glow', 'line-opacity', 0, 1100, 150);
+      const mk = (r.shape === 'oneway' ? destMarker : startMarker)?.getElement();
+      if (mk) {
+        mk.classList.remove('is-closing');
+        void mk.offsetWidth;
+        mk.classList.add('is-closing');
+        mk.addEventListener('animationend', () => mk.classList.remove('is-closing'), { once: true });
+      }
+      haptic('success');
     };
+    app.revealK = 0;
     setData('sel', EMPTY);
     setData('sel-line', EMPTY);
+    setData('marks', EMPTY);
     anim = requestAnimationFrame(step);
   }
 
@@ -708,7 +976,9 @@
     lastZoom = map.getZoom();
     updateOrbit();
     map.on('style.load', onStyleLoad);
-    map.on('rotate', () => (app.bearing = map!.getBearing()));
+    map.on('rotate', () => {
+      if (!swinging) app.bearing = map!.getBearing();
+    });
     far = map.getZoom() < 11;
     // Une molette de souris ne transmet pas son événement aux zooms de MapLibre (le zoom part un peu plus tard) :
     // on la suit à part, pour savoir qu'un geste vers l'espace est en cours et montrer l'échelle.
@@ -908,22 +1178,54 @@
     setData('reach', circlePolygon(app.start!.coord, p.shape === 'loop' ? D / 3.7 : D / 2.56));
   });
 
-  // Pendant la création, la zone explorée « respire » : la recherche est en cours.
+  // Pendant la création, un sonar balaie la zone explorée : deux ondes partent du départ jusqu'à son bord,
+  // et la zone respire doucement. La recherche est en cours, autour de toi.
   $effect(() => {
     if (!ready || !map) return;
     const m = map;
-    if (!app.generating || reduce) {
-      m.setPaintProperty('reach-fill', 'fill-opacity', 0.035);
+    const s = app.start?.coord;
+    if (!app.generating || !s) {
+      fadeProp('reach-fill', 'fill-opacity', 0.035, 600);
+      for (const id of ['sonar-a', 'sonar-b']) fadeProp(id, 'circle-stroke-opacity', 0, 300);
       return;
     }
-    let hi = false;
-    const tick = () => {
-      hi = !hi;
-      m.setPaintProperty('reach-fill', 'fill-opacity', hi ? 0.12 : 0.035);
+    const p = untrack(() => app.params);
+    const reachM = p.shape === 'oneway' && app.destination ? haversine(s, app.destination.coord) : (p.distanceKm * 1000) / (p.shape === 'outback' ? 2.56 : 3.7);
+    setData('sonar', pointsFC([s]));
+    for (const id of ['sonar-a', 'sonar-b']) {
+      m.setPaintProperty(id, 'circle-stroke-opacity-transition', { duration: 0, delay: 0 });
+      m.setPaintProperty(id, 'circle-radius-transition', { duration: 0, delay: 0 });
+    }
+    if (reduce) {
+      fadeProp('reach-fill', 'fill-opacity', 0.1, 600);
+      return;
+    }
+    const PERIOD = 1700;
+    const t0 = performance.now();
+    let raf = 0;
+    let breath = false;
+    const frame = (now: number) => {
+      const z = m.getZoom();
+      // Rayon de la zone en pixels à ce zoom (tuiles de 512 px).
+      const mpp = (40075016.686 * Math.cos((s[1] * Math.PI) / 180)) / (512 * 2 ** z);
+      const R = reachM / mpp;
+      ['sonar-a', 'sonar-b'].forEach((id, i) => {
+        const ph = ((now - t0) / PERIOD + i / 2) % 1;
+        m.setPaintProperty(id, 'circle-radius', R * easeOutCubic(ph));
+        m.setPaintProperty(id, 'circle-stroke-opacity', 0.55 * (1 - ph) ** 1.6);
+      });
+      const b = Math.floor((now - t0) / 900) % 2 === 0;
+      if (b !== breath) {
+        breath = b;
+        fadeProp('reach-fill', 'fill-opacity', b ? 0.1 : 0.04, 880);
+      }
+      raf = requestAnimationFrame(frame);
     };
-    tick();
-    const t = setInterval(tick, 800);
-    return () => clearInterval(t);
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      setData('sonar', EMPTY);
+    };
   });
 
   // Départ : marqueur déplaçable pendant la composition, cadrage quand il change.
@@ -994,10 +1296,10 @@
     if (ready) untrack(applyVeil);
   });
 
-  // Plan ou Satellite.
+  // Plan ou Satellite : en fondu enchaîné.
   $effect(() => {
     void app.mapType;
-    if (ready) untrack(applyMapType);
+    if (ready) untrack(() => applyMapType(true));
   });
 
   // Le départ ou le parcours est-il encore à l'écran ?
@@ -1044,7 +1346,8 @@
     const tick = app.drawTick;
     if (!routes.length) {
       cancelAnimationFrame(anim);
-      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done']) setData(id, EMPTY);
+      app.revealK = 1;
+      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen']) setData(id, EMPTY);
       if (lastTick !== -1 && app.phase === 'compose' && app.start) {
         const D = untrack(() => app.params.distanceKm) * 1000;
         const ring = circlePolygon(app.start.coord, D / 3.7);
@@ -1059,11 +1362,10 @@
       features: routes.flatMap((x, i) => (i === sel ? [] : [lineFeature(x.coords, { idx: i })])),
     };
     setData('alt', alt);
-    setData('marks', kmMarks(r));
     setData('water', pointsFC(r.waterPoints));
     const fresh = tick !== lastTick;
     lastTick = tick;
-    draw(r, fresh);
+    draw(r, fresh, kmMarks(r));
     // Les marges dépendent du panneau, mis à jour dans le même cycle : on cadre à l'image suivante.
     if (fresh) requestAnimationFrame(() => fitCoords(r.coords));
   });
@@ -1094,6 +1396,13 @@
       };
       el.addEventListener('click', toggle);
       el.addEventListener('keydown', (e) => (e.key === 'Enter' || e.key === ' ') && toggle(e));
+      tactile(el);
+      // Pendant le tracé, chaque pastille attend le passage du stylo.
+      const rv = reveal && reveal.tick === app.drawTick ? reveal : null;
+      if (rv) {
+        const at = rv.t0 + rv.ms * traceTimeAt((c.from + c.to) / 2 / cum[cum.length - 1]);
+        el.style.animationDelay = `${Math.max(0, Math.round(at - performance.now()))}ms`;
+      }
       climbMarkers.push(new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat(mid).addTo(map!));
     });
   });
@@ -1255,7 +1564,7 @@
 {/if}
 
 {#if lost && !app.pickOnMap && app.phase !== 'follow'}
-  <button
+  <button use:tactile
     type="button"
     class="back-to glass"
     class:wide={app.wide}
@@ -1339,6 +1648,41 @@
         rgba(60, 110, 210, 0.32) 99%,
         rgba(150, 190, 255, 0.55) 100%
       );
+    }
+  }
+
+  /* Le parcours est tracé : le départ (ou l'arrivée) respire une fois, une onde rose s'en échappe. */
+  :global(.mk-start.is-closing)::after,
+  :global(.mk-dest.is-closing)::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    border-radius: 50%;
+    border: 2.5px solid var(--tint);
+    pointer-events: none;
+    animation: close-ring 950ms var(--ease-out) forwards;
+  }
+  :global(.mk-start.is-closing) > :global(span),
+  :global(.mk-dest.is-closing) > :global(span) {
+    animation: close-bump 620ms var(--spring-bouncy);
+  }
+  @keyframes -global-close-ring {
+    from {
+      transform: scale(0.7);
+      opacity: 0.95;
+    }
+    to {
+      transform: scale(3.1);
+      opacity: 0;
+    }
+  }
+  @keyframes -global-close-bump {
+    40% {
+      transform: scale(1.22);
     }
   }
 

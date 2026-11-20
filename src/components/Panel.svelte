@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { app, type Detent } from '../lib/state.svelte';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
 
   let {
     header,
@@ -201,7 +201,7 @@
     onpointercancel={up}
   >
     {#if !app.wide}
-      <button
+      <button use:tactile
         type="button"
         class="handle"
         aria-label="Taille du panneau : {app.detent === 'peek' ? 'réduit' : app.detent === 'half' ? 'moyen' : 'agrandi'}. Flèches haut et bas pour changer."

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import { tactile } from '../lib/haptics';
   import type { Place } from '../lib/types';
   import type { PlaceKind } from '../lib/state.svelte';
 
@@ -17,7 +18,7 @@
   const detail = $derived(place?.kind === 'gps' ? place.detail : place?.detail);
 </script>
 
-<button type="button" class="place" class:glass={floating} class:floating {onclick} aria-label="{title} : {value}{detail ? ', ' + detail : ''}. Modifier">
+<button use:tactile type="button" class="place" class:glass={floating} class:floating {onclick} aria-label="{title} : {value}{detail ? ', ' + detail : ''}. Modifier">
   <span class="dot" class:dest={kind === 'destination'} class:via={kind === 'via'} aria-hidden="true">
     {#if kind === 'start'}
       {#if place?.kind === 'gps'}<Icon name="locate" size={15} fill />{:else}<Icon name="pin" size={15} />{/if}

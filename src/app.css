@@ -276,6 +276,22 @@ textarea {
   --sat: 1.4;
 }
 
+/* Étiquette tactile (iPhone) : couvre le bouton ; le doigt qui la touche fait vibrer le téléphone (voir haptics.ts). */
+.tactile {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  cursor: inherit;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+:disabled > .tactile,
+[aria-disabled='true'] > .tactile {
+  pointer-events: none;
+}
+
 /* Bouton rond en verre (44 pt) */
 .round {
   width: 44px;
@@ -482,6 +498,35 @@ textarea {
     inset 0 2px 5px rgba(255, 255, 255, 0.6),
     0 6px 16px rgba(0, 0, 0, 0.2);
 }
+/* Palier franchi : le pouce enfle un instant ; au bout de la piste, plus franchement. */
+.range.bump::-webkit-slider-thumb {
+  animation: thumb-bump 200ms var(--ease-out);
+}
+.range.bump-strong::-webkit-slider-thumb {
+  animation: thumb-bump-strong 320ms var(--spring-bouncy);
+}
+.range.bump::-moz-range-thumb {
+  animation: thumb-bump 200ms var(--ease-out);
+}
+.range.bump-strong::-moz-range-thumb {
+  animation: thumb-bump-strong 320ms var(--spring-bouncy);
+}
+@keyframes thumb-bump {
+  45% {
+    transform: scale(1.42);
+    box-shadow:
+      0 0 0 6px color-mix(in srgb, var(--tint) 22%, transparent),
+      0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+}
+@keyframes thumb-bump-strong {
+  40% {
+    transform: scale(1.55);
+    box-shadow:
+      0 0 0 10px color-mix(in srgb, var(--tint) 26%, transparent),
+      0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+}
 .range.is-off::-webkit-slider-runnable-track {
   background: var(--fill);
 }
@@ -595,6 +640,7 @@ textarea {
 
 /* Bandeau d'information ou d'erreur */
 .banner {
+  animation: banner-in 360ms var(--ease-out) both;
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -615,6 +661,60 @@ textarea {
 }
 .banner.is-error .icon {
   color: var(--tint);
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    translate: 0 -6px;
+  }
+}
+
+/* Une liste qui apparaît arrive en cascade (rang --i, plafonné par le composant). */
+.li,
+.cascade {
+  animation: cascade-in 420ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+@keyframes cascade-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+/* Recherche en cours : un reflet balaie le bouton ; refus : il tremble, comme un « non » de la tête. */
+.cta.is-busy::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(100deg, transparent 32%, rgba(255, 255, 255, 0.3) 50%, transparent 68%);
+  translate: -100% 0;
+  animation: sheen 1.5s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  pointer-events: none;
+}
+@keyframes sheen {
+  to {
+    translate: 100% 0;
+  }
+}
+.cta.shake {
+  animation: shake 440ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes shake {
+  15%,
+  85% {
+    translate: -2px 0;
+  }
+  30%,
+  70% {
+    translate: 5px 0;
+  }
+  45%,
+  60% {
+    translate: -7px 0;
+  }
 }
 
 /* MapLibre : attribution en verre discret */

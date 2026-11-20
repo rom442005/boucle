@@ -7,7 +7,7 @@
   import SlopeLegend from './SlopeLegend.svelte';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
   import { app } from '../lib/state.svelte';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
   import { duration, km, kmValue, meters, pace, percent, speed, NNBSP } from '../lib/format';
   import { ENVS, ENV_ORDER, SHAPES, SPORTS } from '../lib/sports';
   import { cumulative, nearestOnRoute } from '../lib/geo';
@@ -141,6 +141,9 @@
     if (Math.abs(strip.scrollLeft - target) > 4) strip.scrollTo({ left: target, behavior: 'smooth' });
   });
 
+  /** Favori ou Fait tout juste activé : une onde part de l'icône. */
+  let burst = $state<'star' | 'done' | null>(null);
+
   let editing = $state(false);
   let draft = $state('');
   function startEdit() {
@@ -165,7 +168,7 @@
 {#if many}
   <div class="strip" class:wide={app.wide} bind:this={strip} onscroll={onScroll} role="listbox" aria-label="Propositions" aria-orientation={app.wide ? 'vertical' : 'horizontal'}>
     {#each app.routes as x, i (x.id)}
-      <button type="button" class="card" class:sel={i === app.selected} role="option" aria-selected={i === app.selected} onclick={() => app.select(i)}>
+      <button use:tactile type="button" class="card" class:sel={i === app.selected} role="option" aria-selected={i === app.selected} style:--i={i} onclick={() => app.select(i)}>
         <RouteGlyph coords={x.coords} active={i === app.selected} />
         <span class="c-txt">
           <span class="c-name">{x.name}</span>
@@ -201,7 +204,7 @@
         />
       {:else}
         <h2>{r.name}</h2>
-        <button type="button" class="round edit" aria-label="Renommer le parcours" onclick={startEdit}><Icon name="pencil" size={18} /></button>
+        <button use:tactile type="button" class="round edit" aria-label="Renommer le parcours" onclick={startEdit}><Icon name="pencil" size={18} /></button>
       {/if}
     </div>
     <p class="kind">{SPORTS[r.sport].long} · {SHAPES[r.shape].label}</p>
@@ -216,9 +219,9 @@
     {/if}
 
     <dl class="stats">
-      <div><dt>Distance</dt><dd class="rounded"><RollingNumber value={kmValue(r.lengthM)} /><small>km</small></dd></div>
-      <div><dt>Dénivelé +</dt><dd class="rounded"><RollingNumber value={String(Math.round(r.ascent))} /><small>m</small></dd></div>
-      <div><dt>Durée estimée</dt><dd class="rounded"><RollingNumber value={duration(r.durationS)} /></dd></div>
+      <div><dt>Distance</dt><dd class="rounded"><RollingNumber value={kmValue(r.lengthM * app.revealK)} /><small>km</small></dd></div>
+      <div><dt>Dénivelé +</dt><dd class="rounded"><RollingNumber value={String(Math.round(r.ascent * app.revealK))} /><small>m</small></dd></div>
+      <div><dt>Durée estimée</dt><dd class="rounded"><RollingNumber value={duration(r.durationS * app.revealK)} /></dd></div>
     </dl>
     <p class="sub tabular">D− {meters(r.descent)} · Altitude {r.minEle} à {meters(r.maxEle)} · Pente max {Math.round(r.maxGrade)}{NNBSP}%</p>
 
@@ -245,25 +248,33 @@
     {/if}
 
     <div class="actions">
-      <button type="button" class="act" aria-pressed={app.isSaved(r)} onclick={() => {
-        haptic('tap');
+      <button use:tactile type="button" class="act" aria-pressed={app.isSaved(r)} onclick={() => {
+        const on = !app.isSaved(r);
+        haptic(on ? 'success' : 'tap');
         app.toggleSave(r);
+        if (on) burst = 'star';
       }}>
-        <span class="act-ic"><Icon name="star" fill={app.isSaved(r)} /></span>Favori
+        <span class="act-ic" class:burst={burst === 'star'} onanimationend={(e) => e.animationName.endsWith('act-burst') && (burst = null)}
+          ><Icon name="star" fill={app.isSaved(r)} /></span
+        >Favori
       </button>
-      <button type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => {
-        haptic('tap');
+      <button use:tactile type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => {
+        const on = !app.isDoneToday(r);
+        haptic(on ? 'success' : 'tap');
         app.markDone(r);
+        if (on) burst = 'done';
       }}>
-        <span class="act-ic"><Icon name="done" fill={app.isDoneToday(r)} /></span>Fait
+        <span class="act-ic ok" class:burst={burst === 'done'} onanimationend={(e) => e.animationName.endsWith('act-burst') && (burst = null)}
+          ><Icon name="done" fill={app.isDoneToday(r)} /></span
+        >Fait
       </button>
-      <button type="button" class="act" onclick={() => app.exportGPX(r)}>
+      <button use:tactile type="button" class="act" onclick={() => app.exportGPX(r)}>
         <span class="act-ic"><Icon name="download" /></span>GPX
       </button>
-      <button type="button" class="act" onclick={() => app.shareLink(r)}>
+      <button use:tactile type="button" class="act" onclick={() => app.shareLink(r)}>
         <span class="act-ic"><Icon name="share" /></span>Partager
       </button>
-      <button type="button" class="act" onclick={() => app.reverseSelected()}>
+      <button use:tactile type="button" class="act" onclick={() => app.reverseSelected()}>
         <span class="act-ic"><Icon name="swap" /></span>Inverser
       </button>
     </div>
@@ -277,7 +288,7 @@
         <ul class="climb-list" aria-label="Côtes et descentes du parcours">
           {#each cl as c, i (i)}
             <li>
-              <button type="button" class="climb" class:on={app.focusClimb === i} aria-pressed={app.focusClimb === i} onclick={() => focus(i)}>
+              <button use:tactile type="button" class="climb" class:on={app.focusClimb === i} aria-pressed={app.focusClimb === i} onclick={() => focus(i)}>
                 <span class="c-ic" style:background={slopeColor(c.cls)}><Icon name={c.up ? 'rise' : 'fall'} size={14} /></span>
                 <span class="c-txt">
                   <span class="c-title">{c.up ? 'Montée' : 'Descente'} {SLOPE_WORDS[Math.abs(c.cls)]}</span>
@@ -328,6 +339,18 @@
     overflow: visible;
     margin: 0 0 16px;
     padding: 0;
+  }
+  /* Les propositions arrivent l'une après l'autre, du flou au net. */
+  .card {
+    animation: card-in 520ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 70ms + 80ms);
+  }
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      translate: 0 12px;
+      filter: blur(6px);
+    }
   }
   .card {
     flex: 0 0 calc(100% - 44px);
@@ -576,6 +599,7 @@
     transform: scale(0.92);
   }
   .act-ic {
+    position: relative;
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -583,6 +607,51 @@
     place-items: center;
     background: var(--fill-2);
     color: var(--tint);
+  }
+  .act-ic.ok {
+    --burst: var(--ok);
+  }
+  /* Activé : une onde quitte l'icône et un éclat l'entoure, une fois. */
+  .act-ic.burst::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid var(--burst, var(--tint));
+    animation: act-burst 640ms var(--ease-out) forwards;
+    pointer-events: none;
+  }
+  .act-ic.burst::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--burst, var(--tint)) 30%, transparent) 0 40%, transparent 70%);
+    animation: act-glow 640ms var(--ease-out) forwards;
+    pointer-events: none;
+  }
+  @keyframes act-burst {
+    from {
+      transform: scale(0.85);
+      opacity: 1;
+    }
+    to {
+      transform: scale(1.75);
+      opacity: 0;
+    }
+  }
+  @keyframes act-glow {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    30% {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.2);
+    }
   }
   .climbs {
     display: grid;

@@ -67,6 +67,8 @@ class AppState {
   scrub = $state<number | null>(null);
   /** incrémenté à chaque nouveau résultat pour rejouer le dessin du tracé */
   drawTick = $state(0);
+  /** avancement (0 à 1) du tracé d'un parcours tout juste trouvé : la carte, le profil et les chiffres le suivent */
+  revealK = $state(1);
 
   library = $state.raw<SerialRoute[]>(loadLibrary());
   history = $state.raw<HistoryEntry[]>(loadHistory());

@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte';
   import type { IconName } from '../lib/icons';
   import { app } from '../lib/state.svelte';
-  import { haptic } from '../lib/haptics';
+  import { haptic, tactile } from '../lib/haptics';
 
   interface Option {
     value: T;
@@ -44,7 +44,7 @@
     aria-hidden="true"
   ></span>
   {#each options as o (o.value)}
-    <button
+    <button use:tactile
       type="button"
       role="radio"
       aria-checked={o.value === value}
@@ -72,6 +72,14 @@
   }
   .seg.tall button[aria-checked='true'] {
     color: var(--tint);
+  }
+  .seg.tall button[aria-checked='true'] :global(.icon) {
+    animation: seg-pop 460ms var(--spring-bouncy);
+  }
+  @keyframes seg-pop {
+    from {
+      transform: scale(0.7) rotate(-8deg);
+    }
   }
   .seg.tall button[aria-checked='true'] .lbl {
     color: var(--label);

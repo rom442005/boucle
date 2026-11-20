@@ -30,7 +30,7 @@
 </script>
 
 <svg class="glyph" class:active width={size} height={size} viewBox="0 0 {size} {size}" aria-hidden="true">
-  <path d={d.path} />
+  <path d={d.path} pathLength="1" />
   <circle cx={d.start[0]} cy={d.start[1]} r="3.2" />
 </svg>
 
@@ -47,6 +47,16 @@
     stroke-width: 2.4;
     stroke-linecap: round;
     stroke-linejoin: round;
+    /* Il se dessine à l'apparition, comme le parcours sur la carte (décalé selon le rang de la carte). */
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: glyph-draw 900ms var(--ease-out) forwards;
+    animation-delay: calc(var(--i, 0) * 90ms + 220ms);
+  }
+  @keyframes glyph-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
   }
   circle {
     fill: var(--label-3);

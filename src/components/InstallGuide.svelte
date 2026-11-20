@@ -1,5 +1,6 @@
 <script lang="ts">
   import { encode } from 'uqr';
+  import { tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
 
@@ -37,7 +38,7 @@
         </ol>
         <p class="hint">L’icône Boucle ouvre ensuite l’app en plein écran.</p>
       </div>
-      <button type="button" class="round x-card" aria-label="Fermer le QR code" onclick={close}><Icon name="close" size={16} /></button>
+      <button use:tactile type="button" class="round x-card" aria-label="Fermer le QR code" onclick={close}><Icon name="close" size={16} /></button>
     </div>
   {/if}
 {/snippet}
@@ -48,7 +49,7 @@
     <span class="txt">
       <b>Comme une app :</b> touche Partager <span class="kbd" aria-label="Partager"><Icon name="share" size={15} /></span> (ou ⋯ puis Partager), puis « Sur l’écran d’accueil ».
     </span>
-    <button type="button" class="x" aria-label="Masquer ce conseil" onclick={() => app.setFlag('installVu')}><Icon name="close" size={16} /></button>
+    <button use:tactile type="button" class="x" aria-label="Masquer ce conseil" onclick={() => app.setFlag('installVu')}><Icon name="close" size={16} /></button>
   </div>
 {:else if mode === 'mac'}
   {#if open}
@@ -57,8 +58,8 @@
     <div class="banner install" role="note">
       <span class="ic" aria-hidden="true"><Icon name="phone" size={20} /></span>
       <span class="txt"><b>Sur ton iPhone</b><br />Scanne le QR code pour installer l’app.</span>
-      <button type="button" class="qr-btn" onclick={() => (open = true)}><Icon name="qr" size={16} />QR code</button>
-      <button type="button" class="x" aria-label="Masquer ce conseil" onclick={() => app.setFlag('qrVu')}><Icon name="close" size={16} /></button>
+      <button use:tactile type="button" class="qr-btn" onclick={() => (open = true)}><Icon name="qr" size={16} />QR code</button>
+      <button use:tactile type="button" class="x" aria-label="Masquer ce conseil" onclick={() => app.setFlag('qrVu')}><Icon name="close" size={16} /></button>
     </div>
   {/if}
 {:else}

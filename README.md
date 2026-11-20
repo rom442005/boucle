@@ -24,6 +24,8 @@ Sur iPhone, quand les propositions arrivent, le panneau descend pour montrer tou
 
 Chaque proposition affiche la distance, le dénivelé, la durée estimée, ce qu'elle respecte de la demande, les milieux traversés, la répartition des sols et le profil d'altitude. Le bouton **3D** incline la carte et met en volume le relief et les bâtiments, à leur hauteur réelle : maisons en sable, immeubles en gris, tours en ardoise (légende sur la carte). Il affiche « 2D » pour revenir à plat. Le tracé est coloré selon la pente, comme le profil : les montées du rose au grenat, les descentes de la lavande à l'indigo, le plat en rose clair. Les côtes et descentes notables sont signalées sur la carte par une pastille (« +28 m · 4 % ») et listées dans le détail : toucher l'une d'elles zoome dessus et la surligne sur le profil. Pendant le suivi en direct, l'app annonce la prochaine (« Montée dans 200 m : 0,7 km à 4 % »). En 3D, le relief est accentué selon le terrain pour que les collines se voient même en ville plate. Glisser le doigt sur le profil déplace une loupe sur la carte.
 
+Quand les propositions arrivent, le parcours choisi se dessine sur la carte comme au stylo, avec un halo rose ; le profil d'altitude et les chiffres (distance, dénivelé, durée) avancent avec lui, et le départ « respire » quand la boucle se referme. Pendant la recherche, un sonar balaie la zone explorée. Le passage en 3D fait pivoter la caméra et lever le relief.
+
 Le détail d'un parcours dit aussi **ce qui t'attend si tu pars maintenant** : la météo au départ (température, ciel, vent) et l'heure de retour par rapport au coucher du soleil (« Retour vers 17 h 52, au crépuscule »). L'icône passe à l'ambre quand le départ ou le retour se fait de nuit. Pendant la composition, l'option « Rues éclairées » indique l'heure de la nuit ce soir.
 
 Actions :
@@ -66,7 +68,7 @@ Ces services sont gratuits pour un usage raisonnable : une création de parcours
 - Le suivi en direct fonctionne app ouverte ; iOS coupe la localisation des web apps en arrière-plan.
 - Satellite : les photos détaillées couvrent la France métropolitaine (IGN). Ailleurs, on voit les images de la Terre de loin, puis le plan en s'approchant.
 - « Si tu pars maintenant » suppose un départ immédiat : pour une sortie plus tard dans la journée, l'heure de retour se décale d'autant.
-- Vibrations : Safari sur iPhone n'a pas d'API de vibration. Depuis iOS 26.5, seuls les vrais interrupteurs (options) vibrent ; les curseurs et les boutons vibrent sur Android et sur iOS 17.4 à 26.4.
+- Vibrations : Safari sur iPhone n'a pas d'API de vibration. Boucle passe par l'interrupteur du système : chaque bouton, choix ou option vibre au toucher, y compris depuis iOS 26.5. Un curseur qu'on fait glisser ne peut pas vibrer sur iPhone (il vibre sur Android) : son pouce enfle à chaque palier.
 
 ## Développement
 

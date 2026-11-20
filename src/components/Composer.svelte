@@ -7,7 +7,7 @@
   import Stops from './Stops.svelte';
   import { app } from '../lib/state.svelte';
   import { isDesktop, isIOS, isStandalone } from '../lib/platform';
-  import { asSwitch, haptic, nativeSwitch } from '../lib/haptics';
+  import { asSwitch, haptic, nativeSwitch, tactile } from '../lib/haptics';
   import { elevationLevel, SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
   import { kmSetting, pace, speed } from '../lib/format';
   import { nightfall } from '../lib/conditions';
@@ -178,9 +178,9 @@
         <span class="row-icon"><Icon name="gauge" /></span>
         <span class="row-label">{isRun ? 'Allure' : 'Vitesse moyenne'}<span class="row-sub">Pour estimer la durée</span></span>
         <div class="stepper" role="group" aria-label={isRun ? 'Allure' : 'Vitesse moyenne'}>
-          <button type="button" aria-label={isRun ? 'Allure plus rapide' : 'Moins vite'} onclick={() => stepPace(-1)}><Icon name="minus" size={14} /></button>
+          <button use:tactile type="button" aria-label={isRun ? 'Allure plus rapide' : 'Moins vite'} onclick={() => stepPace(-1)}><Icon name="minus" size={14} /></button>
           <output class="tabular" aria-live="polite">{isRun ? pace(paceValue) : speed(paceValue)}</output>
-          <button type="button" aria-label={isRun ? 'Allure plus lente' : 'Plus vite'} onclick={() => stepPace(1)}><Icon name="plus" size={14} /></button>
+          <button use:tactile type="button" aria-label={isRun ? 'Allure plus lente' : 'Plus vite'} onclick={() => stepPace(1)}><Icon name="plus" size={14} /></button>
         </div>
       </div>
     </div>
