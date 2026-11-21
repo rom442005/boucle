@@ -708,14 +708,16 @@ textarea {
 /* Communauté : liste groupée du fil et des profils, état vide qui guide. */
 .c-list {
   list-style: none;
+  display: grid;
+  gap: 12px;
   margin: 0 0 14px;
   padding: 0;
-  border-radius: 20px;
+}
+/* Chaque parcours est sa propre carte, aux coins concentriques de l'image qu'elle porte. */
+.c-list > li {
+  border-radius: 28px;
   background: var(--fill-group);
   overflow: hidden;
-}
-.c-list > li + li {
-  border-top: 0.5px solid var(--separator);
 }
 .c-empty {
   display: grid;

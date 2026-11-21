@@ -6,7 +6,12 @@
   import { LEVELS, type CommunityRoute } from '../lib/community/types';
   import { ago } from '../lib/community/time';
   import { decodePolyline, haversine } from '../lib/geo';
-  import { km, NNBSP } from '../lib/format';
+  import { km, kmValue, NNBSP } from '../lib/format';
+  import { SCENES, SPORT_EMOJI } from '../lib/scenes';
+  import type { Shape } from '../lib/types';
+
+  const SPORT_SCENE = { run: 'run', trail: 'trail', road: 'road', gravel: 'gravel' } as const;
+  const SHAPE_EMOJI: Record<Shape, string> = { loop: '🔁', outback: '↩️', oneway: '➡️' };
   import { SPORTS, SHAPES } from '../lib/sports';
   import { tactile } from '../lib/haptics';
   import type { LngLat } from '../lib/types';
@@ -20,25 +25,24 @@
 
 <li class="c-li li" style:--i={Math.min(i, 8)}>
   <button use:tactile type="button" class="c-open" onclick={() => community.openRoute(r.id, r)}>
+    <!-- La sortie en image : sa première photo, sinon le tracé en grand sur la teinte du sport. -->
+    <span class="c-media" class:photo={!!r.cover} style:--tone={SCENES[SPORT_SCENE[r.sport]].tone}>
+      {#if r.cover}<img src={r.cover} alt="" loading="lazy" decoding="async" />{/if}
+      <span class="c-trace" class:small={!!r.cover}><RouteGlyph {coords} size={r.cover ? 52 : 120} active /></span>
+      <span class="c-chip glass">{SPORT_EMOJI[r.sport]} {SPORTS[r.sport].label}</span>
+      <span class="c-stats glass rounded tabular"><b>{kmValue(r.distanceM)}</b> km · ⛰️ <b>{r.ascentM}</b> m</span>
+    </span>
+    <span class="c-txt">
+      <span class="c-title">{r.name}</span>
+      <span class="c-meta tabular">{SHAPE_EMOJI[r.shape]} {SHAPES[r.shape].label}{#if away != null}{' · 📍 '}{away < 1000 ? `${Math.round(away / 10) * 10}${NNBSP}m` : km(away)}{/if}{#if !author}{' · '}{ago(r.createdAt)}{/if}</span>
+    </span>
     {#if author}
       <span class="c-author">
-        <Avatar id={r.authorId} name={r.authorName} src={r.authorAvatar} size={30} />
-        <span class="c-who">
-          <span class="c-name-a">{r.authorName}</span>
-          <span class="c-sub">{LEVELS[r.authorLevel]}{r.authorCity ? ` · ${r.authorCity}` : ''} · {ago(r.createdAt)}</span>
-        </span>
+        <Avatar id={r.authorId} name={r.authorName} src={r.authorAvatar} size={26} />
+        <span class="c-name-a">{r.authorName}</span>
+        <span class="c-sub">{LEVELS[r.authorLevel]}{r.authorCity ? ` · ${r.authorCity}` : ''} · {ago(r.createdAt)}</span>
       </span>
     {/if}
-    <span class="c-route">
-      <RouteGlyph {coords} size={54} active />
-      <span class="c-txt">
-        <span class="c-title">{r.name}</span>
-        <span class="c-meta tabular">{km(r.distanceM)} · {r.ascentM}{NNBSP}m D+ · {SPORTS[r.sport].label} · {SHAPES[r.shape].label.toLowerCase()}</span>
-        {#if away != null}<span class="c-meta tabular">Départ à {away < 1000 ? `${Math.round(away / 10) * 10}${NNBSP}m` : km(away)}{!author ? ` · ${ago(r.createdAt)}` : ''}</span>
-        {:else if !author}<span class="c-meta">{ago(r.createdAt)}</span>{/if}
-      </span>
-      {#if r.cover}<img class="c-cover" src={r.cover} alt="" width="54" height="54" loading="lazy" decoding="async" />{/if}
-    </span>
   </button>
   <div class="c-foot">
     <button use:tactile type="button" class="c-act" class:on={r.likedByMe} aria-pressed={r.likedByMe} aria-label="J’aime ({r.likes})" onclick={() => community.toggleLike(r)}>
@@ -53,15 +57,82 @@
 </li>
 
 <style>
-  .c-cover {
-    flex: none;
-    width: 54px;
-    height: 54px;
-    margin-left: auto;
-    border-radius: 12px;
+  .c-media {
+    position: relative;
+    display: grid;
+    place-items: center end;
+    padding-right: 24px;
+    height: 168px;
+    border-radius: 20px;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, 0.22), transparent 60%),
+      linear-gradient(160deg, color-mix(in srgb, var(--tone) 70%, #fff), var(--tone));
+  }
+  .c-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    background: var(--fill-2);
-    box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+    transition: transform 600ms var(--ease-out);
+  }
+  .c-open:active .c-media img {
+    transform: scale(1.03);
+  }
+  .c-trace {
+    position: relative;
+    display: grid;
+  }
+  .c-trace :global(.glyph) {
+    background: transparent;
+  }
+  .c-trace :global(.glyph path) {
+    stroke: #fff;
+    stroke-width: 3;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+  }
+  .c-trace :global(.glyph circle) {
+    fill: var(--tint);
+    stroke: #fff;
+    stroke-width: 1.5;
+  }
+  .c-trace.small {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.28);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+  .c-chip,
+  .c-stats {
+    position: absolute;
+    left: 10px;
+    --g-bg: rgba(20, 20, 22, 0.32);
+    --blur: 14px;
+    --rim-hi: rgba(255, 255, 255, 0.55);
+    --rim-lo: rgba(255, 255, 255, 0.14);
+    --rim-hi2: rgba(255, 255, 255, 0.3);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .c-chip {
+    top: 10px;
+    padding: 5px 11px;
+  }
+  .c-stats {
+    bottom: 10px;
+    padding: 6px 12px;
+    font-weight: 500;
+  }
+  .c-stats b {
+    font-size: 1rem;
+    font-weight: 700;
   }
   .c-ph {
     pointer-events: none;
@@ -72,7 +143,7 @@
   .c-open {
     display: grid;
     gap: 10px;
-    padding: 12px 14px 6px 12px;
+    padding: 8px 8px 4px;
     text-align: left;
     color: var(--label-3);
   }
@@ -82,10 +153,7 @@
   .c-author {
     display: flex;
     align-items: center;
-    gap: 10px;
-  }
-  .c-who {
-    display: grid;
+    gap: 8px;
     min-width: 0;
   }
   .c-name-a {
@@ -100,16 +168,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .c-route {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
   .c-txt {
-    flex: 1;
     min-width: 0;
     display: grid;
-    gap: 2px;
+    gap: 3px;
+    padding: 0 6px;
+  }
+  .c-author {
+    padding: 0 6px;
   }
   .c-title {
     font-weight: 650;

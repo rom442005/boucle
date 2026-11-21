@@ -280,7 +280,7 @@
         <div class="group">
           {#each conds as c, i (i)}
             <div class="row">
-              <span class="row-icon" class:warn={c.warn}><Icon name={c.icon} size={20} /></span>
+              <span class="row-icon" class:warn={c.warn} class:emo={!!c.emoji}>{#if c.emoji}{c.emoji}{:else}<Icon name={c.icon} size={20} />{/if}</span>
               <span class="row-label">{c.title}<span class="row-sub">{c.sub}</span></span>
             </div>
           {/each}
@@ -670,6 +670,11 @@
   /* Départ ou retour dans le noir : l'icône passe à l'ambre des avertissements. */
   .conds .row-icon.warn {
     color: var(--warn);
+  }
+  .conds .row-icon.emo {
+    font-size: 1.375rem;
+    line-height: 1;
+    place-items: center;
   }
   .actions {
     display: grid;

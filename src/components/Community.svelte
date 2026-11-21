@@ -36,9 +36,8 @@
   <ProfileView />
 {:else}
   {#if community.demo}
-    <div class="banner demo" role="note">
-      <span class="icon"><Icon name="shield" size={18} /></span>
-      <span>Démonstration : membres et parcours fictifs, rien ne quitte ton appareil. Code de connexion : 123456.</span>
+    <div class="demo" role="note" aria-label="Démonstration : membres et parcours fictifs, rien ne quitte ton appareil. Code de connexion : 123456.">
+      <span>🧪 Démo · code <b class="tabular">123456</b></span>
       {#if community.configured}<button use:tactile type="button" class="text-btn" onclick={() => community.quitDemo()}>Quitter</button>{/if}
     </div>
   {/if}
@@ -105,12 +104,24 @@
 
 <style>
   .demo {
-    margin-bottom: 12px;
+    display: flex;
     align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: fit-content;
+    margin: 0 auto 12px;
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: var(--fill-2);
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .demo b {
+    color: var(--label);
   }
   .demo .text-btn {
-    margin-left: auto;
-    min-height: 32px;
+    min-height: 28px;
+    font-size: 0.8125rem;
   }
   .feed-head {
     display: grid;
