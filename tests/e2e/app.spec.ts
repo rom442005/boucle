@@ -43,9 +43,10 @@ async function open(page: Page) {
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
 }
 
-/** « Faire une boucle » : les réglages montent du bas. */
+/** Les réglages : sur iPhone, « Faire une boucle » les fait monter ; sur Mac, ils sont déjà dans le panneau. */
 async function compose(page: Page) {
-  await page.getByRole('button', { name: 'Faire une boucle' }).click();
+  const go = page.getByRole('button', { name: 'Faire une boucle' });
+  if (await go.count()) await go.click();
   await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
 }
 
@@ -434,7 +435,7 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await expect(page.getByRole('button', { name: /^Ne plus suivre / })).toBeVisible();
   // Publier un parcours créé.
   await page.getByRole('button', { name: /Retour à la Communauté/ }).click();
-  await page.getByRole('button', { name: /Retour aux réglages/ }).click();
+  await page.getByRole('button', { name: 'Créer', exact: true }).click();
   await createLoop(page);
   await page.getByRole('button', { name: 'Publier' }).click();
   await page.getByRole('textbox', { name: 'Nom' }).fill('Ma boucle de test');
@@ -442,7 +443,7 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await expect(page.getByText('Publié dans la Communauté')).toBeVisible();
 });
 
-test('premier lancement : créer un compte, puis la carte seule et les réglages qui montent', async ({ page }) => {
+test('premier lancement : créer un compte, puis les quatre onglets', async ({ page, browserName }) => {
   await page.goto('./');
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toBeVisible();
   await page.getByRole('button', { name: 'Créer un compte' }).click();
@@ -453,15 +454,25 @@ test('premier lancement : créer un compte, puis la carte seule et les réglages
   await page.getByRole('textbox', { name: 'Prénom' }).fill('Sam');
   await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('2000');
   await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Vélo' }).click();
-  await page.getByRole('checkbox').check();
+  await page.locator('.welcome').getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Créer mon profil' }).click();
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
-  // L'accueil : la carte, et trois boutons.
-  await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Communauté — Sam/ })).toBeVisible();
-  await compose(page);
-  await page.getByRole('button', { name: 'Fermer les réglages' }).click();
-  await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+  // Quatre onglets : en bas sur iPhone, en haut du panneau sur Mac.
+  const tabs = page.getByRole('navigation', { name: 'Sections' });
+  for (const t of ['Créer', 'Communauté', 'Mes parcours', 'Profil']) await expect(tabs.getByRole('button', { name: t, exact: true })).toBeVisible();
+  await tabs.getByRole('button', { name: 'Profil', exact: true }).click();
+  await expect(page.getByRole('region', { name: /^Profil de Sam/ })).toBeVisible();
+  await tabs.getByRole('button', { name: 'Créer', exact: true }).click();
+  if (browserName !== 'chromium') {
+    // iPhone : la carte, « Faire une boucle » au-dessus des onglets ; les réglages montent puis redescendent.
+    await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+    await compose(page);
+    await expect(tabs).toHaveCount(0);
+    await page.getByRole('button', { name: 'Fermer les réglages' }).click();
+    await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
+  }
   // Au lancement suivant, plus de question.
   await page.reload();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();

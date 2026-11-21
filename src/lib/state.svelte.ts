@@ -65,6 +65,8 @@ class AppState {
   phase = $state<Phase>('compose');
   /** Accueil : la carte seule, les réglages repliés derrière le bouton « Faire une boucle ». */
   home = $state(true);
+  /** hauteur de la barre d'onglets du bas (iPhone), 0 quand elle est cachée */
+  tabbarH = $state(0);
   /** écran à retrouver en quittant le suivi */
   private beforeFollow: Phase = 'results';
 

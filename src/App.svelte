@@ -31,6 +31,7 @@
   import HomeBar from './components/HomeBar.svelte';
   import Welcome from './components/Welcome.svelte';
   import Lightbox from './components/Lightbox.svelte';
+  import TabBar from './components/TabBar.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -115,19 +116,25 @@
     const n = app.routes.length;
     if (n > 1) app.select((app.selected + dir + n) % n);
   }
-  /** Accueil : la carte seule et la barre du bas. */
-  const athome = $derived(app.phase === 'compose' && app.home);
+  /** Accueil (iPhone) : la carte seule, « Faire une boucle » et les onglets. Sur Mac, le panneau reste ouvert. */
+  const athome = $derived(!app.wide && app.phase === 'compose' && app.home);
   /** iPhone : les réglages couvrent l'écran (pas de boutons de carte par-dessus). */
   const fullsheet = $derived(!app.wide && app.phase === 'compose' && !app.home && app.detent === 'full');
   const canSwipe = $derived(!app.wide && app.phase === 'results' && app.routes.length > 1);
-  /** Onglet actif sur Mac. */
-  const tab = $derived(
-    app.phase === 'community' || (app.phase === 'detail' && app.detailFrom?.kind === 'communaute')
-      ? 'community'
-      : app.phase === 'library' || app.phase === 'detail'
-        ? 'library'
-        : 'create',
+  /** Ton propre profil est affiché. */
+  const meView = $derived(app.phase === 'community' && community.view === 'profile' && !!community.viewing && community.viewing.profile.id === community.me?.id);
+  /** Onglet actif : en haut sur Mac, en bas sur iPhone. */
+  const tab = $derived<'create' | 'community' | 'library' | 'profile'>(
+    meView
+      ? 'profile'
+      : app.phase === 'community' || (app.phase === 'detail' && app.detailFrom?.kind === 'communaute')
+        ? 'community'
+        : app.phase === 'library' || (app.phase === 'detail' && (app.detailFrom?.kind === 'favori' || app.detailFrom?.kind === 'historique'))
+          ? 'library'
+          : 'create',
   );
+  /** iPhone : les onglets du bas, sauf pendant les réglages (plein écran), le suivi ou un choix sur la carte. */
+  const showTabs = $derived(!app.wide && app.phase !== 'follow' && !welcome && !app.pickOnMap && !(app.phase === 'compose' && !app.home));
   const backLabel = $derived(
     app.phase === 'detail' ? (app.detailFrom?.kind === 'communaute' ? 'Retour à la Communauté' : 'Retour à mes parcours') : 'Retour aux réglages',
   );
@@ -167,6 +174,7 @@
     <BuildingsLegend />
   {/if}
 
+  {#if showTabs}<TabBar active={tab} />{/if}
   {#if athome}
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
   {:else}
@@ -193,8 +201,9 @@
             <button use:tactile type="button" class="pill" class:is-on={tab === 'library'} onclick={() => {
                 community.sheet = null;
                 app.openLibrary();
-              }}>
-              Mes parcours{#if app.library.length}<span class="tabular dim">&nbsp;{app.library.length}</span>{/if}
+              }}>Mes parcours</button>
+            <button use:tactile type="button" class="pill prof" class:is-on={tab === 'profile'} onclick={() => community.openMe()}>
+              {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={20} />{/if}Profil
             </button>
           </nav>
         </div>
@@ -213,24 +222,27 @@
         </div>
       {:else if app.phase === 'community'}
         <div class="nav">
-          <button use:tactile type="button" class="round navbtn" aria-label={community.view === 'profile' ? 'Retour à la Communauté' : 'Retour aux réglages'} onclick={communityBack}>
-            <Icon name="back" size={20} />
-          </button>
-          <h2>{headTitle}</h2>
-          {#if community.available && community.view === 'feed'}
-            <button use:tactile type="button" class="round navbtn me" aria-label={community.signedIn ? 'Mon profil' : 'Se connecter'} onclick={() => community.openMyProfile()}>
-              {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={32} />{:else}<Icon name="user" size={22} />{/if}
+          <!-- Les onglets mènent partout : un retour seulement depuis le profil d'un autre membre. -->
+          {#if community.view === 'profile' && !meView}
+            <button use:tactile type="button" class="round navbtn" aria-label="Retour à la Communauté" onclick={communityBack}>
+              <Icon name="back" size={20} />
             </button>
           {:else}
             <span class="navbtn-space" aria-hidden="true"></span>
           {/if}
+          <h2>{headTitle}</h2>
+          <span class="navbtn-space" aria-hidden="true"></span>
         </div>
       {:else if app.phase === 'compose'}
         <!-- Les réglages, montés du bas : un bouton pour redescendre vers la carte, puis le départ. -->
         <div class="nav">
-          <button use:tactile type="button" class="round navbtn" aria-label="Fermer les réglages" onclick={() => app.closeComposer()}>
-            <Icon name="down" size={20} />
-          </button>
+          {#if app.wide}
+            <span class="navbtn-space" aria-hidden="true"></span>
+          {:else}
+            <button use:tactile type="button" class="round navbtn" aria-label="Fermer les réglages" onclick={() => app.closeComposer()}>
+              <Icon name="down" size={20} />
+            </button>
+          {/if}
           <h2>{headTitle}</h2>
           <span class="navbtn-space" aria-hidden="true"></span>
         </div>
@@ -266,9 +278,13 @@
         </div>
       {:else}
         <div class="nav">
-          <button use:tactile type="button" class="round navbtn" aria-label={backLabel} onclick={() => (app.phase === 'library' ? app.closeLibrary() : app.back())}>
-            <Icon name="back" size={20} />
-          </button>
+          {#if app.phase === 'library'}
+            <span class="navbtn-space" aria-hidden="true"></span>
+          {:else}
+            <button use:tactile type="button" class="round navbtn" aria-label={backLabel} onclick={() => app.back()}>
+              <Icon name="back" size={20} />
+            </button>
+          {/if}
           <h2>{headTitle}</h2>
           {#if app.phase === 'results'}
             <button use:tactile type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
@@ -376,7 +392,7 @@
     color: var(--tint);
     background: var(--tint-soft);
   }
-  /* Trois onglets : sur leur propre ligne, sous le nom de l'app, à parts égales. */
+  /* Quatre onglets : sur leur propre ligne, sous le nom de l'app. */
   .brand {
     flex-wrap: wrap;
     row-gap: 10px;
@@ -384,17 +400,20 @@
   .tabs {
     flex-basis: 100%;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
+    grid-template-columns: repeat(4, auto);
+    gap: 2px;
     padding: 3px;
     border-radius: 999px;
     background: var(--fill-2);
   }
   .tabs .pill {
     min-height: 32px;
-    padding: 0 10px;
+    padding: 0 8px;
     font-size: 0.8125rem;
     background: transparent;
+  }
+  .tabs .prof {
+    gap: 6px;
   }
   .tabs .pill.is-on {
     background: var(--thumb);
@@ -402,10 +421,6 @@
     box-shadow:
       0 3px 8px rgba(0, 0, 0, 0.1),
       0 1px 1px rgba(0, 0, 0, 0.04);
-  }
-  .dim {
-    color: var(--label-2);
-    font-weight: 500;
   }
   .start-wide {
     display: grid;
@@ -420,10 +435,6 @@
   }
   .sheet {
     animation: cascade-in 320ms var(--ease-out) both;
-  }
-  .me {
-    padding: 0;
-    overflow: hidden;
   }
   .nav h2 {
     flex: 1;

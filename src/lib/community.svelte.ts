@@ -623,6 +623,13 @@ class CommunityState {
     }
   }
 
+  /** Onglet Profil : ton profil, ou la connexion d'abord (dans le panneau de la Communauté). */
+  openMe() {
+    if (app.phase !== 'community') this.open();
+    this.sheet = null;
+    void this.openMyProfile();
+  }
+
   async openMyProfile() {
     await this.requireAccount('Connecte-toi pour retrouver ton profil.', () => void this.openProfile(this.me!.id));
   }

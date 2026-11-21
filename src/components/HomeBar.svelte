@@ -1,26 +1,19 @@
 <script lang="ts">
-  import Icon from './Icon.svelte';
-  import Avatar from './Avatar.svelte';
   import { app } from '../lib/state.svelte';
-  import { community } from '../lib/community.svelte';
   import { tactile } from '../lib/haptics';
 
   /*
-   * Accueil : la carte seule et trois boutons en bas. Au milieu, « Faire une boucle » ouvre les réglages ;
-   * à gauche, Mes parcours ; à droite, la Communauté (ou ton profil).
+   * Accueil (iPhone) : la carte seule et, au-dessus des onglets, le geste principal : « Faire une boucle »,
+   * qui fait monter les réglages.
    */
 
-  // La carte se cadre au-dessus de la barre.
+  // La carte se cadre au-dessus du bouton et des onglets.
   $effect(() => {
-    if (app.wide) app.padding = { top: 40, bottom: 130, left: 40, right: 80 };
-    else app.padding = { top: 60, bottom: 140, left: 28, right: 64 };
+    app.padding = { top: 60, bottom: 110 + app.tabbarH, left: 28, right: 64 };
   });
 </script>
 
-<nav class="home" aria-label="Accueil">
-  <button use:tactile type="button" class="side glass" aria-label="Mes parcours : favoris et historique" onclick={() => app.openLibrary()}>
-    <Icon name="list" size={22} />
-  </button>
+<nav class="home" aria-label="Accueil" style:--tabs="{app.tabbarH}px">
   <button use:tactile type="button" class="go" onclick={() => app.openComposer()}>
     <svg class="loop" viewBox="0 0 1024 1024" width="22" height="22" aria-hidden="true">
       <path d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="currentColor" stroke-width="92" stroke-linecap="round" stroke-linejoin="round" />
@@ -28,11 +21,6 @@
     </svg>
     Faire une boucle
   </button>
-  {#if community.available}
-    <button use:tactile type="button" class="side glass me" aria-label={community.me ? `Communauté — ${community.me.firstName}` : 'Communauté'} onclick={() => community.open()}>
-      {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={40} />{:else}<Icon name="users" size={22} />{/if}
-    </button>
-  {/if}
 </nav>
 
 <style>
@@ -40,7 +28,7 @@
     position: fixed;
     z-index: 18;
     left: 50%;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+    bottom: calc(var(--tabs, 0px) + 14px);
     translate: -50% 0;
     display: flex;
     align-items: center;
@@ -53,21 +41,6 @@
       translate: -50% 40px;
       scale: 0.94;
     }
-  }
-  .side {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    color: var(--label);
-    transition: transform 260ms var(--spring);
-  }
-  .side:active {
-    transform: scale(0.9);
-  }
-  .me {
-    padding: 0;
   }
   /* Le geste principal : une capsule rose, la boucle de l'icône en tête. */
   .go {

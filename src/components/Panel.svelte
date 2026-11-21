@@ -31,11 +31,13 @@
   /** Hauteur du contenu jusqu'au repère [data-fold] : la position moyenne s'arrête juste en dessous. */
   let foldH = $state(0);
 
+  /** barre d'onglets en bas (iPhone) : le panneau se pose au-dessus */
+  const tabs = $derived(app.wide ? 0 : app.tabbarH);
   const heights = $derived({
     peek: Math.max(110, Math.round(headH + footH)),
     half: foldH ? Math.round(Math.min(headH + foldH + footH, vh * 0.66)) : Math.round(Math.min(vh * 0.62, 600)),
     // Les réglages prennent tout l'écran ; un parcours ou une liste laisse voir le haut de la carte.
-    full: Math.round(vh - safeTop - (app.phase === 'compose' ? 10 : 70)),
+    full: Math.round(vh - safeTop - (app.phase === 'compose' ? 10 : 70) - tabs),
   } satisfies Record<Detent, number>);
 
   // Mesure du repère (le contenu change selon l'étape et le sport).
@@ -83,7 +85,7 @@
       const top = app.phase === 'compose' ? 128 : 40;
       // Parcours affiché : marges latérales plus larges pour que les pastilles des côtes tiennent à l'écran.
       const side = app.phase === 'results' || app.phase === 'detail' ? 64 : 28;
-      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24, left: side, right: 64 };
+      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24 + tabs, left: side, right: 64 };
     }
   });
 
@@ -192,7 +194,9 @@
   class:wide={app.wide}
   class:dragging={dragH != null}
   class:is-peek={!app.wide && app.detent === 'peek' && dragH == null}
+  class:over-tabs={tabs > 0}
   style:height={app.wide ? undefined : `${height}px`}
+  style:bottom={tabs ? `${tabs + 6}px` : undefined}
   aria-label={label}
 >
   <div
@@ -326,7 +330,13 @@
     padding: 8px 14px max(12px, calc(var(--safe-bottom) - 8px));
     border-top: 0.5px solid var(--separator);
   }
-  .wide .foot {
-    padding-bottom: 16px;
+  .wide .foot,
+  .over-tabs .foot {
+    padding-bottom: 12px;
+  }
+  .panel.over-tabs {
+    transition:
+      height 620ms var(--sheet-ease),
+      bottom 320ms var(--ease-out);
   }
 </style>
