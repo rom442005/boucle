@@ -481,3 +481,28 @@ test('premier lancement : créer un compte, puis les quatre onglets', async ({ p
   await page.waitForTimeout(1500);
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
 });
+
+// Garde-fou des mises à jour (MapLibre 6 a d'abord laissé la carte vide et décalé le cadrage) : la carte
+// se dessine sans erreur (ni service bloqué par les règles de sécurité de la page), et un parcours trouvé
+// tient dans la partie visible, hors panneau.
+test('carte : aucune erreur, parcours cadré dans la partie visible', async ({ page, browserName }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => m.type() === 'error' && /worker|webgl|maplibre|content security policy|refused to/i.test(m.text()) && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(e.message));
+  await open(page);
+  // Sans remonter le panneau : sur iPhone, il se replie pour montrer tout le parcours.
+  await compose(page);
+  await page.getByRole('button', { name: /Créer la boucle/ }).click();
+  await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeAttached({ timeout: 60_000 });
+  await expect(page.locator('.card.ghost')).toHaveCount(0, { timeout: 30_000 });
+  await page.waitForTimeout(2500);
+  const start = (await page.locator('.mk-start').boundingBox())!;
+  const panel = (await page.locator('section.panel').boundingBox())!;
+  const view = page.viewportSize()!;
+  expect(start.x).toBeGreaterThan(0);
+  expect(start.x + start.width).toBeLessThan(view.width);
+  expect(start.y).toBeGreaterThan(0);
+  if (browserName === 'chromium') expect(start.x).toBeGreaterThan(panel.x + panel.width);
+  else expect(start.y + start.height).toBeLessThan(panel.y);
+  expect(errors).toEqual([]);
+});

@@ -1,8 +1,11 @@
 name: Déploiement GitHub Pages
 
+# Chaque envoi sur main est vérifié (failles, types, tests, construction) avant d'être mis en ligne ;
+# une proposition de mise à jour (Dependabot) passe les mêmes contrôles, sans être publiée.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -18,12 +21,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
+      # Aucune faille importante dans ce qui part chez les utilisateurs (les outils de construction à part).
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run check
       - run: npm test
       - run: npm run build
@@ -31,11 +36,13 @@ jobs:
           # Communauté : adresse et clé publique du projet Supabase (variables du dépôt, vides tant qu'il n'existe pas).
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

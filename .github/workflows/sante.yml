@@ -1,0 +1,38 @@
+name: Contrôle de santé hebdomadaire
+
+# Chaque lundi matin, l'app en entier est remise à l'épreuve, comme si quelqu'un l'utilisait : failles connues,
+# types, tests, construction, parcours dans un vrai navigateur (Mac et iPhone), et génération réelle contre
+# les services publics (itinéraires, carte, météo). Si un service change ou si une faille apparaît, ce
+# contrôle échoue et GitHub prévient par e-mail le propriétaire du dépôt.
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sante:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Failles connues (ce qui part chez les utilisateurs)
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Failles connues (outils de construction, pour information)
+        run: npm audit --audit-level=critical
+      - run: npm run check
+      - run: npm test
+      - name: Génération réelle (services publics)
+        run: npx vitest run tests/unit/live.test.ts
+        env:
+          LIVE: '1'
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Parcours dans un vrai navigateur
+        run: npx playwright test

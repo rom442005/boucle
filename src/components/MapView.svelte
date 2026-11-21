@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import maplibregl from 'maplibre-gl';
+  import * as maplibregl from 'maplibre-gl';
+  // MapLibre 6 calcule les tuiles dans un fichier à part : servi avec l'app (sinon la carte reste vide).
+  import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import type { GeoJSONSource, Map as MLMap, Marker } from 'maplibre-gl';
   import type { FeatureCollection, GeoJSON, LineString, Polygon } from 'geojson';
   import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
@@ -17,6 +19,7 @@
   import Icon from './Icon.svelte';
   import type { LngLat, Route } from '../lib/types';
 
+  maplibregl.setWorkerUrl(mapWorkerUrl);
   const VIEW_KEY = 'boucle.vue.v1';
   const NANTES: LngLat = [-1.5536, 47.2184];
   const dark = matchMedia('(prefers-color-scheme: dark)');
@@ -143,6 +146,9 @@
    * remplacée dans la foulée ne serait jamais affichée.
    */
   let fadeTimers: ReturnType<typeof setTimeout>[] = [];
+  // Propriétés nommées à la volée (fondus, plan/satellite) : MapLibre 6 type les noms, on les passe tels quels.
+  const paint = (m: MLMap, id: string, prop: string, v: unknown) => (m.setPaintProperty as (i: string, p: string, v: unknown) => void).call(m, id, prop, v);
+  const layout = (m: MLMap, id: string, prop: string, v: unknown) => (m.setLayoutProperty as (i: string, p: string, v: unknown) => void).call(m, id, prop, v);
   function fadeProp(id: string, prop: string, value: unknown, ms: number, delay = 0) {
     if (delay > 0) {
       fadeTimers.push(setTimeout(() => fadeProp(id, prop, value, ms), delay));
@@ -150,8 +156,8 @@
     }
     const m = map;
     if (!m?.getLayer(id)) return;
-    m.setPaintProperty(id, `${prop}-transition`, { duration: ms, delay: 0 });
-    m.setPaintProperty(id, prop, value);
+    paint(m, id, `${prop}-transition`, { duration: ms, delay: 0 });
+    paint(m, id, prop, value);
   }
   function clearFades() {
     for (const t of fadeTimers) clearTimeout(t);
@@ -389,7 +395,7 @@
           }
         }
         m.setPaintProperty(id, 'raster-opacity-transition', { duration: 640 * motion, delay: 0 });
-        m.setPaintProperty(id, 'raster-opacity', full);
+        paint(m, id, 'raster-opacity', full);
       } else if (motion) {
         m.setPaintProperty(id, 'raster-opacity-transition', { duration: 420, delay: 0 });
         m.setPaintProperty(id, 'raster-opacity', 0);
@@ -415,8 +421,8 @@
       if (RASTERS.includes(o.id) && o.prop === 'visibility') continue;
       const v = sat ? o.value : planValue(planStyle, o);
       try {
-        if (o.kind === 'paint') m.setPaintProperty(o.id, o.prop, v);
-        else m.setLayoutProperty(o.id, o.prop, v);
+        if (o.kind === 'paint') paint(m, o.id, o.prop, v);
+        else layout(m, o.id, o.prop, v);
       } catch {
         /* propriété refusée : le plan reste lisible */
       }
@@ -574,30 +580,46 @@
    * en 3D, avec une inclinaison douce qui embrasse tout le parcours. Un lieu lointain se rejoint en survolant
    * le globe, comme dans Plans : on s'élève, on traverse, on redescend.
    */
-  const NO_PAD: Padding = { top: 0, bottom: 0, left: 0, right: 0 };
   /** Un peu d'air entre un parcours cadré et les bords (panneau, profil, boutons). */
   const breathe = (p: Padding): Padding => ({ top: p.top + 18, bottom: p.bottom + 18, left: p.left + 18, right: p.right + 18 });
-  function fitCoords(coords: LngLat[], animate = true, pitch = app.terrain3d ? 52 : 0, bearing?: number) {
+  function fitCoords(coords: LngLat[], animate = true, pitch = app.terrain3d ? 52 : 0, bearing?: number, settle = true) {
     if (!map || coords.length < 2) return;
     const [w, s, e, n] = bbox(coords);
-    // En projection globe, MapLibre cadre d'après la seule marge passée ici : la marge propre de la carte
-    // (celle qui centre le globe vu de loin) est mise à zéro le temps du calcul, puis rejointe pendant le mouvement.
-    const tr = map.transform;
-    const kept = { ...tr.padding };
-    tr.setPadding(NO_PAD);
+    // La partie visible de la carte (hors panneau, onglets, profil) : `pad`. MapLibre ajoute à la marge passée
+    // celle que la carte porte déjà (celle qui centre le globe vu de loin) : on ne lui passe que la différence.
+    // La carte vole ensuite sans marge, le parcours décalé vers la partie visible (offset).
+    const pad = breathe(untrack(() => app.padding));
+    const { top = 0, bottom = 0, left = 0, right = 0 } = map.getPadding();
+    const own = { top, bottom, left, right };
+    const rest = {
+      top: Math.max(0, pad.top - own.top),
+      bottom: Math.max(0, pad.bottom - own.bottom),
+      left: Math.max(0, pad.left - own.left),
+      right: Math.max(0, pad.right - own.right),
+    };
     const cam = map.cameraForBounds(
       [
         [w, s],
         [e, n],
       ],
-      { padding: breathe(untrack(() => app.padding)), maxZoom: 16, ...(bearing != null ? { bearing } : {}) },
+      { padding: rest, maxZoom: 16, ...(bearing != null ? { bearing } : {}) },
     );
-    tr.setPadding(kept);
     if (!cam) return;
     const c = map.getCenter();
     const far = haversine([c.lng, c.lat], [(w + e) / 2, (s + n) / 2]) > 40000 || map.getZoom() < 8;
     const motion = !animate || reduce ? { duration: 0 } : far ? { curve: 1.55, speed: 1.25, maxDuration: 3600 } : { duration: 850 };
-    map.flyTo({ ...cam, pitch, padding: NO_PAD, ...motion });
+    map.flyTo({
+      center: cam.center,
+      zoom: cam.zoom,
+      bearing: cam.bearing,
+      pitch,
+      padding: { top: 0, bottom: 0, left: 0, right: 0 },
+      // Le centre calculé est celui de la carte avec sa propre marge : sans marge, il se décale d'autant.
+      offset: [(own.left - own.right) / 2, (own.top - own.bottom) / 2],
+      ...motion,
+    });
+    // Venu de loin (le globe), le cadrage calculé là-haut n'est qu'approché : il s'ajuste à l'arrivée.
+    if (far && settle && !reduce) map.once('moveend', () => fitCoords(coords, true, pitch, bearing, false));
   }
 
   /**
