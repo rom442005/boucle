@@ -3,22 +3,42 @@ import type { HistoryEntry } from './persist';
 
 /*
  * Paysages en fond des écrans sans parcours (accueil, réglages sur iPhone, profil, Mes parcours), sous des
- * blocs de verre. Photos Unsplash (licence Unsplash, usage libre), servies avec l'app. La teinte d'attente
- * reprend le ton dominant de chaque photo, le temps qu'elle arrive.
+ * blocs de verre. Sept photos Unsplash (licence Unsplash, usage libre) servies avec l'app, en deux tailles :
+ * portrait pour l'iPhone, très grande pour les écrans larges. Elles tournent toutes les cinq minutes, les
+ * mêmes partout au même moment ; la teinte dominante de chacune attend qu'elle soit là.
  */
-export type Scene = 'run' | 'trail' | 'road' | 'gravel' | 'welcome' | 'profile' | 'library';
+export const SCENES = [
+  { file: 's1', tone: '#3d4a2a' },
+  { file: 's2', tone: '#5d6170' },
+  { file: 's3', tone: '#4f5d3c' },
+  { file: 's4', tone: '#7a8584' },
+  { file: 's5', tone: '#8d9c96' },
+  { file: 's6', tone: '#b77a68' },
+  { file: 's7', tone: '#2e5656' },
+] as const;
 
-export const SCENES: Record<Scene, { src: string; tone: string }> = {
-  run: { src: 'scenes/run.jpg', tone: '#3d4a2a' },
-  trail: { src: 'scenes/trail.jpg', tone: '#5d6170' },
-  road: { src: 'scenes/road.jpg', tone: '#4f5d3c' },
-  gravel: { src: 'scenes/gravel.jpg', tone: '#7a8584' },
-  welcome: { src: 'scenes/welcome.jpg', tone: '#8d9c96' },
-  profile: { src: 'scenes/profile.jpg', tone: '#b77a68' },
-  library: { src: 'scenes/library.jpg', tone: '#2e5656' },
-};
+/** Durée de chaque photo. */
+export const SCENE_MS = 5 * 60 * 1000;
 
-export const sceneUrl = (s: Scene) => import.meta.env.BASE_URL + SCENES[s].src;
+/** La photo du moment (la même sur tous les écrans, d'un lancement à l'autre). */
+export const sceneAt = (t = Date.now()) => Math.floor(t / SCENE_MS) % SCENES.length;
+
+const big = () => typeof window !== 'undefined' && window.innerWidth * (window.devicePixelRatio || 1) > 1400;
+export const sceneUrl = (i: number) => `${import.meta.env.BASE_URL}scenes/${SCENES[i].file}-${big() ? 'l' : 'm'}.jpg`;
+
+const warmed = new Set<number>();
+/** Télécharge et décode une photo à l'avance : elle apparaîtra sans attendre. */
+export function warmScene(i: number) {
+  if (warmed.has(i) || typeof Image === 'undefined') return;
+  warmed.add(i);
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = sceneUrl(i);
+  void img.decode?.().catch(() => warmed.delete(i));
+}
+
+/** Teinte de chaque sport (cartes du fil sans photo). */
+export const SPORT_TONE: Record<Sport, string> = { run: '#3d4a2a', trail: '#5d6170', road: '#4f5d3c', gravel: '#7a8584' };
 
 export const SPORT_EMOJI: Record<Sport, string> = { run: '🏃', trail: '⛰️', road: '🚴', gravel: '🚵' };
 export const ENV_EMOJI: Record<EnvClass, string> = { forest: '🌲', water: '🌊', park: '🌳', fields: '🌾', urban: '🏙️' };

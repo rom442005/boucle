@@ -7,10 +7,9 @@
   import { ago } from '../lib/community/time';
   import { decodePolyline, haversine } from '../lib/geo';
   import { km, kmValue, NNBSP } from '../lib/format';
-  import { SCENES, SPORT_EMOJI } from '../lib/scenes';
+  import { SPORT_EMOJI, SPORT_TONE } from '../lib/scenes';
   import type { Shape } from '../lib/types';
 
-  const SPORT_SCENE = { run: 'run', trail: 'trail', road: 'road', gravel: 'gravel' } as const;
   const SHAPE_EMOJI: Record<Shape, string> = { loop: '🔁', outback: '↩️', oneway: '➡️' };
   import { SPORTS, SHAPES } from '../lib/sports';
   import { tactile } from '../lib/haptics';
@@ -26,7 +25,7 @@
 <li class="c-li li" style:--i={Math.min(i, 8)}>
   <button use:tactile type="button" class="c-open" onclick={() => community.openRoute(r.id, r)}>
     <!-- La sortie en image : sa première photo, sinon le tracé en grand sur la teinte du sport. -->
-    <span class="c-media" class:photo={!!r.cover} style:--tone={SCENES[SPORT_SCENE[r.sport]].tone}>
+    <span class="c-media" class:photo={!!r.cover} style:--tone={SPORT_TONE[r.sport]}>
       {#if r.cover}<img src={r.cover} alt="" loading="lazy" decoding="async" />{/if}
       <span class="c-trace" class:small={!!r.cover}><RouteGlyph {coords} size={r.cover ? 52 : 120} active /></span>
       <span class="c-chip glass">{SPORT_EMOJI[r.sport]} {SPORTS[r.sport].label}</span>

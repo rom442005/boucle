@@ -986,3 +986,10 @@ textarea {
 .on-photo .glass-panel {
   --g-bg: rgba(18, 18, 20, 0.44);
 }
+
+/* Passage d'un onglet à l'autre : un fondu court, sans bascule de la carte. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}

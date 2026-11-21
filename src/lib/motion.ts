@@ -3,6 +3,8 @@
  * pour que le tracé d'un parcours, son profil et ses compteurs avancent ensemble.
  */
 
+import { tick } from 'svelte';
+
 /** Préférence « réduire les animations » du système (lue en direct). */
 export const reducedMotion = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -35,4 +37,17 @@ export function traceTimeAt(f: number): number {
     else hi = mid;
   }
   return (lo + hi) / 2;
+}
+
+/**
+ * Passage d'un écran à l'autre en fondu (View Transitions, Safari 18 et Chrome) : l'ancien contenu se fond
+ * dans le nouveau au lieu de sauter. Sans l'API, ou si l'on réduit les animations, le changement est direct.
+ */
+export function smoothly(change: () => void) {
+  const doc = document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => unknown };
+  if (!doc.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return change();
+  doc.startViewTransition(async () => {
+    change();
+    await tick();
+  });
 }

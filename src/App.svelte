@@ -34,7 +34,8 @@
   import TabBar from './components/TabBar.svelte';
   import Backdrop from './components/Backdrop.svelte';
   import TodayCard from './components/TodayCard.svelte';
-  import type { Scene } from './lib/scenes';
+  import { sceneAt, warmScene } from './lib/scenes';
+  import { smoothly } from './lib/motion';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -61,6 +62,10 @@
       }
       if (community.available && !community.session && !seen && !location.hash.startsWith('#r=')) welcome = true;
     });
+    // Pendant un moment calme, ce qui fera attendre plus tard se prépare : la photo du moment et la Communauté.
+    const idle = (f: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 4000 }) : setTimeout(f, 1500));
+    setTimeout(() => idle(() => warmScene(sceneAt())), 2500);
+    setTimeout(() => idle(() => void community.prefetch()), 3500);
     const onWide = () => (app.wide = wideQuery.matches);
     wideQuery.addEventListener('change', onWide);
     const h = location.hash;
@@ -140,22 +145,35 @@
    * Paysage en fond des écrans qui ne montrent pas de parcours : l'accueil, les réglages sur iPhone (la photo
    * suit le sport), Mes parcours, un profil. La carte revient dès qu'il y a un tracé à voir.
    */
-  const SPORT_SCENE = { run: 'run', trail: 'trail', road: 'road', gravel: 'gravel' } as const;
-  const scene = $derived<Scene | null>(
-    welcome
-      ? 'welcome'
-      : app.phase === 'follow' || app.pickOnMap
-        ? null
-        : !app.wide && app.phase === 'compose' && !app.home
-          ? SPORT_SCENE[app.params.sport]
-          : app.phase === 'library'
-            ? 'library'
-            : app.phase === 'community' && community.view === 'profile' && !community.sheet
-              ? 'profile'
-              : null,
+  const scene = $derived(
+    welcome ||
+      (app.phase !== 'follow' &&
+        !app.pickOnMap &&
+        ((!app.wide && app.phase === 'compose' && !app.home) ||
+          app.phase === 'library' ||
+          (app.phase === 'community' && community.view === 'profile' && !community.sheet))),
   );
+  /** Le paysage reste en place une fois venu : il ne fait que s'effacer, sans rien recharger. */
+  let backdropOn = $state(false);
+  $effect(() => {
+    if (scene) backdropOn = true;
+  });
   /** Le panneau sur la photo : en blocs pour les réglages (iPhone), en verre fumé ailleurs. */
   const photo = $derived(!scene || welcome ? null : app.phase === 'compose' ? 'cards' : 'sheet');
+  const TABS = ['create', 'community', 'library', 'profile'] as const;
+  const TAB_LABEL = { create: 'Créer', community: 'Communauté', library: 'Mes parcours', profile: 'Profil' } as const;
+  const TAB_ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;
+  function goTab(t: (typeof TABS)[number]) {
+    smoothly(() => changeTab(t));
+  }
+  function changeTab(t: (typeof TABS)[number]) {
+    community.sheet = null;
+    if (t === 'create') {
+      if (tab !== 'create') app.closeLibrary();
+    } else if (t === 'community') community.open();
+    else if (t === 'library') app.openLibrary();
+    else community.openMe();
+  }
   /** iPhone : les onglets du bas, sauf pendant les réglages (plein écran), le suivi ou un choix sur la carte. */
   const showTabs = $derived(!app.wide && app.phase !== 'follow' && !welcome && !app.pickOnMap && !(app.phase === 'compose' && !app.home));
   const backLabel = $derived(
@@ -189,7 +207,7 @@
 {/snippet}
 
 <MapView />
-{#if scene}<Backdrop {scene} />{/if}
+{#if backdropOn}<Backdrop visible={scene} />{/if}
 
 {#if app.phase !== 'follow'}
   {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
@@ -199,38 +217,33 @@
     <BuildingsLegend />
   {/if}
 
-  {#if showTabs}<TabBar active={tab} onphoto={!!scene} />{/if}
+  {#if showTabs}<TabBar active={tab} onphoto={scene} />{/if}
   {#if athome}
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
   {:else}
   <Panel solid={fullsheet && !photo} {photo} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
+        <!-- Le logo, puis les quatre sections en icônes : une seule ligne, sans le nom de l'app. -->
         <div class="brand">
           <span class="logo" aria-hidden="true">
-            <svg viewBox="0 0 1024 1024" width="30" height="30"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
+            <svg viewBox="0 0 1024 1024" width="36" height="36"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path class="logo-trace" pathLength="1" d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
           </span>
-          <h1>Boucle</h1>
+          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)}>
+            <span class="tab-on" aria-hidden="true"></span>
+            {#each TABS as t (t)}
+              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onclick={() => goTab(t)}>
+                {#if t === 'profile' && community.me}
+                  <Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} />
+                {:else}
+                  <Icon name={TAB_ICON[t]} size={21} fill={tab === t} />
+                {/if}
+              </button>
+            {/each}
+          </nav>
           <button use:tactile type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
             <Icon name="phone" size={18} />
           </button>
-          <nav class="tabs" aria-label="Sections">
-            <button use:tactile type="button" class="pill" class:is-on={tab === 'create'} onclick={() => {
-                community.sheet = null;
-                if (tab !== 'create') app.closeLibrary();
-              }}>Créer</button>
-            <button use:tactile type="button" class="pill" class:is-on={tab === 'community'} onclick={() => {
-                community.sheet = null;
-                community.open();
-              }}>Communauté</button>
-            <button use:tactile type="button" class="pill" class:is-on={tab === 'library'} onclick={() => {
-                community.sheet = null;
-                app.openLibrary();
-              }}>Mes parcours</button>
-            <button use:tactile type="button" class="pill prof" class:is-on={tab === 'profile'} onclick={() => community.openMe()}>
-              {#if community.me}<Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={20} />{/if}Profil
-            </button>
-          </nav>
         </div>
       {/if}
       {#if app.wide && showInstall}
@@ -395,15 +408,8 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     padding: 2px 0 14px;
-  }
-  .brand h1 {
-    margin: 0;
-    font-size: 1.375rem;
-    font-weight: 750;
-    letter-spacing: -0.03em;
-    flex: 1;
   }
   .logo {
     display: grid;
@@ -417,35 +423,71 @@
     color: var(--tint);
     background: var(--tint-soft);
   }
-  /* Quatre onglets : sur leur propre ligne, sous le nom de l'app. */
-  .brand {
-    flex-wrap: wrap;
-    row-gap: 10px;
+  /* Le logo se dessine à l'ouverture, comme un parcours tout juste trouvé. */
+  .logo svg {
+    display: block;
+    border-radius: 10px;
+    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--tint) 80%, transparent);
   }
+  .logo-trace {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: logo-draw 1.2s cubic-bezier(0.55, 0, 0.2, 1) 300ms forwards;
+  }
+  @keyframes logo-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  /* Quatre sections en icônes, une pastille glisse sous la section active. */
   .tabs {
-    flex-basis: 100%;
+    position: relative;
+    flex: 1;
     display: grid;
-    grid-template-columns: repeat(4, auto);
-    gap: 2px;
+    grid-template-columns: repeat(4, 1fr);
     padding: 3px;
     border-radius: 999px;
     background: var(--fill-2);
   }
-  .tabs .pill {
-    min-height: 32px;
-    padding: 0 8px;
-    font-size: 0.8125rem;
-    background: transparent;
-  }
-  .tabs .prof {
-    gap: 6px;
-  }
-  .tabs .pill.is-on {
+  .tab-on {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc((100% - 6px) / 4);
+    border-radius: 999px;
     background: var(--thumb);
-    color: var(--label);
     box-shadow:
       0 3px 8px rgba(0, 0, 0, 0.1),
       0 1px 1px rgba(0, 0, 0, 0.04);
+    transform: translateX(calc(var(--at) * 100%));
+    transition: transform 480ms var(--spring-bouncy);
+  }
+  .tab {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 36px;
+    color: var(--label-2);
+    transition: color 200ms var(--ease-out);
+  }
+  .tab.on {
+    color: var(--tint);
+  }
+  .tab :global(.icon) {
+    transition: transform 320ms var(--spring-bouncy);
+  }
+  .tab:active :global(.icon) {
+    transform: scale(0.86);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tab-on {
+      transition: none;
+    }
+    .logo-trace {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
   }
   .start-wide {
     display: grid;

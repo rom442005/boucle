@@ -436,6 +436,8 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   // Publier un parcours créé.
   await page.getByRole('button', { name: /Retour à la Communauté/ }).click();
   await page.getByRole('button', { name: 'Créer', exact: true }).click();
+  // Le changement d'onglet passe par un fondu : on attend l'écran Créer.
+  await expect(page.getByRole('button', { name: 'Faire une boucle' }).or(page.getByRole('heading', { name: 'Nouveau parcours' })).first()).toBeVisible();
   await createLoop(page);
   await page.getByRole('button', { name: 'Publier' }).click();
   await page.getByRole('textbox', { name: 'Nom' }).fill('Ma boucle de test');

@@ -323,6 +323,13 @@ class CommunityState {
     void this.loadFeed();
   }
 
+  /** En arrière-plan, au calme : le fil est prêt avant qu'on ouvre l'onglet (puis rafraîchi à l'ouverture). */
+  async prefetch() {
+    const b = await this.start();
+    if (!b || this.feed.length || this.loading) return;
+    await this.loadFeed();
+  }
+
   /** Ouvre la Communauté (onglet ou bouton). */
   open() {
     app.openCommunity();

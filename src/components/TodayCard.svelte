@@ -2,12 +2,12 @@
   import { app } from '../lib/state.svelte';
   import { sunTimes } from '../lib/sun';
   import { clock } from '../lib/conditions';
-  import { skyEmoji, weekActivity } from '../lib/scenes';
+  import { skyEmoji } from '../lib/scenes';
   import { NNBSP } from '../lib/format';
 
   /*
-   * Aujourd'hui, en un coup d'œil, posé sur la carte comme un widget : le temps qu'il fait au départ, la
-   * lumière qui reste, et la semaine en barres (distance par jour, aujourd'hui en rose).
+   * Aujourd'hui, en un coup d'œil, posé sur la carte comme un widget : le temps qu'il fait au départ et la
+   * lumière qui reste.
    */
   $effect(() => {
     const s = app.start?.coord;
@@ -30,10 +30,6 @@
     const next = sunTimes(now + 86400000, s[1], s[0]).sunrise;
     return next ? { emoji: '🌅', text: `Lever ${clock(next)}` } : null;
   });
-  const week = $derived(weekActivity(app.history, now));
-  const top = $derived(Math.max(...week.days, 1));
-  const DAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-  const kmW = $derived((week.total / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }));
 </script>
 
 <section class="today glass photo-card on-photo" aria-label="Aujourd’hui">
@@ -46,20 +42,6 @@
       {#if w}<span>💨 {Math.round(w.windKmh)}{NNBSP}km/h</span>{/if}
     </span>
   </div>
-  <div class="week">
-    <span class="wk">
-      <b class="rounded tabular">{kmW}<small>km</small></b>
-      <span>{week.count ? `${week.count} sortie${week.count > 1 ? 's' : ''} cette semaine` : 'Cette semaine'}</span>
-    </span>
-    <ol class="bars" aria-label="Distance par jour cette semaine">
-      {#each week.days as d, i (i)}
-        <li class:now={i === week.today} aria-label="{DAYS[i]} : {(d / 1000).toFixed(1)} km">
-          <span class="bar" style:--h={d ? Math.max(0.12, d / top) : 0}></span>
-          <span class="d">{DAYS[i]}</span>
-        </li>
-      {/each}
-    </ol>
-  </div>
 </section>
 
 <style>
@@ -70,9 +52,8 @@
     left: 12px;
     width: min(300px, calc(100vw - 96px));
     display: grid;
-    gap: 14px;
-    padding: 14px 16px 12px;
-    border-radius: 30px;
+    padding: 12px 16px;
+    border-radius: 28px;
     --g-bg: rgba(24, 26, 28, 0.62);
     --blur: 22px;
     animation: today-in 700ms var(--spring) 200ms both;
@@ -123,82 +104,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .week {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 12px;
-    padding-top: 12px;
-    border-top: 0.5px solid var(--separator);
-  }
-  .wk {
-    display: grid;
-    gap: 2px;
-    font-size: 0.75rem;
-    color: var(--label-2);
-  }
-  .wk b {
-    font-size: 1.375rem;
-    font-weight: 650;
-    color: var(--label);
-    letter-spacing: -0.02em;
-  }
-  .wk small {
-    font-family: var(--font);
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-left: 2px;
-    color: var(--label-2);
-  }
-  .bars {
-    display: flex;
-    gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .bars li {
-    display: grid;
-    justify-items: center;
-    gap: 4px;
-  }
-  .bar {
-    width: 7px;
-    height: 34px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.16);
-    position: relative;
-    overflow: hidden;
-  }
-  .bar::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 0;
-    height: calc(var(--h) * 100%);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.85);
-    transform-origin: bottom;
-    animation: grow 700ms var(--spring) 500ms both;
-  }
-  li.now .bar::after {
-    background: var(--tint);
-  }
-  @keyframes grow {
-    from {
-      transform: scaleY(0);
-    }
-  }
-  .d {
-    font-size: 0.625rem;
-    font-weight: 600;
-    color: var(--label-3);
-  }
-  li.now .d {
-    color: var(--label);
-  }
   @media (prefers-reduced-motion: reduce) {
-    .today,
-    .bar::after {
+    .today {
       animation: none;
     }
   }
