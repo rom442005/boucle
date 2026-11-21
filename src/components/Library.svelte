@@ -8,6 +8,7 @@
   import { dateShort, duration, km, NNBSP, pace, speed } from '../lib/format';
   import { SPORTS } from '../lib/sports';
   import { elevationStats } from '../lib/elevation';
+  import { recentActivity, SPORT_EMOJI } from '../lib/scenes';
 
   let editing = $state(false);
 
@@ -42,6 +43,17 @@
     };
   });
 
+  /** Les huit dernières semaines, en barres (la semaine en cours en rose). */
+  const recent = $derived(recentActivity(app.history));
+  const peak = $derived(Math.max(...recent.weeks, 1));
+  /** Le sport le plus pratiqué, pour l'émoji du résumé. */
+  const mainSport = $derived.by(() => {
+    const n: Record<string, number> = {};
+    for (const h of app.history) n[h.route.s] = (n[h.route.s] ?? 0) + 1;
+    const top = Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0] as keyof typeof SPORT_EMOJI | undefined;
+    return top ? SPORT_EMOJI[top] : '🏃';
+  });
+
   const dateLong = (t: number) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).format(t);
 
   let file: HTMLInputElement | undefined = $state();
@@ -58,6 +70,26 @@
 </script>
 
 <input bind:this={file} type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" class="visually-hidden" tabindex="-1" onchange={onFile} />
+
+<section class="sum" aria-label="Ce mois-ci">
+  <div class="sum-top">
+    <span class="sum-emo" aria-hidden="true">{mainSport}</span>
+    <span class="sum-txt">
+      <span class="sum-k rounded tabular">{month.km.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}<small>km</small></span>
+      <span class="sum-l">en {month.label}</span>
+    </span>
+    <span class="sum-side">
+      <span><b class="rounded tabular">{month.count}</b> sortie{month.count > 1 ? 's' : ''}</span>
+      <span><b class="rounded tabular">{month.time ? duration(month.time) : '0 min'}</b></span>
+      <span><b class="rounded tabular">{app.library.length}</b> favori{app.library.length > 1 ? 's' : ''} ⭐</span>
+    </span>
+  </div>
+  <ol class="weeks" aria-label="Distance par semaine, huit dernières semaines">
+    {#each recent.weeks as wk, i (i)}
+      <li class:now={i === 7} style:--h={wk ? Math.max(0.08, wk / peak) : 0} style:--i={i} aria-label="{(wk / 1000).toFixed(1)} km"></li>
+    {/each}
+  </ol>
+</section>
 
 <div class="tabs">
   <Segmented
@@ -110,14 +142,6 @@
     </div>
   {/if}
 {:else if outings.length}
-  <section class="month" aria-label="Ce mois-ci">
-    <h3 class="field-label">En {month.label}</h3>
-    <dl class="mstats">
-      <div><dt>Distance</dt><dd class="rounded tabular">{month.km.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}<small>km</small></dd></div>
-      <div><dt>Sorties</dt><dd class="rounded tabular">{month.count}</dd></div>
-      <div><dt>Temps suivi</dt><dd class="rounded tabular">{month.time ? duration(month.time) : '—'}</dd></div>
-    </dl>
-  </section>
   <div class="list-head">
     <h3 class="field-label">Sorties</h3>
     <button use:tactile type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
@@ -151,6 +175,99 @@
 {/if}
 
 <style>
+  .sum {
+    display: grid;
+    gap: 14px;
+    margin: 2px 0 14px;
+    padding: 16px 16px 14px;
+    border-radius: 26px;
+    background: var(--fill-group);
+  }
+  .sum-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sum-emo {
+    font-size: 2.25rem;
+    line-height: 1;
+  }
+  .sum-txt {
+    display: grid;
+    gap: 2px;
+  }
+  .sum-k {
+    font-size: 2.5rem;
+    font-weight: 650;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+  .sum-k small {
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--label-2);
+    margin-left: 3px;
+  }
+  .sum-l {
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .sum-side {
+    margin-left: auto;
+    display: grid;
+    justify-items: end;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: var(--label-2);
+    text-align: right;
+  }
+  .sum-side b {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    color: var(--label);
+  }
+  .weeks {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    align-items: end;
+    gap: 6px;
+    height: 46px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .weeks li {
+    height: 100%;
+    border-radius: 6px;
+    background: var(--fill-2);
+    position: relative;
+    overflow: hidden;
+  }
+  .weeks li::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: calc(var(--h) * 100%);
+    border-radius: 6px;
+    background: var(--label-2);
+    transform-origin: bottom;
+    animation: wk-grow 640ms var(--spring) calc(200ms + var(--i) * 40ms) both;
+  }
+  .weeks li.now::after {
+    background: var(--tint);
+  }
+  @keyframes wk-grow {
+    from {
+      transform: scaleY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .weeks li::after {
+      animation: none;
+    }
+  }
   .tabs {
     margin: 2px 0 16px;
   }
@@ -232,45 +349,6 @@
   .meta {
     font-size: 0.8125rem;
     color: var(--label-2);
-  }
-  .month {
-    display: grid;
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-  .month h3 {
-    margin: 0;
-  }
-  .mstats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 0;
-    padding: 12px 14px;
-    border-radius: 18px;
-    background: var(--fill-group);
-  }
-  .mstats div + div {
-    padding-left: 12px;
-    border-left: 0.5px solid var(--separator);
-  }
-  .mstats dt {
-    font-size: 0.75rem;
-    color: var(--label-2);
-    font-weight: 500;
-  }
-  .mstats dd {
-    margin: 2px 0 0;
-    font-size: 1.5rem;
-    font-weight: 650;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
-  }
-  .mstats small {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--label-2);
-    margin-left: 2px;
   }
   .import {
     width: 100%;

@@ -44,6 +44,12 @@ export default defineConfig(({ command, isPreview, mode }) => ({
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
+            // Photos de fond (paysages) : fixes pour une version, gardées après la première vue.
+            urlPattern: ({ url }) => url.pathname.includes('/scenes/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'scenes', expiration: { maxEntries: 20 }, cacheableResponse: { statuses: [0, 200] } },
+          },
+          {
             // Tuiles vectorielles et polices de la carte : elles ne changent pas pour une version donnée.
             urlPattern: /^https:\/\/tiles\.openfreemap\.org\/(planet\/.+|fonts\/.+|sprites\/.+)$/,
             handler: 'CacheFirst',

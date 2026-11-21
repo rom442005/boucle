@@ -32,6 +32,9 @@
   import Welcome from './components/Welcome.svelte';
   import Lightbox from './components/Lightbox.svelte';
   import TabBar from './components/TabBar.svelte';
+  import Backdrop from './components/Backdrop.svelte';
+  import TodayCard from './components/TodayCard.svelte';
+  import type { Scene } from './lib/scenes';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -133,6 +136,26 @@
           ? 'library'
           : 'create',
   );
+  /**
+   * Paysage en fond des écrans qui ne montrent pas de parcours : l'accueil, les réglages sur iPhone (la photo
+   * suit le sport), Mes parcours, un profil. La carte revient dès qu'il y a un tracé à voir.
+   */
+  const SPORT_SCENE = { run: 'run', trail: 'trail', road: 'road', gravel: 'gravel' } as const;
+  const scene = $derived<Scene | null>(
+    welcome
+      ? 'welcome'
+      : app.phase === 'follow' || app.pickOnMap
+        ? null
+        : !app.wide && app.phase === 'compose' && !app.home
+          ? SPORT_SCENE[app.params.sport]
+          : app.phase === 'library'
+            ? 'library'
+            : app.phase === 'community' && community.view === 'profile' && !community.sheet
+              ? 'profile'
+              : null,
+  );
+  /** Le panneau sur la photo : en blocs pour les réglages (iPhone), en verre fumé ailleurs. */
+  const photo = $derived(!scene || welcome ? null : app.phase === 'compose' ? 'cards' : 'sheet');
   /** iPhone : les onglets du bas, sauf pendant les réglages (plein écran), le suivi ou un choix sur la carte. */
   const showTabs = $derived(!app.wide && app.phase !== 'follow' && !welcome && !app.pickOnMap && !(app.phase === 'compose' && !app.home));
   const backLabel = $derived(
@@ -166,19 +189,21 @@
 {/snippet}
 
 <MapView />
+{#if scene}<Backdrop {scene} />{/if}
 
 {#if app.phase !== 'follow'}
-  {#if !welcome && !fullsheet}<MapControls minimal={athome && !app.wide} />{/if}
+  {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
+  {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}<TodayCard />{/if}
   <!-- Légende seulement quand les volumes sont visibles (à partir du zoom 13). -->
-  {#if app.terrain3d && app.zoom >= 13.2 && !app.pickOnMap}
+  {#if app.terrain3d && app.zoom >= 13.2 && !app.pickOnMap && !scene}
     <BuildingsLegend />
   {/if}
 
-  {#if showTabs}<TabBar active={tab} />{/if}
+  {#if showTabs}<TabBar active={tab} onphoto={!!scene} />{/if}
   {#if athome}
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
   {:else}
-  <Panel solid={fullsheet} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
+  <Panel solid={fullsheet && !photo} {photo} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <div class="brand">

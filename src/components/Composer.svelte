@@ -20,6 +20,8 @@
   // Sur Mac : bandeau qui affiche le QR code à scanner avec l'iPhone.
   const qrHint = $derived(isDesktop && !app.flags.qrVu);
 
+  /** iPhone : les réglages flottent en blocs de verre sur un paysage (le sport choisit la photo). */
+  const cards = $derived(!app.wide);
   const p = $derived(app.params);
   const def = $derived(SPORTS[p.sport]);
 
@@ -58,12 +60,13 @@
   }
 </script>
 
-<div class="composer">
+<div class="composer" class:cards>
   {#if installHint}
     <InstallGuide mode="banner" />
   {:else if qrHint}
     <InstallGuide mode="mac" />
   {/if}
+  <div class="set" class:glass={cards} class:photo-card={cards}>
   <Segmented
     label="Sport"
     tall
@@ -103,13 +106,14 @@
     onreset={() => setElevation(null)}
   />
   </div>
+  </div>
 
-  <section class="block" aria-labelledby="env-l">
+  <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="env-l">
     <h3 id="env-l" class="field-label">Milieu</h3>
     <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
   </section>
 
-  <section class="block" aria-labelledby="shape-l">
+  <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="shape-l">
     <h3 id="shape-l" class="field-label">Forme</h3>
     <Segmented
       label="Forme du parcours"
@@ -124,7 +128,7 @@
   </section>
 
   {#if def.surfaces && def.surfaceHint}
-    <section class="block" aria-labelledby="surf-l">
+    <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="surf-l">
       <h3 id="surf-l" class="field-label">Sol</h3>
       <Segmented
         label="Type de sol"
@@ -135,7 +139,7 @@
     </section>
   {/if}
 
-  <section class="block" aria-labelledby="opt-l">
+  <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="opt-l">
     <h3 id="opt-l" class="field-label">Options</h3>
     <div class="group">
       <label class="row">
@@ -198,9 +202,30 @@
       translate: 0 18px;
     }
   }
-  .block {
+  .block,
+  .set {
     display: grid;
     gap: 10px;
+  }
+  .set {
+    gap: 16px;
+  }
+  /* En blocs sur la photo : plus d'air entre eux, les listes se fondent dans leur bloc. */
+  .cards {
+    gap: 12px;
+  }
+  .cards .block,
+  .cards .set {
+    padding: 14px 14px 16px;
+  }
+  .cards .block :global(.group) {
+    margin: 0 -6px -6px;
+    background: transparent;
+  }
+  .cards .block h3 {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--label-2);
   }
   .block h3 {
     margin: 0;

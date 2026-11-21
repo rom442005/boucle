@@ -9,7 +9,7 @@
    * iPhone : quatre onglets en bas de l'écran, comme sur Strava. Créer (la carte et « Faire une boucle »),
    * la Communauté, Mes parcours, ton Profil. Le panneau se pose juste au-dessus.
    */
-  let { active }: { active: 'create' | 'community' | 'library' | 'profile' } = $props();
+  let { active, onphoto = false }: { active: 'create' | 'community' | 'library' | 'profile'; onphoto?: boolean } = $props();
 
   let h = $state(0);
   $effect(() => {
@@ -29,7 +29,7 @@
   }
 </script>
 
-<nav class="tabbar glass" aria-label="Sections" bind:offsetHeight={h}>
+<nav class="tabbar glass" class:on-photo={onphoto} aria-label="Sections" bind:offsetHeight={h}>
   <button use:tactile type="button" class="tab" class:on={active === 'create'} aria-current={active === 'create' ? 'page' : undefined} onclick={() => go('create')}>
     <span class="ic"><Icon name="map" size={24} /></span><span class="lb">Créer</span>
   </button>

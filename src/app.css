@@ -931,3 +931,56 @@ textarea {
     animation-duration: 1ms !important;
   }
 }
+
+/*
+ * Sur un paysage : verre fumé et texte clair, dans les deux apparences, comme les widgets d'Apple posés
+ * sur une photo. Les blocs (.photo-card) sont du vrai verre : flou fort, liseré lumineux, ombre longue.
+ */
+.on-photo {
+  color-scheme: dark;
+  color: var(--label);
+  --tint: #ff375f;
+  --tint-deep: #ffb3c4;
+  --tint-soft: rgba(255, 70, 110, 0.3);
+  --label: #ffffff;
+  --label-2: rgba(255, 255, 255, 0.76);
+  --label-3: rgba(255, 255, 255, 0.5);
+  --separator: rgba(255, 255, 255, 0.16);
+  --fill: rgba(255, 255, 255, 0.24);
+  --fill-2: rgba(255, 255, 255, 0.14);
+  --fill-group: rgba(255, 255, 255, 0.1);
+  --thumb: rgba(255, 255, 255, 0.3);
+  --glass-panel: rgba(20, 20, 22, 0.36);
+  --glass-ctl: rgba(24, 24, 26, 0.3);
+  --rim-hi: rgba(255, 255, 255, 0.62);
+  --rim-lo: rgba(255, 255, 255, 0.14);
+  --rim-hi2: rgba(255, 255, 255, 0.34);
+  --sheen: rgba(255, 255, 255, 0.16);
+  --inner-hi: rgba(255, 255, 255, 0.22);
+  --inner-lo: rgba(0, 0, 0, 0.16);
+  --shadow-glass: 0 26px 54px -22px rgba(0, 0, 0, 0.55), 0 4px 12px -4px rgba(0, 0, 0, 0.22);
+  --shadow-ctl: 0 12px 28px -12px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.2);
+  --env-forest: #7cc35e;
+  --env-water: #6db7ee;
+  --env-park: #9fd46d;
+  --env-fields: #e0c063;
+  --env-urban: #c9c5bb;
+  --ok: #30d158;
+}
+.photo-card {
+  --g-bg: rgba(10, 12, 14, 0.3);
+  --blur: 30px;
+  --sat: 1.45;
+  --g-shadow: var(--shadow-glass);
+  border-radius: 28px;
+  padding: 16px;
+}
+/* Sur la photo, le rose doux manque de contraste : l'état actif devient rose plein. */
+.on-photo .pill.is-on {
+  background: var(--tint);
+  color: #fff;
+}
+.on-photo.glass-panel,
+.on-photo .glass-panel {
+  --g-bg: rgba(18, 18, 20, 0.44);
+}

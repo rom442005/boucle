@@ -71,6 +71,13 @@
     background: var(--tint-soft);
     margin-bottom: 2px;
   }
+  /* Sur une photo : un bloc de verre fumé comme les autres. */
+  :global(.on-photo) .install {
+    background: rgba(10, 12, 14, 0.3);
+    -webkit-backdrop-filter: blur(28px) saturate(1.4);
+    backdrop-filter: blur(28px) saturate(1.4);
+    border-radius: 24px;
+  }
   .install .ic {
     color: var(--tint);
     display: grid;

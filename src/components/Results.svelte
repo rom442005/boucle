@@ -19,6 +19,7 @@
   import { community } from '../lib/community.svelte';
   import { LEVELS } from '../lib/community/types';
   import { ago } from '../lib/community/time';
+  import { ENV_EMOJI } from '../lib/scenes';
 
   const r = $derived(app.route);
   /** parcours de la Communauté affiché (auteur, j'aime, commentaires) */
@@ -60,7 +61,7 @@
     const exact = dErr < 0.005;
     out.push({
       ok: dErr <= 0.06,
-      text: exact ? 'Distance tenue' : `Distance à ${percent(Math.max(dErr, 0.01))} près`,
+      text: exact ? '📏 Distance tenue' : `📏 Distance à ${percent(Math.max(dErr, 0.01))} près`,
       short: exact ? 'Distance tenue' : `Distance ±${percent(Math.max(dErr, 0.01))}`,
     });
     // Les points de passage choisis (souvent au milieu d'un parc ou d'une place) : tenus si le tracé passe à moins de 120 m.
@@ -68,21 +69,21 @@
     for (const v of x.vias ?? []) {
       const near = nearestOnRoute(x.coords, cum!, v.coord).dist <= 120;
       const name = v.name.length > 24 ? v.name.slice(0, 23) + '…' : v.name;
-      out.push({ ok: near, text: near ? `Passe par ${v.name}` : `Passe près de ${v.name}`, short: `Par ${name}` });
+      out.push({ ok: near, text: near ? `📍 Passe par ${v.name}` : `📍 Passe près de ${v.name}`, short: `Par ${name}` });
     }
     if (p.elevation != null) {
       const ok = Math.abs(x.ascent - p.elevation) <= Math.max(25, p.elevation * 0.2);
-      out.push({ ok, text: `${meters(x.ascent)} de D+ pour ${meters(p.elevation)} visés`, short: `D+ ${Math.round(x.ascent)} / ${meters(p.elevation)}` });
+      out.push({ ok, text: `⛰️ ${meters(x.ascent)} de D+ pour ${meters(p.elevation)} visés`, short: `D+ ${Math.round(x.ascent)} / ${meters(p.elevation)}` });
     }
     if (p.envs.length) {
       const share = p.envs.reduce((s, e) => s + (x.env[e] ?? 0), 0);
       const names = p.envs.map((e: EnvClass) => ENVS[e].short).join(' et ');
-      out.push({ ok: share >= 0.3, text: `${percent(share)} en ${names}`, short: `${percent(share)} ${names}` });
+      out.push({ ok: share >= 0.3, text: `${p.envs.map((e: EnvClass) => ENV_EMOJI[e]).join('')} ${percent(share)} en ${names}`, short: `${percent(share)} ${names}` });
     }
     if (p.water) {
       const n = x.waterPoints.length;
       const t = n ? `${n} point${n > 1 ? 's' : ''} d’eau` : 'Pas de point d’eau connu';
-      out.push({ ok: n > 0, text: t, short: n ? t : 'Sans point d’eau' });
+      out.push({ ok: n > 0, text: `💧 ${t}`, short: n ? t : 'Sans point d’eau' });
     }
     return out;
   }

@@ -416,3 +416,11 @@ A panel-glass card under the status bar (max 520 px, 28 px radius) with the rema
 - **Don't** use sharp corners or rectangular buttons; concentric radii only.
 - **Don't** colour the route or the profile outside the five-step slope ramp.
 - **Don't** let the map style grow louder: land stays warm grey, fills stay pale, so the route remains the only saturated line. The drawn globe is the one exception, and it has faded out (zoom 5.4) long before a route can be read.
+
+## Photo Scenes (21/11/2026)
+
+Two worlds now share the app. **The map** stays wherever there is a route to see (composing on Mac, proposals, detail, live follow, the Community feed). **Landscape photography** fills the screens without a route: the welcome screen, the iPhone composer (the photo follows the sport: golden forest path for running, peaks above a sea of clouds for trail, a green road in the mist for road cycling, layered hills for gravel), Mes parcours and profiles. Photos are Unsplash (free licence), shipped in `public/scenes/`, cached at runtime, faded in over their dominant tone and drifting very slowly (48 s, off under Reduce Motion), with a soft top and bottom veil.
+
+On a photo, everything switches to **smoked glass**: the `.on-photo` token set (white labels, translucent white fills, dark glass at 0.3 to 0.44 alpha, brighter specular rim, longer black shadow), in both appearances. The iPhone composer drops its sheet entirely: each group (sport and sliders, Milieu, Forme, Sol, Options) is its own 28 px `.photo-card` of real glass over the sharp photo. Active pills turn solid pink on photos (the pink wash lacks contrast there).
+
+**Summary blocks**: short, factual widgets with native emoji and small bar charts, never explanations. The "Aujourd'hui" widget floats on the map (iPhone home, Mac composer): weather emoji and temperature, sunrise or sunset, wind, then this week's distance with seven day bars (today in pink). Mes parcours opens on a month summary (main sport emoji, km, outings, time, favourites) with eight weekly bars. Profile stats carry emoji (🗺️ 👥 ❤️). Route fit checks start with an emoji (📏 ⛰️ 🌲 💧 📍).

@@ -73,7 +73,7 @@ test('créer une boucle, comparer les propositions, parcourir le profil', async 
   await options.nth(1).click();
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
   // La liste détaillée dit ce que la proposition tient de la demande (les cartes en ont une version courte).
-  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/^Distance/)).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Distance (tenue|à)/)).toBeVisible();
   const profile = page.getByRole('slider', { name: /Profil d’altitude/ });
   await profile.focus();
   await page.keyboard.press('PageUp');
@@ -132,7 +132,7 @@ test('marquer un parcours comme fait puis le retrouver dans l’historique', asy
   if (!(await page.getByRole('button', { name: /Mes parcours/ }).first().isVisible())) await page.getByRole('button', { name: 'Fermer les réglages' }).click();
   await page.getByRole('button', { name: /Mes parcours/ }).first().click();
   await page.getByRole('radio', { name: /Historique/ }).click();
-  await expect(page.getByText(/^En /)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Ce mois-ci' })).toBeVisible();
   const rows = page.getByRole('list', { name: 'Historique des sorties' }).getByRole('button');
   await expect(rows).toHaveCount(1);
   await rows.first().click();
@@ -278,7 +278,7 @@ test('imposer plusieurs points de passage dans une boucle', async ({ page, brows
   await expect(page.locator('.mk-via')).toHaveCount(2);
   await expect(page.getByRole('button', { name: /^Passer par :/ })).toHaveCount(2);
   await createLoop(page);
-  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/^Passe (par|près de)/)).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Passe (par|près de)/)).toHaveCount(2);
   await expect(page.locator('.mk-via.many b')).toHaveText(['1', '2']);
   // Retour aux réglages : on peut en retirer un.
   await page.getByRole('button', { name: 'Retour aux réglages' }).click();

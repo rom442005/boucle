@@ -18,7 +18,7 @@
   });
 </script>
 
-<div class="welcome" role="dialog" aria-modal="true" aria-labelledby="w-title">
+<div class="welcome on-photo" role="dialog" aria-modal="true" aria-labelledby="w-title">
   <div class="card">
     {#if step === 'hello'}
       <div class="hello">
@@ -46,7 +46,7 @@
           }}>Plus tard</button>
       </div>
     {:else}
-      <div class="auth">
+      <div class="auth glass photo-card">
         <AuthFlow reason={mode === 'create' ? 'Un code par e-mail suffit, sans mot de passe.' : 'Un code par e-mail te reconnecte, sans mot de passe.'} />
         <button use:tactile type="button" class="later" onclick={() => (step = 'hello')}>Retour</button>
       </div>
@@ -63,16 +63,12 @@
     align-items: end;
     justify-items: center;
     padding: calc(env(safe-area-inset-top, 0px) + 20px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
-    background: color-mix(in srgb, #f2f1ed 78%, transparent);
-    backdrop-filter: blur(18px) saturate(1.2);
-    -webkit-backdrop-filter: blur(18px) saturate(1.2);
     animation: veil-in 600ms var(--ease-out) both;
     overflow-y: auto;
   }
   @keyframes veil-in {
     from {
       opacity: 0;
-      backdrop-filter: blur(0);
     }
   }
   .card {
@@ -134,13 +130,16 @@
     display: grid;
     gap: 6px;
     padding: 20px 16px 8px;
-    border-radius: 28px;
-    background: var(--fill-group);
+    border-radius: 32px;
   }
-  @media (prefers-color-scheme: dark) {
-    .welcome {
-      background: color-mix(in srgb, #1c1c1e 80%, transparent);
-    }
+  h1 {
+    text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+  }
+  .acts .pill {
+    --g-bg: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.16);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    backdrop-filter: blur(20px) saturate(1.5);
   }
   @media (min-width: 860px) {
     .welcome {

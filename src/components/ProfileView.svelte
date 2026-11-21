@@ -50,15 +50,15 @@
     <Avatar id={p.id} name={p.firstName} src={p.avatar} size={88} />
   {/if}
   <dl class="pstats">
-    <div><dd class="rounded tabular">{v.stats.routes}</dd><dt>Parcours</dt></div>
-    <div><dd class="rounded tabular">{v.stats.followers}</dd><dt>Abonnés</dt></div>
-    <div><dd class="rounded tabular">{v.stats.following}</dd><dt>Abonnements</dt></div>
+    <div><dd class="rounded tabular">{v.stats.routes}</dd><dt><span aria-hidden="true">🗺️</span> Parcours</dt></div>
+    <div><dd class="rounded tabular">{v.stats.followers}</dd><dt><span aria-hidden="true">👥</span> Abonnés</dt></div>
+    <div><dd class="rounded tabular">{v.stats.likes}</dd><dt><span aria-hidden="true">❤️</span> J’aime</dt></div>
   </dl>
 </section>
 
 <div class="who">
   <h2>{p.firstName}</h2>
-  <p class="sub">{LEVELS[p.level]}{p.city ? ` · ${p.city}` : ''}{v.stats.likes ? ` · ${v.stats.likes} j’aime reçu${v.stats.likes > 1 ? 's' : ''}` : ''}</p>
+  <p class="sub">{LEVELS[p.level]}{p.city ? ` · 📍 ${p.city}` : ''} · {v.stats.following} abonnement{v.stats.following > 1 ? 's' : ''}</p>
 </div>
 {#if p.bio}<p class="bio">{p.bio}</p>{:else if mine}<button use:tactile type="button" class="text-btn add-bio" onclick={() => (community.sheet = { kind: 'edit' })}>Ajoute une présentation</button>{/if}
 <p class="sports">
@@ -286,7 +286,7 @@
   }
   .pstats dd {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     font-weight: 650;
   }
   .acts {

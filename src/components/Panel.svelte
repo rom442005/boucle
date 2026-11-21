@@ -10,6 +10,7 @@
     label,
     onswipe,
     solid = false,
+    photo = null,
   }: {
     header?: Snippet;
     children: Snippet;
@@ -19,6 +20,8 @@
     onswipe?: (dir: 1 | -1) => void;
     /** feuille opaque (réglages en plein écran) */
     solid?: boolean;
+    /** sur un paysage : verre fumé (« sheet »), ou plus de feuille du tout, seulement des blocs de verre (« cards ») */
+    photo?: 'sheet' | 'cards' | null;
   } = $props();
 
   let vh = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -195,6 +198,8 @@
   class:dragging={dragH != null}
   class:is-peek={!app.wide && app.detent === 'peek' && dragH == null}
   class:over-tabs={tabs > 0}
+  class:on-photo={!!photo}
+  class:bare={photo === 'cards'}
   style:height={app.wide ? undefined : `${height}px`}
   style:bottom={tabs ? `${tabs + 6}px` : undefined}
   aria-label={label}
@@ -329,6 +334,26 @@
     flex: none;
     padding: 8px 14px max(12px, calc(var(--safe-bottom) - 8px));
     border-top: 0.5px solid var(--separator);
+  }
+  /* Sur un paysage, en blocs : la feuille disparaît, les réglages flottent en verre sur la photo. */
+  .panel.bare {
+    --g-bg: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .panel.bare::before,
+  .panel.bare::after {
+    display: none;
+  }
+  .bare .top {
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
+  }
+  .bare .handle span {
+    background: rgba(255, 255, 255, 0.55);
+  }
+  .bare .foot {
+    border-top: none;
   }
   .wide .foot,
   .over-tabs .foot {
