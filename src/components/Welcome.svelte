@@ -28,7 +28,6 @@
           <circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" />
         </svg>
         <h1 id="w-title">Boucle</h1>
-        <p class="tag">Tes parcours de course et de vélo, sur mesure. Et ceux des autres, autour de toi.</p>
       </div>
       <div class="acts">
         <button use:tactile type="button" class="cta" onclick={() => {
@@ -115,13 +114,6 @@
     font-size: 2.25rem;
     font-weight: 750;
     letter-spacing: -0.035em;
-  }
-  .tag {
-    margin: 0;
-    max-width: 30ch;
-    font-size: 1.0625rem;
-    line-height: 1.4;
-    color: var(--label-2);
   }
   .acts {
     display: grid;

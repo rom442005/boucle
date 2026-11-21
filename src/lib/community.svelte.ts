@@ -579,7 +579,7 @@ class CommunityState {
       const t = opts.hideStart ? hidePrivateZone(route.coords, route.profile, 300) : { coords: route.coords, profile: route.profile, removed: 0 };
       const cum = cumulative(t.coords);
       const lengthM = cum[cum.length - 1] ?? route.lengthM;
-      const shown: Route = { ...route, name, coords: t.coords, profile: t.profile, lengthM, via: undefined };
+      const shown: Route = { ...route, name, coords: t.coords, profile: t.profile, lengthM, vias: undefined };
       const data = { ...serialize(shown, true), pr: undefined };
       const out = await (await this.api()).publish({
         name,

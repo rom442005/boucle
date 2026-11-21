@@ -55,7 +55,7 @@
   let lastStartKey = '';
   let startMarker: Marker | null = null;
   let destMarker: Marker | null = null;
-  let viaMarker: Marker | null = null;
+  let viaMarkers: Marker[] = [];
   let userMarker: Marker | null = null;
   let lens: Marker | null = null;
   let attrib: maplibregl.AttributionControl | null = null;
@@ -87,7 +87,7 @@
     if (aimKind === 'start') return 'Départ ici';
     if (aimKind === 'via') return 'Passer par ici';
     const s = app.start?.coord;
-    return s ? `à ${km(haversine(s, aim.ll))} du départ` : 'Destination ici';
+    return s ? `à ${km(haversine(s, aim.ll))} du départ` : 'Arrivée ici';
   });
   let ripple = $state<{ x: number; y: number; id: number } | null>(null);
   let rippleId = 0;
@@ -99,7 +99,7 @@
     if (reduce) return;
     ripple = { x: pt.x, y: pt.y, id: ++rippleId };
     requestAnimationFrame(() => {
-      const mk = (kind === 'start' ? startMarker : kind === 'via' ? viaMarker : destMarker)?.getElement();
+      const mk = (kind === 'start' ? startMarker : kind === 'via' ? viaMarkers[app.editVia ?? viaMarkers.length - 1] : destMarker)?.getElement();
       if (!mk) return;
       mk.classList.remove('is-dropping');
       void mk.offsetWidth;
@@ -886,7 +886,7 @@
     const ring = circlePolygon(s.coord, app.params.shape === 'outback' ? D / 2.56 : D / 3.7);
     const pts = [...((ring.features[0].geometry as Polygon).coordinates[0] as LngLat[])];
     if (app.params.shape === 'oneway' && app.destination) pts.push(app.destination.coord);
-    if (app.via) pts.push(app.via.coord);
+    for (const v of app.vias) pts.push(v.coord);
     return pts;
   }
   function checkLost() {
@@ -1070,7 +1070,7 @@
     const place = (kind: PlaceKind, c: LngLat, pt: { x: number; y: number }) => {
       haptic('tap');
       void app.placeFromMap(kind, c);
-      app.showToast(kind === 'start' ? 'Départ placé ici' : kind === 'via' ? 'Point de passage placé ici' : 'Destination placée ici');
+      app.showToast(kind === 'start' ? 'Départ placé ici' : kind === 'via' ? 'Point de passage placé ici' : 'Arrivée placée ici');
       landed(kind, pt);
     };
     // Un clic place un point : « Choisir sur la carte », recherche ouverte sur Mac (la carte reste visible),
@@ -1324,27 +1324,37 @@
     if (ready) untrack(checkLost);
   });
 
-  // Point de passage imposé : losange, déplaçable pendant la composition.
+  // Points de passage imposés : losanges numérotés, déplaçables pendant la composition.
   $effect(() => {
     if (!ready || !map) return;
     const compose = app.phase === 'compose';
-    const v = compose ? app.via?.coord : app.phase === 'results' || app.phase === 'detail' ? app.route?.via?.coord : undefined;
-    if (!v) {
-      viaMarker?.remove();
-      viaMarker = null;
-      return;
-    }
-    if (!viaMarker) {
-      viaMarker = new maplibregl.Marker({ element: element('mk-via', '<span></span>'), draggable: compose, anchor: 'center' }).setLngLat(v).addTo(map);
-      viaMarker.on('dragend', () => {
-        const ll = viaMarker!.getLngLat();
-        app.placeFromMap('via', [ll.lng, ll.lat]);
-      });
-    } else {
-      viaMarker.setLngLat(v);
-      viaMarker.setDraggable(compose);
-    }
-    viaMarker.getElement().classList.toggle('is-draggable', compose);
+    const list: LngLat[] = compose
+      ? app.vias.map((v) => v.coord)
+      : app.phase === 'results' || app.phase === 'detail'
+        ? (app.route?.vias ?? []).map((v) => v.coord)
+        : [];
+    while (viaMarkers.length > list.length) viaMarkers.pop()!.remove();
+    list.forEach((v, i) => {
+      let mk = viaMarkers[i];
+      if (!mk) {
+        mk = new maplibregl.Marker({ element: element('mk-via', '<span></span><b></b>'), draggable: compose, anchor: 'center' }).setLngLat(v).addTo(map!);
+        mk.on('dragend', () => {
+          const ll = mk.getLngLat();
+          app.editVia = i;
+          void app.placeFromMap('via', [ll.lng, ll.lat]);
+        });
+        viaMarkers[i] = mk;
+      } else {
+        mk.setLngLat(v);
+        mk.setDraggable(compose);
+      }
+      const el = mk.getElement();
+      el.classList.toggle('is-draggable', compose);
+      // Sur un parcours, les points sont numérotés dans l'ordre où il les rencontre.
+      const numbered = !compose && list.length > 1;
+      el.classList.toggle('many', numbered);
+      el.querySelector('b')!.textContent = numbered ? String(i + 1) : '';
+    });
   });
 
   // Aperçu au survol : ligne droite du départ vers la destination visée.
@@ -1967,6 +1977,25 @@
     background: #fff;
     box-shadow:
       inset 0 0 0 3.5px var(--tint),
+      0 4px 10px rgba(0, 0, 0, 0.28);
+  }
+  :global(.mk-via) {
+    position: relative;
+  }
+  :global(.mk-via b) {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font: 700 10px/1 var(--font-rounded, var(--font));
+    color: var(--tint);
+    pointer-events: none;
+  }
+  :global(.mk-via.many span) {
+    width: 19px;
+    height: 19px;
+    box-shadow:
+      inset 0 0 0 2.5px var(--tint),
       0 4px 10px rgba(0, 0, 0, 0.28);
   }
   /* Le marqueur se pose (translate s'ajoute au transform de positionnement de MapLibre). */

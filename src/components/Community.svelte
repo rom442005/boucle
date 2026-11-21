@@ -31,7 +31,6 @@
   <div class="c-empty">
     <span class="c-empty-ic" aria-hidden="true"><Icon name="users" size={40} /></span>
     <h3>La Communauté arrive bientôt</h3>
-    <p class="hint">Tu pourras y publier tes parcours, découvrir ceux des coureurs et cyclistes autour de toi, les aimer, les commenter et les reprendre.</p>
   </div>
 {:else if community.view === 'profile' && community.viewing}
   <ProfileView />
@@ -90,7 +89,6 @@
         <CommunityItem {r} {i} {from} />
       {/each}
     </ul>
-    <p class="hint foot">Un parcours publié commence à 300{' '}m du départ de son auteur : son adresse reste privée.</p>
   {:else}
     <div class="c-empty">
       <span class="c-empty-ic" aria-hidden="true"><Icon name={community.feedKind === 'following' ? 'userPlus' : 'users'} size={38} /></span>
@@ -154,9 +152,6 @@
     color: var(--tint-deep);
     background: var(--tint-soft);
     font-weight: 600;
-  }
-  .foot {
-    margin: 0 4px 8px;
   }
   /* Chargement : la forme du fil, sans contenu, qui pulse doucement. */
   .sk {

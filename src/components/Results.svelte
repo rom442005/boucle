@@ -63,11 +63,12 @@
       text: exact ? 'Distance tenue' : `Distance à ${percent(Math.max(dErr, 0.01))} près`,
       short: exact ? 'Distance tenue' : `Distance ±${percent(Math.max(dErr, 0.01))}`,
     });
-    if (x.via) {
-      // Le point de passage choisi (souvent au milieu d'un parc ou d'une place) : tenu si le tracé passe à moins de 120 m.
-      const near = nearestOnRoute(x.coords, cumulative(x.coords), x.via.coord).dist <= 120;
-      const name = x.via.name.length > 24 ? x.via.name.slice(0, 23) + '…' : x.via.name;
-      out.push({ ok: near, text: near ? `Passe par ${x.via.name}` : `Passe près de ${x.via.name}`, short: `Par ${name}` });
+    // Les points de passage choisis (souvent au milieu d'un parc ou d'une place) : tenus si le tracé passe à moins de 120 m.
+    const cum = x.vias?.length ? cumulative(x.coords) : null;
+    for (const v of x.vias ?? []) {
+      const near = nearestOnRoute(x.coords, cum!, v.coord).dist <= 120;
+      const name = v.name.length > 24 ? v.name.slice(0, 23) + '…' : v.name;
+      out.push({ ok: near, text: near ? `Passe par ${v.name}` : `Passe près de ${v.name}`, short: `Par ${name}` });
     }
     if (p.elevation != null) {
       const ok = Math.abs(x.ascent - p.elevation) <= Math.max(25, p.elevation * 0.2);
@@ -365,9 +366,6 @@
             </li>
           {/each}
         </ul>
-        <p class="hint">Touche une côte pour la voir sur la carte et sur le profil.</p>
-      {:else}
-        <p class="hint">Pas de côte notable : un parcours plutôt plat.</p>
       {/if}
     </section>
 
@@ -376,9 +374,6 @@
     {/if}
     {#if r.surface}
       <Breakdown title="Sols" items={surfItems(r)} note={r.busy != null ? `Grands axes : ${percent(r.busy)}` : undefined} />
-    {/if}
-    {#if r.shape === 'loop' && r.overlap * r.lengthM >= 50}
-      <p class="hint">Repasse au même endroit sur {meters(Math.round((r.overlap * r.lengthM) / 10) * 10)}.</p>
     {/if}
     {#if cr}<Comments r={cr} />{/if}
   </article>

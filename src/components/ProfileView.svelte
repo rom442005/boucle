@@ -64,7 +64,6 @@
 <p class="sports">
   {#each p.sports as s (s)}<span class="sp"><Icon name={SPORT_ICON[s]} size={15} />{SPORTS[s].label}</span>{/each}
 </p>
-<p class="hint since">Membre depuis {since}{p.practiceYears != null ? ` · pratique depuis ${p.practiceYears} an${p.practiceYears > 1 ? 's' : ''}` : ''}</p>
 
 <div class="acts">
   {#if mine}
@@ -95,7 +94,7 @@
       {/each}
     </ul>
   {:else}
-    <p class="hint none">{mine ? 'Rien de publié pour l’instant : sur un parcours qui te plaît, touche Publier.' : `${p.firstName} n’a encore rien publié.`}</p>
+    <p class="hint none">Aucun parcours</p>
   {/if}
 {:else if v.photos.length}
   <ul class="grid" aria-label="Photos de sorties de {p.firstName}">
@@ -108,7 +107,7 @@
     {/each}
   </ul>
 {:else}
-  <p class="hint none">{mine ? 'Tes photos de sorties apparaîtront ici : ouvre un parcours de la Communauté et touche Ajouter.' : `${p.firstName} n’a pas encore partagé de photo.`}</p>
+  <p class="hint none">Aucune photo</p>
 {/if}
 
 {#if mine}
@@ -267,9 +266,6 @@
     font-size: 0.9375rem;
     line-height: 1.45;
     white-space: pre-line;
-  }
-  .since {
-    margin: 0 0 14px;
   }
   .pstats {
     flex: 1;

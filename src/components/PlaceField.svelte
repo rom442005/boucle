@@ -12,8 +12,8 @@
     floating = false,
   }: { kind: PlaceKind; place: Place | null; busy?: boolean; onclick: () => void; floating?: boolean } = $props();
 
-  const title = $derived(kind === 'start' ? 'Départ' : kind === 'via' ? 'Passer par' : 'Destination');
-  const EMPTY: Record<PlaceKind, string> = { start: 'Choisir un départ', destination: 'Choisir une destination', via: 'Choisir un lieu' };
+  const title = $derived(kind === 'start' ? 'Départ' : kind === 'via' ? 'Passer par' : 'Arrivée');
+  const EMPTY: Record<PlaceKind, string> = { start: 'Choisir un départ', destination: 'Libre', via: 'Choisir un lieu' };
   const value = $derived(busy ? 'Localisation…' : place ? (place.kind === 'gps' ? 'Ma position' : place.name) : EMPTY[kind]);
   const detail = $derived(place?.kind === 'gps' ? place.detail : place?.detail);
 </script>
@@ -30,7 +30,7 @@
   </span>
   <span class="txt">
     <span class="t">{title}</span>
-    <span class="v" class:empty={!place && !busy}>{value}{#if detail}<span class="d">{` · ${detail}`}</span>{/if}</span>
+    <span class="v" class:empty={!place && !busy && kind !== 'destination'}>{value}{#if detail}<span class="d">{` · ${detail}`}</span>{/if}</span>
   </span>
   <span class="chev" aria-hidden="true"><Icon name="search" size={18} /></span>
 </button>

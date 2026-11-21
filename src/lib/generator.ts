@@ -42,8 +42,8 @@ import { estimateDuration, SPORTS } from './sports';
 export interface GenerateOptions {
   start: Place;
   destination?: Place | null;
-  /** point de passage imposé : un endroit à visiter forcément */
-  via?: Place | null;
+  /** points de passage imposés : des endroits à visiter forcément (l'ordre de passage est optimisé) */
+  vias?: Place[];
   params: Params;
   settings: Settings;
   seed: number;
@@ -180,9 +180,9 @@ interface Ctx {
   wx: Weather | null;
   signal?: AbortSignal;
   report: (m: string, r: number) => void;
-  /** point de passage imposé */
+  /** point de passage imposé, quand il y en a un seul */
   via: LngLat | null;
-  /** lieux à ne jamais couper ni rendre inaccessibles (point de passage) */
+  /** lieux à ne jamais couper ni rendre inaccessibles (points de passage) */
   keep: LngLat[];
   /** altitudes de points (relief de la carte 3D, sinon service d'itinéraires) */
   heightsOf: (pts: LngLat[]) => Promise<number[] | null>;
@@ -318,9 +318,9 @@ function nextSize(plan: Plan): number {
 function retracesOf(c: Ctx, coords: LngLat[]): Retrace | null {
   if (c.p.shape === 'outback') return null;
   const rt = findRetraces(coords);
-  if (!c.via || !rt.stretches.length) return rt;
-  const r = viaRadius(coords, c.via);
-  const stretches = rt.stretches.filter((s) => !nearPoint(coords, s, c.via!, r));
+  if (!c.keep.length || !rt.stretches.length) return rt;
+  const radii = c.keep.map((v) => viaRadius(coords, v));
+  const stretches = rt.stretches.filter((s) => !c.keep.some((v, i) => nearPoint(coords, s, v, radii[i])));
   if (stretches.length === rt.stretches.length) return rt;
   const length = stretches.reduce((a, s) => a + (s.to - s.from), 0);
   const total = lengthOf(coords);
@@ -337,7 +337,7 @@ function clean(res: RouteResult, keep: LngLat[] = [], loop = false): RouteResult
   for (let pass = 0; pass < 3; pass++) {
     // Une boucle perd aussi les grands détours qui reviennent sur eux-mêmes ; un trajet vers un lieu,
     // seulement les petits culs-de-sac (son détour est voulu pour allonger, il sera recalculé s'il repasse).
-    const cuts = deadEnds(cur.coords, findRetraces(cur.coords), keep, loop ? 0.35 : 0, keep.length ? viaRadius(cur.coords, keep[0]) : 60);
+    const cuts = deadEnds(cur.coords, findRetraces(cur.coords), keep, loop ? 0.35 : 0, keep.length ? Math.max(...keep.map((v) => viaRadius(cur.coords, v))) : 60);
     if (!cuts.length) break;
     cur = applyCuts(cur.coords, cur.profile, cuts);
   }
@@ -570,26 +570,31 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   const costing = costingFor(p, settings);
   const report = (message: string, ratio: number) => o.onProgress?.({ message, ratio });
 
-  if (p.shape === 'oneway' && !o.destination) throw new GenerateError('Choisis d’abord une destination.');
-  const via = o.via?.coord ?? null;
+  const vias = (o.vias ?? []).map((v) => v.coord);
+  const via = vias.length === 1 ? vias[0] : null;
+  const dest = p.shape === 'oneway' ? (o.destination?.coord ?? null) : null;
 
   // Zone de recherche autour du départ (ou du milieu du trajet).
   let center = start.coord;
   let areaR: number;
-  if (p.shape === 'oneway' && o.destination) {
-    const ab = haversine(start.coord, o.destination.coord);
-    center = destination(start.coord, bearing(start.coord, o.destination.coord), ab / 2);
+  if (dest) {
+    const ab = haversine(start.coord, dest);
+    center = destination(start.coord, bearing(start.coord, dest), ab / 2);
     areaR = Math.max(ab / 2 + 1200, D / 3.2);
-  } else if (via) {
-    const sv = haversine(start.coord, via);
-    center = destination(start.coord, bearing(start.coord, via), sv / 2);
-    areaR = Math.max(sv / 2 + 1500, p.shape === 'outback' ? D / 2 / 1.15 + 700 : D / 4 + 700);
+  } else if (vias.length) {
+    const lng = vias.reduce((a, v) => a + v[0], start.coord[0]) / (vias.length + 1);
+    const lat = vias.reduce((a, v) => a + v[1], start.coord[1]) / (vias.length + 1);
+    center = [lng, lat];
+    areaR = Math.max(haversine(center, start.coord) + 1500, p.shape === 'outback' ? D / 2 / 1.15 + 700 : D / 4 + 700);
+  } else if (p.shape === 'oneway') {
+    // Aller simple sans arrivée : on peut partir dans toutes les directions.
+    areaR = D / 1.5 + 700;
   } else if (p.shape === 'outback') {
     areaR = D / 2 / 1.15 + 700;
   } else {
     areaR = D / 4 + 700;
   }
-  if (via) areaR = Math.max(areaR, haversine(center, via) + 800);
+  for (const v of vias) areaR = Math.max(areaR, haversine(center, v) + 800);
   areaR = Math.min(areaR, 45000);
 
   // Tout ce qui ne dépend pas du service d'itinéraires part en même temps ; la recherche n'attend
@@ -598,7 +603,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   const rasterP = buildEnvRaster(center, areaR, signal, unpavedWeight(p) > 0 || wantsPaved(p)).catch(() => null);
   const wxP = p.headwind && sport.bike && p.shape !== 'oneway' ? weather(start.coord, signal) : Promise.resolve(null);
   const waterP = p.water ? drinkingWater(bboxAround(center, areaR), signal).catch(() => [] as LngLat[]) : Promise.resolve([] as LngLat[]);
-  const needRelief = p.elevation != null && p.shape !== 'oneway' && !via;
+  const needRelief = p.elevation != null && p.shape !== 'oneway' && !vias.length;
   const terrainP: Promise<Terrain | null> = needRelief ? loadTerrain(start.coord, p.shape === 'outback' ? D / 2 : D / 2.6, signal).catch(() => null) : Promise.resolve(null);
   const needDes = p.envs.length > 0 || unpavedWeight(p) > 0;
   const [raster0, wx, terrain] = await Promise.all([
@@ -624,7 +629,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     signal,
     report,
     via,
-    keep: via ? [via] : [],
+    keep: vias,
     heightsOf: async (pts) => {
       if (terrain) {
         const h = pts.map((q) => terrain.heightAt(q));
@@ -657,8 +662,8 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
         const water = p.water ? await within(waterP, 1500, [] as LngLat[]) : [];
         if (signal?.aborted) return;
         const a = analyse(cand, ctx, raster, water, settings);
-        a.route.name = routeName((cand.half ?? cand.res).maneuvers, p.shape, start.coord, cand.far, o.destination?.name);
-        if (o.via) a.route.via = { name: o.via.name, coord: o.via.coord };
+        a.route.name = routeName((cand.half ?? cand.res).maneuvers, p.shape, start.coord, cand.far, dest ? o.destination?.name : undefined);
+        if (vias.length) a.route.vias = orderedVias(o.vias!, cand);
         pin.route = a.route;
         o.onPartial!({ routes: [a.route], note: null, weather: wx });
       })();
@@ -666,9 +671,21 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   }
 
   let candidates: Cand[] = [];
-  if (p.shape === 'loop') candidates = via ? await viaLoops(ctx, via) : await loops(ctx);
-  else if (p.shape === 'outback') candidates = via ? await viaOutbacks(ctx, via) : await outbacks(ctx);
-  else candidates = await oneways(ctx, o.destination!.coord);
+  const S = start.coord;
+  if (p.shape === 'loop') {
+    if (!vias.length) candidates = await loops(ctx);
+    else if (via) candidates = await viaLoops(ctx, via);
+    else {
+      const ord = orderVias(S, vias, S);
+      candidates = await throughPoints(ctx, [S, ...ord, S], farthest(S, ord));
+    }
+  } else if (p.shape === 'outback') {
+    candidates = vias.length ? await pathExtend(ctx, [S, ...orderVias(S, vias, null)], true) : await outbacks(ctx);
+  } else if (dest) {
+    candidates = vias.length ? await throughPoints(ctx, [S, ...orderVias(S, vias, dest), dest], dest) : await oneways(ctx, dest);
+  } else {
+    candidates = vias.length ? await pathExtend(ctx, [S, ...orderVias(S, vias, null)], false) : await freeOneways(ctx);
+  }
   if (signal?.aborted) throw aborted();
 
   if (!candidates.length) {
@@ -681,7 +698,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   }
 
   // Rapport longueur / figure de ce quartier, pour la prochaine fois.
-  if (!via && p.shape !== 'oneway') saveRatio(rKey, ctx.ratio);
+  if (!vias.length && p.shape !== 'oneway') saveRatio(rKey, ctx.ratio);
 
   report('Comparaison des propositions…', 0.9);
   await partial;
@@ -720,18 +737,19 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     a.route.name =
       pin?.route && a.cand === pin.cand
         ? pin.route.name
-        : routeName((a.cand.half ?? a.cand.res).maneuvers, p.shape, start.coord, a.cand.far, o.destination?.name);
+        : routeName((a.cand.half ?? a.cand.res).maneuvers, p.shape, start.coord, a.cand.far, dest ? o.destination?.name : undefined);
   }
 
   const routes = picked.map((a) => a.route);
-  if (o.via) for (const r of routes) r.via = { name: o.via.name, coord: o.via.coord };
+  if (vias.length) picked.forEach((a, i) => (routes[i].vias = orderedVias(o.vias!, a.cand)));
   tag(routes, p);
 
   let note: string | null = null;
-  if (o.via && routes.length) {
+  if ((vias.length || dest) && routes.length) {
     const shortest = Math.min(...routes.map((r) => r.lengthM));
     if (shortest > D * 1.12) {
-      note = `Pour passer par ${o.via.name}, le parcours fait au moins ${(shortest / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km.`;
+      const by = vias.length === 1 ? `passer par ${o.vias![0].name}` : vias.length ? 'passer par ces lieux' : `aller à ${o.destination!.name}`;
+      note = `Pour ${by}, le parcours fait au moins ${(shortest / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km.`;
     }
   }
   if (p.elevation != null && routes.length && !note) {
@@ -982,7 +1000,6 @@ async function outbacks(c: Ctx): Promise<Cand[]> {
 /* ------------------------------ Vers un lieu (A vers B) ------------------------------ */
 
 async function oneways(c: Ctx, B: LngLat): Promise<Cand[]> {
-  if (c.via) return viaOneways(c, B, c.via);
   const { start: A, D } = c;
   let direct: RouteResult[] = [];
   try {
@@ -1132,66 +1149,83 @@ async function viaLoops(c: Ctx, V: LngLat): Promise<Cand[]> {
   });
 }
 
-/** Allers-retours par V : on va jusqu'à V, puis plus loin si la distance le demande, et on revient. */
-async function viaOutbacks(c: Ctx, V: LngLat): Promise<Cand[]> {
-  const { start: S, D } = c;
-  const half = D / 2;
-  let first: RouteResult;
-  try {
-    first = clean((await routeJobs([{ points: [{ coord: S }, { coord: V }] }], c.costing, c.signal))[0], c.keep);
-  } catch (e) {
-    if (e instanceof RoutingError) throw new GenerateError('Aucun chemin praticable ne mène à ce point de passage pour ce sport.');
-    throw e;
-  }
-  const L1 = lengthOf(first.coords);
-  const brg = bearing(S, V);
-  const basePlan = makePlan({ rank: 99, status: 'done', target: half, windAlign: windAlign(c.wx, brg), initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: V, anchors: [] }) });
-  const only = fixedCand(c, mirror(first), V, basePlan, first);
-  if (L1 >= half * 0.92) return [only];
-  // La taille se règle sur la longueur ajoutée après V (offset : l'aller jusqu'à V).
-  const plans = [0, 55, -55].map((dev, rank) =>
-    makePlan({
-      rank,
-      target: half,
-      offset: L1,
-      mirror: true,
-      windAlign: windAlign(c.wx, brg + dev),
-      initSize: () => (half - L1) / 1.3,
-      build: (e, fix) => {
-        let turn = destination(V, brg + dev + fix.turn, e);
-        if (c.des) turn = pullToward(c.des, turn, Math.max(200, e * 0.3));
-        return { job: { points: [{ coord: S }, { coord: V, through: !fix.plain }, { coord: turn }] }, size: e, far: turn, anchors: [V, turn] };
-      },
-    }),
-  );
-  const found = await runSearch(c, plans, {
-    want: 3,
-    maxRequests: 3,
-    from: 0.3,
-    to: 0.85,
-    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.06 : 0.045),
-    usable: (x) => Math.abs(x.err) <= 0.08,
-  });
-  return found.length ? found : [only];
+/* ------------------------- Plusieurs points de passage, aller simple ------------------------- */
+
+/**
+ * Ordre de passage qui fait le moins de chemin : du départ, par tous les points, jusqu'à l'arrivée (le
+ * départ pour une boucle), ou sans arrivée imposée. Tous les ordres sont essayés (5 points au plus).
+ */
+function orderVias(S: LngLat, vias: LngLat[], end: LngLat | null): LngLat[] {
+  if (vias.length < 2) return vias;
+  let best = vias;
+  let bestL = Infinity;
+  const walk = (done: LngLat[], rest: LngLat[], L: number) => {
+    if (L >= bestL) return;
+    if (!rest.length) {
+      const total = L + (end ? haversine(done[done.length - 1], end) : 0);
+      if (total < bestL) {
+        bestL = total;
+        best = done;
+      }
+      return;
+    }
+    const from = done.length ? done[done.length - 1] : S;
+    rest.forEach((v, i) => walk([...done, v], [...rest.slice(0, i), ...rest.slice(i + 1)], L + haversine(from, v)));
+  };
+  walk([], vias, 0);
+  return best;
 }
 
-/** Vers un lieu par V : le trajet direct par V, puis deux détours sur la plus longue étape si la distance le permet. */
-async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Cand[]> {
-  const { start: A, D } = c;
+function farthest(S: LngLat, pts: LngLat[]): LngLat {
+  return pts.reduce((a, q) => (haversine(S, q) > haversine(S, a) ? q : a), pts[0] ?? S);
+}
+
+/** Les points de passage dans l'ordre où le parcours les rencontre. */
+function orderedVias(vias: Place[], cand: Cand): { name: string; coord: LngLat }[] {
+  const coords = cand.half?.coords ?? cand.res.coords;
+  const at = (v: LngLat) => {
+    let k = 0;
+    let d = Infinity;
+    coords.forEach((q, i) => {
+      const x = haversine(q, v);
+      if (x < d) {
+        d = x;
+        k = i;
+      }
+    });
+    return k;
+  };
+  return vias
+    .map((v) => ({ v, k: at(v.coord) }))
+    .sort((a, b) => a.k - b.k)
+    .map(({ v }) => ({ name: v.name, coord: v.coord }));
+}
+
+/**
+ * Trajet par des points imposés, dans l'ordre : départ, points de passage, arrivée (le départ pour une
+ * boucle). D'abord le trajet direct, puis deux détours sur la plus longue étape si la distance le demande.
+ */
+async function throughPoints(c: Ctx, pts: LngLat[], far: LngLat): Promise<Cand[]> {
+  const { D } = c;
+  const loop = c.p.shape === 'loop';
+  const asPoints = (seq: LngLat[], t: boolean, heading?: number): Waypoint[] =>
+    seq.map((coord, i) => (i === 0 || i === seq.length - 1 ? { coord, heading: loop ? heading : undefined } : { coord, through: t }));
   let base: RouteResult;
   try {
-    base = clean((await routeJobs([{ points: [{ coord: A }, { coord: V, through: true }, { coord: B }] }], c.costing, c.signal))[0], c.keep);
+    base = clean((await routeJobs([{ points: asPoints(pts, true) }], c.costing, c.signal))[0], c.keep, loop);
   } catch (e) {
     if (e instanceof RoutingError) throw new GenerateError('Aucun chemin praticable ne relie ces points pour ce sport.');
     throw e;
   }
-  const basePlan = makePlan({ rank: 99, status: 'done', target: D, windAlign: 0, initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: B, anchors: [] }) });
-  const out: Cand[] = [fixedCand(c, base, B, basePlan)];
+  const basePlan = makePlan({ rank: 99, status: 'done', target: D, windAlign: 0, initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far, anchors: [] }) });
+  const out: Cand[] = [fixedCand(c, base, far, basePlan)];
   const L0 = lengthOf(base.coords);
   c.report('Recherche des chemins…', 0.4);
   if (D <= L0 * 1.1) return out;
-  const firstLeg = haversine(A, V) >= haversine(V, B);
-  const [P, Q] = firstLeg ? [A, V] : [V, B];
+  // Le détour s'écarte de la plus longue étape, d'un côté ou de l'autre.
+  let k = 0;
+  for (let i = 1; i < pts.length - 1; i++) if (haversine(pts[i], pts[i + 1]) > haversine(pts[k], pts[k + 1])) k = i;
+  const [P, Q] = [pts[k], pts[k + 1]];
   const pq = Math.max(60, haversine(P, Q));
   const brg = bearing(P, Q);
   const mid = destination(P, brg, pq / 2);
@@ -1205,11 +1239,9 @@ async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Cand[]> {
       build: (h, fix) => {
         let w = destination(mid, brg + side + fix.turn, h);
         if (c.des) w = pullToward(c.des, w, Math.max(250, h * 0.3));
-        const t = !fix.plain;
-        const points: Waypoint[] = firstLeg
-          ? [{ coord: A }, { coord: w, through: t }, { coord: V, through: t }, { coord: B }]
-          : [{ coord: A }, { coord: V, through: t }, { coord: w, through: t }, { coord: B }];
-        return { job: { points, avoid: fix.avoid }, size: h, far: B, anchors: [w, V, B] };
+        const seq = [...pts.slice(0, k + 1), w, ...pts.slice(k + 1)];
+        const head = fix.heading ?? undefined;
+        return { job: { points: asPoints(seq, !fix.plain, head), avoid: fix.avoid }, size: h, far, anchors: seq.slice(1), heading: loop ? (head ?? null) : null };
       },
     }),
   );
@@ -1223,6 +1255,98 @@ async function viaOneways(c: Ctx, B: LngLat, V: LngLat): Promise<Cand[]> {
     repair: (plan, x) => repairLoop(c, plan, x),
   });
   return [...found, ...out];
+}
+
+/**
+ * Par des points de passage, puis plus loin si la distance le demande : l'aller d'un aller-retour (retour
+ * par le même chemin), ou un aller simple qui s'arrête là où la distance est atteinte.
+ */
+async function pathExtend(c: Ctx, pts: LngLat[], back: boolean): Promise<Cand[]> {
+  const goal = back ? c.D / 2 : c.D;
+  const last = pts[pts.length - 1];
+  const inner = (seq: LngLat[], t: boolean): Waypoint[] => seq.map((coord, i) => (i === 0 || i === seq.length - 1 ? { coord } : { coord, through: t }));
+  let first: RouteResult;
+  try {
+    first = clean((await routeJobs([{ points: inner(pts, true) }], c.costing, c.signal))[0], c.keep);
+  } catch (e) {
+    if (e instanceof RoutingError) throw new GenerateError('Aucun chemin praticable ne mène à ces points de passage pour ce sport.');
+    throw e;
+  }
+  const L1 = lengthOf(first.coords);
+  const brg = bearing(pts[pts.length - 2], last);
+  const basePlan = makePlan({ rank: 99, status: 'done', target: goal, windAlign: windAlign(c.wx, brg), initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: last, anchors: [] }) });
+  const only = back ? fixedCand(c, mirror(first), last, basePlan, first) : fixedCand(c, first, last, basePlan);
+  if (L1 >= goal * 0.92) return [only];
+  // La taille se règle sur la longueur ajoutée après le dernier point (offset : le trajet jusqu'à lui).
+  const plans = [0, 55, -55].map((dev, rank) =>
+    makePlan({
+      rank,
+      target: goal,
+      offset: L1,
+      mirror: back,
+      windAlign: windAlign(c.wx, brg + dev),
+      initSize: () => (goal - L1) / 1.3,
+      build: (e, fix) => {
+        let turn = destination(last, brg + dev + fix.turn, e);
+        if (c.des) turn = pullToward(c.des, turn, Math.max(200, e * 0.3));
+        const seq = [...pts, turn];
+        return { job: { points: inner(seq, !fix.plain), avoid: back ? undefined : fix.avoid }, size: e, far: turn, anchors: seq.slice(1) };
+      },
+    }),
+  );
+  const found = await runSearch(c, plans, {
+    want: 3,
+    maxRequests: 3,
+    from: 0.3,
+    to: 0.85,
+    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.06 : 0.045) && (back || retraceOf(c, x) <= retraceOk(x.L)),
+    usable: (x) => Math.abs(x.err) <= 0.08 && (back || retraceOf(c, x) <= retraceOk(x.L)),
+    repair: back ? undefined : (plan, x) => repairLoop(c, plan, x),
+  });
+  return found.length ? found : [only];
+}
+
+/**
+ * Aller simple sans arrivée choisie : vers les directions les plus agréables (milieux voulus), jusqu'à la
+ * distance demandée. Le tracé s'incurve un peu pour ne pas suivre une seule grande route.
+ */
+async function freeOneways(c: Ctx): Promise<Cand[]> {
+  const { start: S, D } = c;
+  const off = c.rnd() * 360;
+  const reach = D / c.ratio;
+  const dirs = Array.from({ length: 8 }, (_, i) => (off + i * 45) % 360)
+    .map((th) => ({ th, s: directionScore(c, th, [1, 2, 3].map((j) => destination(S, th, (reach * j) / 3)), null, 0) }))
+    .sort((a, b) => a.s - b.s);
+  const plans = dirs.slice(0, 5).map(({ th }, rank) =>
+    makePlan({
+      rank,
+      status: rank < 3 ? 'wait' : 'reserve',
+      target: D,
+      windAlign: 0,
+      initSize: () => reach,
+      build: (r, fix) => {
+        const t = th + fix.turn;
+        const bend = (rank % 2 ? 1 : -1) * 14;
+        const wps = [destination(S, t + bend, r / 3), destination(S, t - bend / 2, (2 * r) / 3)].map((w) => (c.des ? pullToward(c.des, w, Math.max(250, r * 0.15)) : w));
+        const E = destination(S, t, r);
+        return {
+          job: { points: [{ coord: S }, ...wps.map((coord) => ({ coord, through: !fix.plain })), { coord: E }], avoid: fix.avoid },
+          size: r,
+          far: E,
+          anchors: [...wps, E],
+        };
+      },
+    }),
+  );
+  return runSearch(c, plans, {
+    want: 3,
+    maxRequests: 5,
+    from: 0.15,
+    to: 0.85,
+    good: (x) => Math.abs(x.err) <= (x.plan.tries >= 2 ? 0.07 : 0.05) && retraceOf(c, x) <= retraceOk(x.L),
+    usable: (x) => Math.abs(x.err) <= 0.1 && retraceOf(c, x) <= retraceOk(x.L),
+    repair: (plan, x) => repairLoop(c, plan, x),
+  });
 }
 
 /* ------------------------------------ Outils ------------------------------------ */

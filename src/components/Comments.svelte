@@ -48,8 +48,6 @@
     </ul>
   {:else if community.commentsLoading}
     <p class="hint">Chargement des commentaires…</p>
-  {:else}
-    <p class="hint">Pas encore de commentaire. Tu l’as fait ? Dis comment c’était.</p>
   {/if}
 
   <form class="cm-new" onsubmit={send}>

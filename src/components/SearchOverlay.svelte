@@ -6,8 +6,8 @@
   import type { Place } from '../lib/types';
 
   const kind = $derived(app.search!);
-  const TITLE = { start: 'Choisir le départ', destination: 'Choisir la destination', via: 'Choisir un point de passage' } as const;
-  const FIELD = { start: 'Adresse de départ', destination: 'Adresse de destination', via: 'Adresse du point de passage' } as const;
+  const TITLE = { start: 'Choisir le départ', destination: 'Choisir l’arrivée', via: 'Choisir un point de passage' } as const;
+  const FIELD = { start: 'Adresse de départ', destination: 'Adresse d’arrivée', via: 'Adresse du point de passage' } as const;
   const HINT = { start: 'Adresse, lieu, parc…', destination: 'Où veux-tu aller ?', via: 'Par où veux-tu passer ?' } as const;
   let q = $state('');
   let results = $state<Place[]>([]);
@@ -92,7 +92,6 @@
       <span class="ic" class:map-ic={kind !== 'start'}><Icon name="crosshair" size={18} /></span>
       <span class="row-label">
         Choisir sur la carte
-        {#if app.wide}<span class="row-sub">Ou clique directement sur la carte, à droite.</span>{/if}
       </span>
     </button>
   {/snippet}

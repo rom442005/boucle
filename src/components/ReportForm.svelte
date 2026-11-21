@@ -40,10 +40,9 @@
     {/each}
   </fieldset>
   <label class="field">
-    <span class="field-label">Précisions <span class="opt">facultatif</span></span>
+    <span class="field-label">Précisions</span>
     <textarea class="input" rows="2" maxlength="200" bind:value={details}></textarea>
   </label>
-  <p class="hint">Le signalement est anonyme pour la personne concernée. Il est examiné sous 24 h ; un contenu contraire aux conditions est retiré.</p>
   <button use:tactile type="submit" class="cta" disabled={!reason || busy}><Icon name="report" size={18} />{busy ? 'Envoi…' : 'Signaler'}</button>
 </form>
 
@@ -76,18 +75,9 @@
     margin: 0;
     accent-color: var(--tint);
   }
-  .opt {
-    font-weight: 400;
-    font-size: 0.8125rem;
-    color: var(--label-2);
-    margin-left: 4px;
-  }
   textarea.input {
     resize: vertical;
     min-height: 60px;
     padding-top: 10px;
-  }
-  .rep > .hint {
-    margin: 0 4px;
   }
 </style>

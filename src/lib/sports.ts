@@ -84,7 +84,7 @@ export const SPORT_ORDER: Sport[] = ['run', 'trail', 'road', 'gravel'];
 export const SHAPES: Record<Shape, { label: string; cta: string }> = {
   loop: { label: 'Boucle', cta: 'Créer la boucle' },
   outback: { label: 'Aller-retour', cta: 'Créer l’aller-retour' },
-  oneway: { label: 'Vers un lieu', cta: 'Créer l’itinéraire' },
+  oneway: { label: 'Aller simple', cta: 'Créer l’aller simple' },
 };
 
 export const ENVS: Record<EnvClass, { label: string; short: string }> = {

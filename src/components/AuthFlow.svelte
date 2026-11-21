@@ -70,7 +70,6 @@
     <div class="lead">
       <span class="lead-ic" aria-hidden="true"><Icon name="users" size={30} fill /></span>
       <h2>Rejoins la Communauté</h2>
-      <p class="hint">{reason} Publie tes parcours, aime et commente ceux des autres, suis les coureurs et cyclistes autour de toi.</p>
     </div>
   {/if}
 
@@ -82,8 +81,6 @@
       </label>
       {#if community.demo}
         <div class="banner" role="note"><span class="icon"><Icon name="mail" size={18} /></span><span>Pas encore d’e-mail : les comptes vivent sur cet appareil le temps que le serveur soit mis en ligne. Le code est <b>123456</b>.</span></div>
-      {:else}
-        <p class="hint">Pas de mot de passe : un code à 6 chiffres arrive par e-mail. Il crée ton compte la première fois.</p>
       {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Envoi…' : 'Recevoir un code'}</button>
@@ -108,12 +105,10 @@
           }}>{resent ? 'Code renvoyé' : 'Renvoyer le code'}</button>
         <button use:tactile type="button" class="text-btn" onclick={() => (step = 'email')}>Changer d’adresse</button>
       </div>
-      {#if !community.demo}<p class="hint">Rien reçu ? Regarde dans les courriers indésirables. Le lien de l’e-mail connecte aussi.</p>{/if}
     </form>
   {:else}
     <div class="lead">
       <h2>Ton profil</h2>
-      <p class="hint">Ce que la communauté verra : ton prénom, ton niveau, tes sports. Le reste reste privé.</p>
     </div>
     <ProfileForm creating ondone={() => community.finishAuth()} />
   {/if}
@@ -136,10 +131,6 @@
     font-weight: 700;
     letter-spacing: -0.02em;
   }
-  .lead .hint {
-    margin: 0;
-    max-width: 36ch;
-  }
   .lead-ic {
     width: 60px;
     height: 60px;
@@ -152,9 +143,6 @@
   .step {
     display: grid;
     gap: 12px;
-  }
-  .step .hint {
-    margin: 0 4px;
   }
   .sent {
     display: flex;

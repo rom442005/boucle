@@ -41,9 +41,6 @@
       </button>
     {/each}
   </div>
-  {#if !list.length && !community.uploading}
-    <p class="hint none">Pas encore de photo. Tu as fait cette sortie ? Ajoute les tiennes : prises sur le parcours, elles s’y placent toutes seules.</p>
-  {/if}
   <input bind:this={picker} type="file" accept="image/*" multiple hidden onchange={pick} />
 </section>
 
@@ -132,9 +129,6 @@
     background: rgba(0, 0, 0, 0.45);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-  }
-  .none {
-    margin: 8px 4px 0;
   }
   @media (prefers-reduced-motion: reduce) {
     .tile,

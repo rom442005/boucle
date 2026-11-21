@@ -62,12 +62,12 @@
       <input class="input" bind:value={name} maxlength="80" required />
     </label>
     <label class="field">
-      <span class="field-label">Description <span class="opt">facultatif</span></span>
+      <span class="field-label">Description</span>
       <textarea class="input" rows="3" maxlength="500" placeholder="Ce qui le rend agréable, un passage à connaître…" bind:value={description}></textarea>
     </label>
 
     <div class="field">
-      <span class="field-label">Photos de ta sortie <span class="opt">facultatif</span></span>
+      <span class="field-label">Photos</span>
       <div class="pics">
         {#each photos as p, i (p.url)}
           <span class="pic">
@@ -85,12 +85,11 @@
     <div class="group">
       <label class="row">
         <span class="row-icon"><Icon name="eyeSlash" size={20} /></span>
-        <span class="row-label">Masquer mon départ<span class="row-sub">Le parcours publié commence et finit à 300{NNBSP}m de ton départ : ton adresse reste privée.</span></span>
+        <span class="row-label">Masquer mon départ</span>
         <input type="checkbox" class="switch" use:asSwitch bind:checked={hideStart} />
       </label>
     </div>
 
-    <p class="hint">Visible par toute la communauté. Tu pourras le retirer à tout moment depuis ton profil.</p>
     <button use:tactile type="submit" class="cta" disabled={busy}><Icon name="users" size={18} fill />{busy ? 'Publication…' : 'Publier'}</button>
   </form>
 {/if}
@@ -162,12 +161,6 @@
     font-size: 0.875rem;
     color: var(--label-2);
   }
-  .opt {
-    font-weight: 400;
-    font-size: 0.8125rem;
-    color: var(--label-2);
-    margin-left: 4px;
-  }
   textarea.input {
     resize: vertical;
     min-height: 80px;
@@ -176,8 +169,5 @@
   }
   .row {
     cursor: pointer;
-  }
-  .pub > .hint {
-    margin: 0 4px;
   }
 </style>

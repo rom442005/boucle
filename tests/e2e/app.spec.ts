@@ -214,66 +214,75 @@ test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browser
   await expect(page.getByRole('dialog', { name: 'Installer Boucle sur l’iPhone' }).locator('.qr svg')).toBeVisible();
 });
 
-test('choisir la destination en touchant la carte', async ({ page, browserName }) => {
+test('aller simple : arrivée libre, ou placée en touchant la carte', async ({ page, browserName }) => {
   await open(page);
   await compose(page);
-  await page.getByRole('radio', { name: 'Vers un lieu' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Choisir la destination' });
-  await expect(dialog).toBeVisible();
+  await page.getByRole('radio', { name: 'Aller simple' }).click();
+  const arrival = page.getByRole('button', { name: /^Arrivée :/ });
+  await expect(arrival).toHaveAccessibleName(/Libre/);
   const box = (await page.locator('.maplibregl-canvas').boundingBox())!;
   if (browserName === 'chromium') {
-    // Sur Mac, la recherche laisse la carte cliquable à côté ; au survol, un aperçu montre où le point sera posé.
+    // Sur Mac, un clic sur la carte place l'arrivée ; au survol, un aperçu montre où elle sera posée.
     await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35, { steps: 4 });
     await expect(page.locator('.aim-label')).toHaveText(/^à \d+,\d\s?km du départ$/);
     await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.35);
   } else {
+    await arrival.click();
+    const dialog = page.getByRole('dialog', { name: 'Choisir l’arrivée' });
     await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Touche la carte' })).toBeVisible();
     await page.waitForTimeout(800); // le panneau finit de descendre
     await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
   }
-  await expect(dialog).toBeHidden();
-  await expect(page.getByText('Destination placée ici')).toBeVisible();
+  await expect(page.getByText('Arrivée placée ici')).toBeVisible();
   const flag = page.locator('.mk-dest');
   await expect(flag).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Destination :/ })).not.toHaveAccessibleName(/Choisir une destination/);
-  if (browserName !== 'chromium') return;
-  // En mode « Vers un lieu », un clic ailleurs la déplace.
-  const before = (await flag.boundingBox())!;
-  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.6);
-  await expect.poll(async () => (await flag.boundingBox())!.y - before.y).toBeGreaterThan(100);
-  await page.getByRole('button', { name: /Créer l’itinéraire/ }).click();
+  await expect(arrival).not.toHaveAccessibleName(/Libre/);
+  if (browserName === 'chromium') {
+    // Un clic ailleurs la déplace.
+    const before = (await flag.boundingBox())!;
+    await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.6);
+    await expect.poll(async () => (await flag.boundingBox())!.y - before.y).toBeGreaterThan(100);
+  }
+  // Arrivée libre : le parcours s'arrête là où la distance est atteinte.
+  await page.getByRole('button', { name: 'Arrivée libre' }).click();
+  await expect(arrival).toHaveAccessibleName(/Libre/);
+  await page.getByRole('button', { name: /Créer l’aller simple/ }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
 });
 
-test('imposer un point de passage dans une boucle', async ({ page, browserName }) => {
+test('imposer plusieurs points de passage dans une boucle', async ({ page, browserName }) => {
   await open(page);
   await compose(page);
   const box = (await page.locator('.maplibregl-canvas').boundingBox())!;
-  if (browserName === 'chromium') {
-    // Sur Mac, le bouton est en haut de la colonne, sous le départ, toujours visible.
-    await page.getByRole('button', { name: /Passer par un lieu/ }).click();
-    await expect(page.getByRole('dialog', { name: 'Choisir un point de passage' })).toBeVisible();
-    await page.mouse.move(box.x + box.width * 0.72, box.y + box.height * 0.3, { steps: 4 });
-    await expect(page.locator('.aim-label')).toHaveText('Passer par ici');
-    await page.mouse.click(box.x + box.width * 0.72, box.y + box.height * 0.3);
-  } else {
-    // Sur iPhone, dans la section Forme du panneau.
-    await page.getByRole('button', { name: /Passer par un lieu/ }).click();
-    await page.getByRole('dialog', { name: 'Choisir un point de passage' }).getByRole('button', { name: /Choisir sur la carte/ }).click();
-    await page.waitForTimeout(800); // le panneau finit de descendre
-    await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
-  }
-  await expect(page.getByText('Point de passage placé ici')).toBeVisible();
-  await expect(page.locator('.mk-via')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Passer par :/ })).not.toHaveAccessibleName(/Choisir un lieu/);
+  const add = page.getByRole('button', { name: /^Point de passage$/ });
+  const place = async (fx: number, fy: number) => {
+    await add.click();
+    const dialog = page.getByRole('dialog', { name: 'Choisir un point de passage' });
+    await expect(dialog).toBeVisible();
+    if (browserName === 'chromium') {
+      // Sur Mac, la recherche laisse la carte cliquable à côté.
+      await page.mouse.move(box.x + box.width * fx, box.y + box.height * fy, { steps: 4 });
+      await expect(page.locator('.aim-label')).toHaveText('Passer par ici');
+      await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+    } else {
+      await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();
+      await page.waitForTimeout(800); // le panneau finit de descendre
+      await page.touchscreen.tap(box.x + box.width * fx, box.y + box.height * fy);
+    }
+    await expect(page.getByText('Point de passage placé ici').last()).toBeVisible();
+  };
+  await place(0.72, 0.3);
+  await place(0.6, 0.62);
+  await expect(page.locator('.mk-via')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: /^Passer par :/ })).toHaveCount(2);
   await createLoop(page);
-  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/^Passe (par|près de)/)).toBeVisible();
-  await expect(page.locator('.mk-via')).toBeVisible();
-  // Retour aux réglages : on peut le retirer.
+  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/^Passe (par|près de)/)).toHaveCount(2);
+  await expect(page.locator('.mk-via.many b')).toHaveText(['1', '2']);
+  // Retour aux réglages : on peut en retirer un.
   await page.getByRole('button', { name: 'Retour aux réglages' }).click();
-  await page.getByRole('button', { name: /Retirer le point de passage/ }).click();
-  await expect(page.getByRole('button', { name: /Passer par un lieu/ })).toBeVisible();
+  await page.getByRole('button', { name: /Retirer le point de passage/ }).first().click();
+  await expect(page.locator('.mk-via')).toHaveCount(1);
 });
 
 test('la 3D met la ville en volume, avec sa légende', async ({ page, browserName }) => {
@@ -315,7 +324,7 @@ test('côtes et descentes : liste, carte et profil', async ({ page }) => {
     await first.click();
     await expect(first).toHaveAttribute('aria-pressed', 'false');
   } else {
-    await expect(page.getByText('Pas de côte notable')).toBeVisible();
+    await expect(page.locator('.climb-list')).toHaveCount(0);
   }
 });
 

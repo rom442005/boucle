@@ -95,7 +95,6 @@
       {/each}
     </ul>
     <button use:tactile type="button" class="pill import" onclick={() => file?.click()}><Icon name="upload" size={18} />Importer un GPX</button>
-    <p class="hint foot">Favoris enregistrés sur cet appareil. Pour retrouver un parcours sur ton autre appareil, ouvre-le puis touche Partager.</p>
   {:else}
     <div class="empty">
       <svg viewBox="0 0 120 84" width="120" height="84" aria-hidden="true">
@@ -104,7 +103,6 @@
         <circle cx="22" cy="62" r="10" fill="none" stroke="var(--tint)" stroke-opacity=".25" stroke-width="3" />
       </svg>
       <h3>Aucun favori</h3>
-      <p class="hint">Sur un parcours, touche <b>Favori</b> : il t’attendra ici.</p>
       <div class="empty-actions">
         <button use:tactile type="button" class="pill is-on" onclick={() => app.closeLibrary()}>Créer un parcours</button>
         <button use:tactile type="button" class="pill" onclick={() => file?.click()}><Icon name="upload" size={18} />Importer un GPX</button>
@@ -142,12 +140,10 @@
       </li>
     {/each}
   </ul>
-  <p class="hint foot">Une sortie s’ajoute quand tu termines un suivi en direct (au-delà de 300 m) ou quand tu touches <b>Fait</b> sur un parcours.</p>
 {:else}
   <div class="empty">
     <span class="empty-ic" aria-hidden="true"><Icon name="history" size={40} /></span>
     <h3>Aucune sortie pour l’instant</h3>
-    <p class="hint">Suis un parcours en direct, ou touche <b>Fait</b> sur un parcours que tu as couru : il apparaîtra ici avec la date, la distance et le temps.</p>
     <div class="empty-actions">
       <button use:tactile type="button" class="pill is-on" onclick={() => app.closeLibrary()}>Créer un parcours</button>
     </div>
@@ -279,9 +275,6 @@
   .import {
     width: 100%;
   }
-  .foot {
-    margin: 12px 4px 0;
-  }
   .empty {
     display: grid;
     justify-items: center;
@@ -293,10 +286,6 @@
     margin: 6px 0 0;
     font-size: 1.0625rem;
     font-weight: 650;
-  }
-  .empty .hint {
-    max-width: 32ch;
-    margin: 0;
   }
   .empty-ic {
     width: 72px;

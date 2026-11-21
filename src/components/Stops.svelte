@@ -1,48 +1,53 @@
 <script lang="ts">
   /**
-   * Lieux du parcours après le départ : le point de passage imposé (un endroit à visiter forcément,
-   * quelle que soit la forme) et la destination (« Vers un lieu »).
+   * Lieux du parcours après le départ : les points de passage imposés (5 au plus, dans l'ordre qui fait le
+   * moins de chemin) et, pour un aller simple, l'arrivée (libre tant qu'on n'en choisit pas).
    * Sur Mac, en haut de la colonne sous le départ ; sur iPhone, dans la section Forme.
    */
   import Icon from './Icon.svelte';
   import PlaceField from './PlaceField.svelte';
-  import { app } from '../lib/state.svelte';
-  import { isDesktop } from '../lib/platform';
+  import { app, MAX_VIAS } from '../lib/state.svelte';
   import { haptic, tactile } from '../lib/haptics';
 
   const oneway = $derived(app.params.shape === 'oneway');
 </script>
 
 <div class="stops">
-  {#if app.via}
-    <div class="via">
-      <PlaceField kind="via" place={app.via} onclick={() => (app.search = 'via')} />
+  {#each app.vias as v, i (i)}
+    <div class="line">
+      <PlaceField kind="via" place={v} onclick={() => app.chooseVia(i)} />
       <button use:tactile
         type="button"
         class="rm"
-        aria-label="Retirer le point de passage {app.via.name}"
+        aria-label="Retirer le point de passage {v.name}"
         onclick={() => {
           haptic('tap');
-          app.clearVia();
+          app.removeVia(i);
         }}><Icon name="close" size={16} /></button
       >
     </div>
-  {:else}
-    <button use:tactile type="button" class="add" onclick={() => (app.search = 'via')}>
-      <span class="add-ic" aria-hidden="true"><Icon name="diamond" size={14} /></span>
-      Passer par un lieu
-      <span class="opt">facultatif</span>
-    </button>
-  {/if}
+  {/each}
   {#if oneway}
-    <PlaceField kind="destination" place={app.destination} onclick={() => (app.search = 'destination')} />
-    <p class="hint">
+    <div class="line">
+      <PlaceField kind="destination" place={app.destination} onclick={() => (app.search = 'destination')} />
       {#if app.destination}
-        Pour la déplacer, {isDesktop ? 'clique ailleurs sur' : 'touche ailleurs'} la carte ou fais glisser le drapeau.
-      {:else}
-        Ou {isDesktop ? 'clique directement sur' : 'touche directement'} la carte, là où tu veux aller.
+        <button use:tactile
+          type="button"
+          class="rm"
+          aria-label="Arrivée libre"
+          onclick={() => {
+            haptic('tap');
+            app.clearDestination();
+          }}><Icon name="close" size={16} /></button
+        >
       {/if}
-    </p>
+    </div>
+  {/if}
+  {#if app.vias.length < MAX_VIAS}
+    <button use:tactile type="button" class="add" onclick={() => app.chooseVia(null)}>
+      <span class="add-ic" aria-hidden="true"><Icon name="plus" size={14} /></span>
+      Point de passage
+    </button>
   {/if}
 </div>
 
@@ -51,12 +56,19 @@
     display: grid;
     gap: 8px;
   }
-  .via {
+  .line {
     display: flex;
     align-items: center;
     gap: 6px;
+    animation: line-in 380ms var(--spring) both;
   }
-  .via :global(.place) {
+  @keyframes line-in {
+    from {
+      opacity: 0;
+      translate: 0 -6px;
+    }
+  }
+  .line :global(.place) {
     flex: 1;
     min-width: 0;
   }
@@ -101,12 +113,9 @@
     place-items: center;
     background: var(--tint-soft);
   }
-  .opt {
-    font-weight: 400;
-    font-size: 0.8125rem;
-    color: var(--label-2);
-  }
-  .hint {
-    margin: -2px 0 0;
+  @media (prefers-reduced-motion: reduce) {
+    .line {
+      animation: none;
+    }
   }
 </style>

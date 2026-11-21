@@ -8,9 +8,8 @@
   import { app } from '../lib/state.svelte';
   import { isDesktop, isIOS, isStandalone } from '../lib/platform';
   import { asSwitch, haptic, nativeSwitch, tactile } from '../lib/haptics';
-  import { elevationLevel, SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
+  import { SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
   import { kmSetting, pace, speed } from '../lib/format';
-  import { nightfall } from '../lib/conditions';
   import type { Shape, Surface } from '../lib/types';
   import type { IconName } from '../lib/icons';
 
@@ -23,7 +22,6 @@
 
   const p = $derived(app.params);
   const def = $derived(SPORTS[p.sport]);
-  const elevKm = $derived(p.elevation != null ? p.elevation / Math.max(p.distanceKm, 0.1) : 0);
 
   function setDistance(v: number) {
     app.params.distanceKm = v;
@@ -36,7 +34,6 @@
   function setShape(s: Shape) {
     app.params.shape = s;
     app.persist();
-    if (s === 'oneway' && !app.destination) app.search = 'destination';
   }
   function setSurface(s: Surface) {
     app.params.surface = s;
@@ -50,8 +47,6 @@
   }
 
   const isRun = $derived(!def.bike);
-  /** « Nuit à 17 h 49 ce soir » sous l'option des rues éclairées, d'après le départ. */
-  const night = $derived(app.start ? nightfall(Date.now(), app.start.coord[1], app.start.coord[0]) : null);
   const paceKey = $derived(p.sport === 'run' ? 'paceRun' : p.sport === 'trail' ? 'paceTrail' : p.sport === 'road' ? 'speedRoad' : 'speedGravel');
   const paceValue = $derived(app.settings[paceKey]);
   function stepPace(dir: 1 | -1) {
@@ -106,18 +101,12 @@
     tickEvery={def.bike ? 100 : 50}
     onchange={(v) => setElevation(v)}
     onreset={() => setElevation(null)}
-  >
-    {#snippet sub()}
-      <span>{elevationLevel(p.elevation ?? 0, p.distanceKm)}</span>
-      <span class="tabular">{Math.round(elevKm)} m par km</span>
-    {/snippet}
-  </RangeField>
+  />
   </div>
 
   <section class="block" aria-labelledby="env-l">
     <h3 id="env-l" class="field-label">Milieu</h3>
     <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
-    <p class="hint">{p.envs.length ? 'Les parcours passent en priorité par ces milieux, s’il y en a autour du départ.' : 'Peu importe : touche un milieu pour le privilégier.'}</p>
   </section>
 
   <section class="block" aria-labelledby="shape-l">
@@ -143,7 +132,6 @@
         options={(['a', 'b', 'c'] as Surface[]).map((s) => ({ value: s, label: def.surfaces![s] }))}
         onchange={setSurface}
       />
-      <p class="hint">{def.surfaceHint[p.surface]}</p>
     </section>
   {/if}
 
@@ -152,31 +140,31 @@
     <div class="group">
       <label class="row">
         <span class="row-icon"><Icon name="road" /></span>
-        <span class="row-label">Éviter les grands axes<span class="row-sub">Routes à fort trafic évitées quand c’est possible</span></span>
+        <span class="row-label">Éviter les grands axes</span>
         <input class="switch" type="checkbox" use:asSwitch checked={p.avoidBusy} onchange={() => toggle('avoidBusy')} />
       </label>
       {#if p.sport === 'run'}
         <label class="row">
           <span class="row-icon"><Icon name="bulb" /></span>
-          <span class="row-label">Rues éclairées<span class="row-sub">{night ?? 'Pour courir à la nuit tombée'}</span></span>
+          <span class="row-label">Rues éclairées</span>
           <input class="switch" type="checkbox" use:asSwitch checked={p.lit} onchange={() => toggle('lit')} />
         </label>
       {/if}
       <label class="row">
         <span class="row-icon"><Icon name="drop" /></span>
-        <span class="row-label">Points d’eau<span class="row-sub">Fontaines connues sur le parcours</span></span>
+        <span class="row-label">Points d’eau</span>
         <input class="switch" type="checkbox" use:asSwitch checked={p.water} onchange={() => toggle('water')} />
       </label>
       {#if def.bike && p.shape !== 'oneway'}
         <label class="row">
           <span class="row-icon"><Icon name="wind" /></span>
-          <span class="row-label">Partir face au vent<span class="row-sub">Vent dans le dos pour rentrer, selon la météo du moment</span></span>
+          <span class="row-label">Partir face au vent</span>
           <input class="switch" type="checkbox" use:asSwitch checked={p.headwind} onchange={() => toggle('headwind')} />
         </label>
       {/if}
       <div class="row">
         <span class="row-icon"><Icon name="gauge" /></span>
-        <span class="row-label">{isRun ? 'Allure' : 'Vitesse moyenne'}<span class="row-sub">Pour estimer la durée</span></span>
+        <span class="row-label">{isRun ? 'Allure' : 'Vitesse moyenne'}</span>
         <div class="stepper" role="group" aria-label={isRun ? 'Allure' : 'Vitesse moyenne'}>
           <button use:tactile type="button" aria-label={isRun ? 'Allure plus rapide' : 'Moins vite'} onclick={() => stepPace(-1)}><Icon name="minus" size={14} /></button>
           <output class="tabular" aria-live="polite">{isRun ? pace(paceValue) : speed(paceValue)}</output>
@@ -216,9 +204,6 @@
   }
   .block h3 {
     margin: 0;
-  }
-  .hint {
-    margin: -2px 0 0;
   }
   .stepper {
     display: flex;

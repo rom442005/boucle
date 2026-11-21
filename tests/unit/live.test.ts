@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { generate } from '../../src/lib/generator';
 import { defaultParams, DEFAULT_SETTINGS } from '../../src/lib/sports';
 import type { Params, Place, Route } from '../../src/lib/types';
-import { cumulative, nearestOnRoute } from '../../src/lib/geo';
+import { cumulative, haversine, nearestOnRoute } from '../../src/lib/geo';
 import { climbsOf } from '../../src/lib/elevation';
 import { findRetraces } from '../../src/lib/retrace';
 
@@ -11,11 +11,11 @@ declare const process: { env: Record<string, string | undefined> };
 const live = process.env.LIVE === '1';
 const start: Place = { name: 'Nantes', coord: [-1.5536, 47.2184], kind: 'map' };
 
-async function run(p: Partial<Params>, destination?: Place, via?: Place) {
+async function run(p: Partial<Params>, destination?: Place, ...vias: Place[]) {
   const params = { ...defaultParams(p.sport ?? 'run'), ...p };
   const t = Date.now();
   let first = 0;
-  const res = await generate({ start, destination, via, params, settings: DEFAULT_SETTINGS, seed: 42, onPartial: () => (first = Date.now() - t) });
+  const res = await generate({ start, destination, vias, params, settings: DEFAULT_SETTINGS, seed: 42, onPartial: () => (first = Date.now() - t) });
   const ms = Date.now() - t;
   console.log(
     `${params.sport}/${params.shape} ${params.distanceKm} km D+${params.elevation ?? '-'} → ${res.routes
@@ -23,7 +23,7 @@ async function run(p: Partial<Params>, destination?: Place, via?: Place) {
       .join(' | ')} (1re ${first} ms, toutes ${ms} ms)${res.note ? ' — ' + res.note : ''}`,
   );
   // Une boucle ne repasse jamais au même endroit (au plus un bout de carrefour).
-  if (params.shape === 'loop' && !via) for (const r of res.routes) expect(findRetraces(r.coords).length).toBeLessThanOrEqual(Math.max(30, 0.0015 * r.lengthM));
+  if (params.shape === 'loop' && !vias.length) for (const r of res.routes) expect(findRetraces(r.coords).length).toBeLessThanOrEqual(Math.max(30, 0.0015 * r.lengthM));
   for (const r of res.routes.slice(0, 1)) {
     const cs = climbsOf(r);
     console.log(`   côtes (${cs.length}) : ` + cs.map((c) => `${c.up ? '↗' : '↘'} km ${(c.from / 1000).toFixed(1)} ${Math.round(c.to - c.from)} m ${c.gain} m ${c.avg} % (max ${c.max})`).join(' · '));
@@ -98,6 +98,30 @@ describe.skipIf(!live)('génération réelle', () => {
     const res = await run({ sport: 'run', distanceKm: 6, shape: 'oneway' }, proce, jardin);
     expect(res.routes.length).toBeGreaterThanOrEqual(1);
     for (const r of res.routes) expect(passes(r, jardin)).toBeLessThan(120);
+  }, 90000);
+
+  const erdre: Place = { name: 'Île de Versailles', coord: [-1.5535, 47.2278], kind: 'search' };
+
+  it('boucle de 12 km par trois points de passage', async () => {
+    const res = await run({ sport: 'run', distanceKm: 12 }, undefined, proce, jardin, erdre);
+    expect(res.routes.length).toBeGreaterThanOrEqual(1);
+    for (const r of res.routes) for (const v of [proce, jardin, erdre]) expect(passes(r, v)).toBeLessThan(120);
+    expect(res.routes[0].vias?.length).toBe(3);
+  }, 90000);
+
+  it('aller simple de 8 km sans arrivée choisie', async () => {
+    const res = await run({ sport: 'run', distanceKm: 8, shape: 'oneway' });
+    expect(res.routes.length).toBeGreaterThanOrEqual(2);
+    for (const r of res.routes) {
+      expect(Math.abs(r.lengthM - 8000) / 8000).toBeLessThan(0.12);
+      expect(haversine(r.coords[0], r.coords[r.coords.length - 1])).toBeGreaterThan(2000);
+    }
+  }, 90000);
+
+  it('aller simple de 10 km par deux points de passage, sans arrivée', async () => {
+    const res = await run({ sport: 'run', distanceKm: 10, shape: 'oneway' }, undefined, jardin, proce);
+    expect(res.routes.length).toBeGreaterThanOrEqual(1);
+    for (const r of res.routes) for (const v of [jardin, proce]) expect(passes(r, v)).toBeLessThan(120);
   }, 90000);
 
   it('gravel 40 km chemins', async () => {

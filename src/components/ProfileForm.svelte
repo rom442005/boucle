@@ -116,11 +116,10 @@
       <input class="input tabular" type="number" inputmode="numeric" min="1900" max={year} placeholder="1995" bind:value={birthYear} autocomplete="bday-year" required />
     </label>
     <label class="field">
-      <span class="field-label">Ville <span class="opt">facultatif</span></span>
+      <span class="field-label">Ville</span>
       <input class="input" bind:value={city} autocomplete="address-level2" maxlength="60" />
     </label>
   </div>
-  <p class="hint">Ton âge reste privé : il sert seulement à vérifier que tu as 15 ans ou plus.</p>
 
   <div class="field">
     <span class="field-label">Sports pratiqués</span>
@@ -141,12 +140,12 @@
   </div>
 
   <label class="field">
-    <span class="field-label">Années de pratique <span class="opt">facultatif</span></span>
+    <span class="field-label">Années de pratique</span>
     <input class="input tabular short" type="number" inputmode="numeric" min="0" max="80" bind:value={years} />
   </label>
 
   <label class="field">
-    <span class="field-label">Présentation <span class="opt">facultatif</span></span>
+    <span class="field-label">Présentation</span>
     <textarea class="input" rows="3" maxlength="300" placeholder="Qui tu es, tes sorties préférées, tes objectifs, ton prochain dossard…" bind:value={bio}></textarea>
   </label>
 
@@ -216,15 +215,6 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-  }
-  .pf > .hint {
-    margin: -8px 4px 0;
-  }
-  .opt {
-    font-weight: 400;
-    font-size: 0.8125rem;
-    color: var(--label-2);
-    margin-left: 4px;
   }
   .short {
     max-width: 120px;

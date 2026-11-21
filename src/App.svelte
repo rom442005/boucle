@@ -330,7 +330,7 @@
 {#if app.pickOnMap}
   <div class="picker glass" role="status">
     <Icon name="crosshair" size={18} />
-    <span>{isDesktop ? 'Clique sur' : 'Touche'} la carte pour placer {app.pickOnMap === 'start' ? 'le départ' : 'la destination'}</span>
+    <span>{isDesktop ? 'Clique sur' : 'Touche'} la carte pour placer {app.pickOnMap === 'start' ? 'le départ' : app.pickOnMap === 'via' ? 'le point de passage' : 'l’arrivée'}</span>
     <button use:tactile type="button" class="text-btn" onclick={() => app.cancelPick()}>Annuler</button>
   </div>
 {/if}

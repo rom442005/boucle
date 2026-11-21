@@ -36,7 +36,6 @@
           <li>Touche Partager <span class="kbd"><Icon name="share" size={14} /></span> (ou ⋯ puis Partager).</li>
           <li>Choisis « Sur l’écran d’accueil », puis Ajouter.</li>
         </ol>
-        <p class="hint">L’icône Boucle ouvre ensuite l’app en plein écran.</p>
       </div>
       <button use:tactile type="button" class="round x-card" aria-label="Fermer le QR code" onclick={close}><Icon name="close" size={16} /></button>
     </div>
@@ -166,9 +165,6 @@
     padding-left: 18px;
     display: grid;
     gap: 4px;
-  }
-  .steps .hint {
-    margin: 0;
   }
   .x-card {
     position: absolute;

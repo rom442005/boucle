@@ -37,10 +37,12 @@ import { isNativeApp } from './platform';
 const PUBLIC_URL = 'https://rom442005.github.io/boucle/';
 
 const same = (a: LngLat, b: LngLat) => a[0] === b[0] && a[1] === b[1];
+/** Points de passage au plus (le service d'itinéraires accepte 10 points par trajet). */
+export const MAX_VIAS = 5;
 
 export type Phase = 'compose' | 'results' | 'library' | 'detail' | 'follow' | 'community';
 export type Detent = 'peek' | 'half' | 'full';
-/** Rôle d'un lieu choisi : départ, destination (« Vers un lieu ») ou point de passage imposé. */
+/** Rôle d'un lieu choisi : départ, arrivée (« Aller simple ») ou point de passage imposé. */
 export type PlaceKind = 'start' | 'destination' | 'via';
 
 export interface Padding {
@@ -55,8 +57,10 @@ class AppState {
   settings = $state<Settings>(loadSettings(DEFAULT_SETTINGS));
   start = $state<Place | null>(null);
   destination = $state<Place | null>(null);
-  /** point de passage imposé : un endroit à visiter forcément */
-  via = $state<Place | null>(null);
+  /** points de passage imposés : des endroits à visiter forcément (5 au plus) */
+  vias = $state<Place[]>([]);
+  /** point de passage en cours de choix (indice), null pour en ajouter un */
+  editVia = $state<number | null>(null);
 
   phase = $state<Phase>('compose');
   /** Accueil : la carte seule, les réglages repliés derrière le bouton « Faire une boucle ». */
@@ -161,7 +165,8 @@ class AppState {
     if (last.params && SPORTS[last.params.sport]) this.params = { ...defaultParams(last.params.sport), ...last.params };
     if (last.start) this.start = last.start;
     if (last.destination) this.destination = last.destination;
-    if (last.via) this.via = last.via;
+    if (last.vias?.length) this.vias = last.vias.slice(0, MAX_VIAS);
+    else if (last.via) this.vias = [last.via];
   }
 
   get route(): Route | null {
@@ -180,7 +185,7 @@ class AppState {
       params: $state.snapshot(this.params),
       start: this.start ? $state.snapshot(this.start) : undefined,
       destination: this.destination ? $state.snapshot(this.destination) : undefined,
-      via: this.via ? $state.snapshot(this.via) : undefined,
+      vias: this.vias.length ? $state.snapshot(this.vias) : undefined,
     });
   }
 
@@ -256,7 +261,7 @@ class AppState {
 
   /** Le lieu d'un rôle donné (départ, destination, point de passage). */
   placeOf(kind: PlaceKind): Place | null {
-    return kind === 'start' ? this.start : kind === 'destination' ? this.destination : this.via;
+    return kind === 'start' ? this.start : kind === 'destination' ? this.destination : this.editVia != null ? (this.vias[this.editVia] ?? null) : null;
   }
 
   async useMyPosition(kind: PlaceKind = 'start') {
@@ -274,16 +279,35 @@ class AppState {
   setPlace(kind: PlaceKind, p: Place) {
     if (kind === 'start') this.start = p;
     else if (kind === 'destination') this.destination = p;
-    else this.via = p;
+    else if (this.editVia != null && this.editVia < this.vias.length) this.vias[this.editVia] = p;
+    else if (this.vias.length < MAX_VIAS) {
+      this.vias.push(p);
+      // Le nom trouvé ensuite (adresse) remplacera ce point-ci.
+      this.editVia = this.vias.length - 1;
+    }
+    this.persist();
+  }
+
+  /** Ajouter un point de passage (recherche) ou en changer un (indice). */
+  chooseVia(i: number | null) {
+    this.editVia = i;
+    this.search = 'via';
+  }
+
+  /** Retire un point de passage. */
+  removeVia(i: number) {
+    this.vias.splice(i, 1);
+    this.editVia = null;
+    this.persist();
+  }
+
+  /** Arrivée libre pour un aller simple : le parcours s'arrête là où la distance est atteinte. */
+  clearDestination() {
+    this.destination = null;
     this.persist();
   }
 
   /** Choisir un point sur la carte : sur iPhone, le panneau descend pour dégager la carte. */
-  /** Retire le point de passage. */
-  clearVia() {
-    this.via = null;
-    this.persist();
-  }
 
   startPick(kind: PlaceKind) {
     this.search = null;
@@ -328,10 +352,6 @@ class AppState {
         return;
       }
     }
-    if (this.params.shape === 'oneway' && !this.destination) {
-      this.search = 'destination';
-      return;
-    }
     if (reroll) this.seed += 7919;
     this.abort?.abort();
     // La création précédente complète peut-être encore ses sols : elle laisse la place (une requête par seconde).
@@ -364,7 +384,7 @@ class AppState {
       const res = await generate({
         start: $state.snapshot(this.start!) as Place,
         destination: this.destination ? ($state.snapshot(this.destination) as Place) : null,
-        via: this.via ? ($state.snapshot(this.via) as Place) : null,
+        vias: $state.snapshot(this.vias) as Place[],
         params: $state.snapshot(this.params) as Params,
         settings: $state.snapshot(this.settings) as Settings,
         seed: this.seed,
