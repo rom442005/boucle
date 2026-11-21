@@ -158,8 +158,12 @@
   $effect(() => {
     if (scene) backdropOn = true;
   });
-  /** Le panneau sur la photo : en blocs pour les réglages (iPhone), en verre fumé ailleurs. */
-  const photo = $derived(!scene || welcome ? null : app.phase === 'compose' ? 'cards' : 'sheet');
+  /** Sur la photo, plus de feuille : des blocs de verre (réglages sur iPhone, Mes parcours, profils). */
+  const photo = $derived(!scene || welcome ? null : ('cards' as const));
+  // iPhone : Mes parcours et les profils occupent l'écran, leurs blocs flottent sur la photo.
+  $effect(() => {
+    if (photo && !app.wide && app.phase !== 'compose') app.detent = 'full';
+  });
   const TABS = ['create', 'community', 'library', 'profile'] as const;
   const TAB_LABEL = { create: 'Créer', community: 'Communauté', library: 'Mes parcours', profile: 'Profil' } as const;
   const TAB_ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;

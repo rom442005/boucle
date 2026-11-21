@@ -2,13 +2,13 @@
   import Icon from './Icon.svelte';
   import { tactile } from '../lib/haptics';
   import RouteGlyph from './RouteGlyph.svelte';
-  import Segmented from './Segmented.svelte';
   import { app } from '../lib/state.svelte';
   import { cumulative, decodePolyline } from '../lib/geo';
   import { dateShort, duration, km, NNBSP, pace, speed } from '../lib/format';
   import { SPORTS } from '../lib/sports';
   import { elevationStats } from '../lib/elevation';
-  import { recentActivity, SPORT_EMOJI } from '../lib/scenes';
+  import { SPORT_EMOJI } from '../lib/scenes';
+  import ActivityBars from './ActivityBars.svelte';
 
   let editing = $state(false);
 
@@ -43,9 +43,6 @@
     };
   });
 
-  /** Les huit dernières semaines, en barres (la semaine en cours en rose). */
-  const recent = $derived(recentActivity(app.history));
-  const peak = $derived(Math.max(...recent.weeks, 1));
   /** Le sport le plus pratiqué, pour l'émoji du résumé. */
   const mainSport = $derived.by(() => {
     const n: Record<string, number> = {};
@@ -54,6 +51,7 @@
     return top ? SPORT_EMOJI[top] : '🏃';
   });
 
+  const monthTitle = $derived(month.label.charAt(0).toUpperCase() + month.label.slice(1));
   const dateLong = (t: number) => new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).format(t);
 
   let file: HTMLInputElement | undefined = $state();
@@ -71,42 +69,32 @@
 
 <input bind:this={file} type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" class="visually-hidden" tabindex="-1" onchange={onFile} />
 
-<section class="sum" aria-label="Ce mois-ci">
-  <div class="sum-top">
-    <span class="sum-emo" aria-hidden="true">{mainSport}</span>
-    <span class="sum-txt">
-      <span class="sum-k rounded tabular">{month.km.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}<small>km</small></span>
-      <span class="sum-l">en {month.label}</span>
-    </span>
-    <span class="sum-side">
-      <span><b class="rounded tabular">{month.count}</b> sortie{month.count > 1 ? 's' : ''}</span>
-      <span><b class="rounded tabular">{month.time ? duration(month.time) : '0 min'}</b></span>
-      <span><b class="rounded tabular">{app.library.length}</b> favori{app.library.length > 1 ? 's' : ''} ⭐</span>
-    </span>
-  </div>
-  <ol class="weeks" aria-label="Distance par semaine, huit dernières semaines">
-    {#each recent.weeks as wk, i (i)}
-      <li class:now={i === 7} style:--h={wk ? Math.max(0.08, wk / peak) : 0} style:--i={i} aria-label="{(wk / 1000).toFixed(1)} km"></li>
-    {/each}
-  </ol>
-</section>
+<div class="cards">
+  <!-- Le mois en un coup d'œil, puis les 28 derniers jours en barres, comme les blocs d'une app santé. -->
+  <section class="card wide glass photo-card" aria-label="Ce mois-ci">
+    <div class="row"><span class="k">🗓️ {monthTitle}</span><span class="k">⏱️ {month.time ? duration(month.time) : '0 min'}</span></div>
+    <div class="m">
+      <span class="emo" aria-hidden="true">{mainSport}</span>
+      <b class="big rounded tabular">{month.km.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}<small>km</small></b>
+      <span class="side"><b class="rounded tabular">{month.count}</b> sortie{month.count > 1 ? 's' : ''}</span>
+    </div>
+    <div class="sep"></div>
+    <span class="k">28 derniers jours</span>
+    <ActivityBars />
+  </section>
 
-<div class="tabs">
-  <Segmented
-    label="Mes parcours"
-    value={app.libTab}
-    options={[
-      { value: 'favoris', label: `Favoris${app.library.length ? ` (${app.library.length})` : ''}` },
-      { value: 'historique', label: `Historique${app.history.length ? ` (${app.history.length})` : ''}` },
-    ]}
-    onchange={(v) => (app.libTab = v)}
-  />
-</div>
+  <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'favoris'} aria-pressed={app.libTab === 'favoris'} onclick={() => (app.libTab = 'favoris')}>
+    <span class="k">⭐ Favoris</span><b class="n rounded tabular">{app.library.length}</b>
+  </button>
+  <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'historique'} aria-pressed={app.libTab === 'historique'} onclick={() => (app.libTab = 'historique')}>
+    <span class="k">🕒 Sorties</span><b class="n rounded tabular">{app.history.length}</b>
+  </button>
 
+  <section class="card wide glass photo-card list-card" aria-label={app.libTab === 'favoris' ? 'Parcours favoris' : 'Historique des sorties'}>
 {#if app.libTab === 'favoris'}
   {#if favorites.length}
     <div class="list-head">
-      <h3 class="field-label">Parcours favoris</h3>
+      <h3 class="k">Parcours favoris</h3>
       <button use:tactile type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
     </div>
     <ul class="list" aria-label="Parcours favoris">
@@ -143,7 +131,7 @@
   {/if}
 {:else if outings.length}
   <div class="list-head">
-    <h3 class="field-label">Sorties</h3>
+    <h3 class="k">Sorties</h3>
     <button use:tactile type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
   </div>
   <ul class="list" aria-label="Historique des sorties">
@@ -173,103 +161,121 @@
     </div>
   </div>
 {/if}
+  </section>
+</div>
 
 <style>
-  .sum {
+  .cards {
     display: grid;
-    gap: 14px;
-    margin: 2px 0 14px;
-    padding: 16px 16px 14px;
-    border-radius: 26px;
-    background: var(--fill-group);
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-bottom: 8px;
   }
-  .sum-top {
+  .card {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    border-radius: 26px;
+    padding: 14px 16px;
+    text-align: left;
+    color: var(--label);
+    animation: card-in 560ms var(--spring) both;
+  }
+  .cards > :nth-child(2) { animation-delay: 70ms; }
+  .cards > :nth-child(3) { animation-delay: 110ms; }
+  .cards > :nth-child(n + 4) { animation-delay: 160ms; }
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      translate: 0 14px;
+      scale: 0.97;
+    }
+  }
+  .wide {
+    grid-column: 1 / -1;
+  }
+  .k {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--label-2);
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+  }
+  .m {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
   }
-  .sum-emo {
+  .emo {
     font-size: 2.25rem;
     line-height: 1;
   }
-  .sum-txt {
-    display: grid;
-    gap: 2px;
-  }
-  .sum-k {
-    font-size: 2.5rem;
-    font-weight: 650;
+  .big {
+    font-size: 2.75rem;
+    font-weight: 600;
     letter-spacing: -0.04em;
     line-height: 1;
   }
-  .sum-k small {
+  .big small {
     font-family: var(--font);
     font-size: 0.9375rem;
     font-weight: 600;
     letter-spacing: 0;
     color: var(--label-2);
-    margin-left: 3px;
+    margin-left: 4px;
   }
-  .sum-l {
+  .side {
+    margin-left: auto;
     font-size: 0.8125rem;
     color: var(--label-2);
   }
-  .sum-side {
-    margin-left: auto;
-    display: grid;
-    justify-items: end;
-    gap: 3px;
-    font-size: 0.75rem;
-    color: var(--label-2);
-    text-align: right;
-  }
-  .sum-side b {
-    font-size: 0.9375rem;
+  .side b {
+    font-size: 1.25rem;
     font-weight: 650;
     color: var(--label);
   }
-  .weeks {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    align-items: end;
-    gap: 6px;
-    height: 46px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .sep {
+    height: 0.5px;
+    margin: 6px 0 4px;
+    background: var(--separator);
   }
-  .weeks li {
-    height: 100%;
-    border-radius: 6px;
-    background: var(--fill-2);
-    position: relative;
-    overflow: hidden;
+  .tabcard {
+    transition:
+      transform 260ms var(--spring),
+      box-shadow 260ms var(--ease-out);
   }
-  .weeks li::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 0;
-    height: calc(var(--h) * 100%);
-    border-radius: 6px;
-    background: var(--label-2);
-    transform-origin: bottom;
-    animation: wk-grow 640ms var(--spring) calc(200ms + var(--i) * 40ms) both;
+  .tabcard:active {
+    transform: scale(0.97);
   }
-  .weeks li.now::after {
-    background: var(--tint);
+  .tabcard.on {
+    box-shadow:
+      var(--shadow-glass),
+      inset 0 0 0 2px rgba(255, 255, 255, 0.85);
   }
-  @keyframes wk-grow {
-    from {
-      transform: scaleY(0);
-    }
+  .tabcard .n {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  /* La liste se fond dans son bloc de verre. */
+  .list-card .list {
+    margin: 0 -10px;
+    background: transparent;
+  }
+  .list-card :global(.glyph) {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .list-card :global(.glyph path) {
+    stroke: #fff;
   }
   @media (prefers-reduced-motion: reduce) {
-    .weeks li::after {
+    .card {
       animation: none;
     }
-  }
-  .tabs {
-    margin: 2px 0 16px;
   }
   .list-head {
     display: flex;

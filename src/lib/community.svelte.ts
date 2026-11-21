@@ -258,6 +258,7 @@ class CommunityState {
 
   async signOut() {
     await (await this.api()).signOut();
+    this.myView = null;
     this.session = null;
     this.me = null;
     this.myPrivate = null;
@@ -270,6 +271,7 @@ class CommunityState {
   async deleteAccount() {
     try {
       await (await this.api()).deleteAccount();
+      this.myView = null;
       this.session = null;
       this.me = null;
       this.myPrivate = null;
@@ -326,8 +328,18 @@ class CommunityState {
   /** En arrière-plan, au calme : le fil est prêt avant qu'on ouvre l'onglet (puis rafraîchi à l'ouverture). */
   async prefetch() {
     const b = await this.start();
-    if (!b || this.feed.length || this.loading) return;
-    await this.loadFeed();
+    if (!b) return;
+    if (!this.feed.length && !this.loading) await this.loadFeed();
+    // Mon profil aussi : l'onglet Profil s'ouvre déjà rempli.
+    const me = this.me;
+    if (me && !this.myView) {
+      try {
+        const [p, routes, photos] = await Promise.all([b.profile(me.id), b.routesBy(me.id), b.photosBy(me.id).catch(() => [])]);
+        if (p) this.myView = { ...p, routes, photos };
+      } catch {
+        /* il se chargera à l'ouverture */
+      }
+    }
   }
 
   /** Ouvre la Communauté (onglet ou bouton). */
@@ -623,6 +635,7 @@ class CommunityState {
         return;
       }
       this.viewing = { ...p, routes, photos };
+      if (id === this.me?.id) this.myView = this.viewing;
       if (app.phase !== 'community') app.openCommunity();
       this.view = 'profile';
     } catch (e) {
@@ -631,9 +644,21 @@ class CommunityState {
   }
 
   /** Onglet Profil : ton profil, ou la connexion d'abord (dans le panneau de la Communauté). */
+  /** Mon profil tel qu'il a été vu la dernière fois : l'onglet Profil l'affiche sans attendre. */
+  myView = $state.raw<{ profile: Profile; stats: ProfileStats; routes: CommunityRoute[]; photos: RoutePhoto[] } | null>(null);
+
   openMe() {
-    if (app.phase !== 'community') this.open();
     this.sheet = null;
+    const me = this.me;
+    if (this.signedIn && me) {
+      // Tout de suite, ce que l'on sait déjà ; les chiffres se mettent à jour ensuite, sans changer d'écran.
+      this.viewing = this.myView ?? { profile: me, stats: { routes: 0, followers: 0, following: 0, likes: 0, followedByMe: false }, routes: [], photos: [] };
+      this.view = 'profile';
+      if (app.phase !== 'community') app.openCommunity();
+      void this.openProfile(me.id);
+      return;
+    }
+    if (app.phase !== 'community') this.open();
     void this.openMyProfile();
   }
 

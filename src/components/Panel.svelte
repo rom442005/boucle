@@ -355,6 +355,11 @@
   .bare .foot {
     border-top: none;
   }
+  /* Les blocs qui défilent s'effacent en douceur sous le titre au lieu d'être coupés net. */
+  .bare .body {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+  }
   .wide .foot,
   .over-tabs .foot {
     padding-bottom: 12px;

@@ -1,27 +1,31 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import Avatar from './Avatar.svelte';
-  import CommunityItem from './CommunityItem.svelte';
-  import Segmented from './Segmented.svelte';
+  import RouteGlyph from './RouteGlyph.svelte';
+  import ActivityBars from './ActivityBars.svelte';
   import { community } from '../lib/community.svelte';
-  import { pageUrl } from '../lib/platform';
+  import { app } from '../lib/state.svelte';
   import { LEVELS } from '../lib/community/types';
   import { SPORTS } from '../lib/sports';
-  import { haptic, tactile } from '../lib/haptics';
-  import type { IconName } from '../lib/icons';
-  import type { Sport } from '../lib/types';
+  import { decodePolyline } from '../lib/geo';
+  import { km, NNBSP } from '../lib/format';
+  import { last28, SPORT_EMOJI } from '../lib/scenes';
+  import { tactile } from '../lib/haptics';
 
-  const SPORT_ICON: Record<Sport, IconName> = { run: 'run', trail: 'hike', road: 'bicycle', gravel: 'bike' };
+  /*
+   * Un profil en quelques blocs de verre sur la photo : qui (photo, prénom, niveau, ville, présentation),
+   * quatre chiffres en petits blocs, deux par ligne, l'activité des 28 derniers jours (le mien), puis les
+   * parcours et les photos. Le reste (compte, déconnexion, confidentialité) vit dans « Modifier ».
+   */
   const v = $derived(community.viewing!);
   const p = $derived(v.profile);
   const mine = $derived(community.me?.id === p.id);
   const followed = $derived(community.following.includes(p.id));
-  const since = $derived(new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(p.createdAt));
+  const month = $derived(mine ? last28(app.history) : null);
 
-  /** Parcours publiés ou photos de sorties, comme les onglets d'un profil Instagram. */
-  let tab = $state<'routes' | 'photos'>('routes');
   let picker = $state<HTMLInputElement>();
   let avatarBusy = $state(false);
+  let more = $state(false);
 
   async function pickAvatar(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
@@ -32,207 +36,146 @@
     await community.changeAvatar(file);
     avatarBusy = false;
   }
-
-  /** Suppression du compte : un premier toucher demande confirmation, dans la page. */
-  let confirmDelete = $state(false);
-  let deleting = $state(false);
+  const kmText = (m: number) => (m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 </script>
 
-<section class="head" aria-label="Profil de {p.firstName}">
-  {#if mine}
-    <button use:tactile type="button" class="me-ph" aria-label={p.avatar ? 'Changer ma photo de profil' : 'Ajouter une photo de profil'} disabled={avatarBusy} onclick={() => picker?.click()}>
-      <Avatar id={p.id} name={p.firstName} src={p.avatar} size={88} />
-      <span class="me-badge" aria-hidden="true"><Icon name="camera" size={15} fill /></span>
-      {#if avatarBusy}<span class="me-busy" aria-hidden="true"></span>{/if}
-    </button>
-    <input bind:this={picker} type="file" accept="image/*" hidden onchange={pickAvatar} />
-  {:else}
-    <Avatar id={p.id} name={p.firstName} src={p.avatar} size={88} />
-  {/if}
-  <dl class="pstats">
-    <div><dd class="rounded tabular">{v.stats.routes}</dd><dt><span aria-hidden="true">🗺️</span> Parcours</dt></div>
-    <div><dd class="rounded tabular">{v.stats.followers}</dd><dt><span aria-hidden="true">👥</span> Abonnés</dt></div>
-    <div><dd class="rounded tabular">{v.stats.likes}</dd><dt><span aria-hidden="true">❤️</span> J’aime</dt></div>
-  </dl>
-</section>
-
-<div class="who">
-  <h2>{p.firstName}</h2>
-  <p class="sub">{LEVELS[p.level]}{p.city ? ` · 📍 ${p.city}` : ''} · {v.stats.following} abonnement{v.stats.following > 1 ? 's' : ''}</p>
-</div>
-{#if p.bio}<p class="bio">{p.bio}</p>{:else if mine}<button use:tactile type="button" class="text-btn add-bio" onclick={() => (community.sheet = { kind: 'edit' })}>Ajoute une présentation</button>{/if}
-<p class="sports">
-  {#each p.sports as s (s)}<span class="sp"><Icon name={SPORT_ICON[s]} size={15} />{SPORTS[s].label}</span>{/each}
-</p>
-
-<div class="acts">
-  {#if mine}
-    <button use:tactile type="button" class="pill" onclick={() => (community.sheet = { kind: 'edit' })}><Icon name="pencil" size={17} />Modifier le profil</button>
-  {:else}
-    <button use:tactile type="button" class="pill" class:is-on={!followed} aria-label={followed ? `Ne plus suivre ${p.firstName}` : `Suivre ${p.firstName}`} onclick={() => community.toggleFollow(p.id)}>
-      <Icon name={followed ? 'userCheck' : 'userPlus'} size={18} />{followed ? 'Abonné' : 'Suivre'}
-    </button>
-  {/if}
-</div>
-
-<div class="tabs">
-  <Segmented
-    label="Contenu du profil"
-    value={tab}
-    options={[
-      { value: 'routes', label: `Parcours${v.routes.length ? ` · ${v.routes.length}` : ''}` },
-      { value: 'photos', label: `Photos${v.photos.length ? ` · ${v.photos.length}` : ''}` },
-    ]}
-    onchange={(t) => (tab = t)}
-  />
-</div>
-{#if tab === 'routes'}
-  {#if v.routes.length}
-    <ul class="c-list" aria-label="Parcours publiés par {p.firstName}">
-      {#each v.routes as r, i (r.id)}
-        <CommunityItem {r} {i} author={false} />
-      {/each}
-    </ul>
-  {:else}
-    <p class="hint none">Aucun parcours</p>
-  {/if}
-{:else if v.photos.length}
-  <ul class="grid" aria-label="Photos de sorties de {p.firstName}">
-    {#each v.photos as ph, i (ph.id)}
-      <li style:--i={Math.min(i, 12)}>
-        <button use:tactile type="button" aria-label="Photo {i + 1}{ph.caption ? ` : ${ph.caption}` : ''}" onclick={() => community.openPhotos(v.photos, i)}>
-          <img src={ph.thumb} alt="" loading="lazy" decoding="async" />
+<div class="cards">
+  <section class="card hero glass photo-card" aria-label="Profil de {p.firstName}">
+    <div class="who">
+      {#if mine}
+        <button use:tactile type="button" class="ph" aria-label={p.avatar ? 'Changer ma photo de profil' : 'Ajouter une photo de profil'} disabled={avatarBusy} onclick={() => picker?.click()}>
+          <Avatar id={p.id} name={p.firstName} src={p.avatar} size={68} />
+          <span class="ph-badge" aria-hidden="true"><Icon name="camera" size={13} fill /></span>
+          {#if avatarBusy}<span class="ph-busy" aria-hidden="true"></span>{/if}
         </button>
-      </li>
-    {/each}
-  </ul>
-{:else}
-  <p class="hint none">Aucune photo</p>
-{/if}
-
-{#if mine}
-  <h3 class="field-label lh">Compte</h3>
-  <div class="group">
-    <button use:tactile type="button" class="row link" onclick={() => community.signOut()}>
-      <span class="row-icon"><Icon name="signout" size={20} /></span><span class="row-label">Se déconnecter</span>
-    </button>
-    <a class="row link" href={pageUrl('confidentialite.html')} target="_blank" rel="noopener">
-      <span class="row-icon"><Icon name="lock" size={20} /></span><span class="row-label">Confidentialité</span><Icon name="chevron" size={14} />
-    </a>
-    <a class="row link" href={pageUrl('conditions.html')} target="_blank" rel="noopener">
-      <span class="row-icon"><Icon name="shield" size={20} /></span><span class="row-label">Conditions d’utilisation</span><Icon name="chevron" size={14} />
-    </a>
-  </div>
-  {#if !confirmDelete}
-    <button use:tactile type="button" class="danger-link" onclick={() => (confirmDelete = true)}>Supprimer mon compte</button>
-  {:else}
-    <div class="confirm" role="group" aria-label="Confirmer la suppression du compte">
-      <p><b>Supprimer ton compte ?</b> Ton profil, tes parcours publiés, tes j’aime et tes commentaires seront effacés, sans retour possible. Tes favoris et ton historique restent sur cet appareil.</p>
-      <div class="confirm-acts">
-        <button use:tactile type="button" class="pill" onclick={() => (confirmDelete = false)}>Annuler</button>
-        <button use:tactile type="button" class="pill danger" disabled={deleting} onclick={async () => {
-            deleting = true;
-            haptic('warn');
-            await community.deleteAccount();
-            deleting = false;
-          }}>{deleting ? 'Suppression…' : 'Supprimer définitivement'}</button>
+        <input bind:this={picker} type="file" accept="image/*" hidden onchange={pickAvatar} />
+      {:else}
+        <Avatar id={p.id} name={p.firstName} src={p.avatar} size={68} />
+      {/if}
+      <div class="id">
+        <h2>{p.firstName}</h2>
+        <p class="sub">{LEVELS[p.level]}{p.city ? ` · ${p.city}` : ''}</p>
       </div>
+      {#if mine}
+        <button use:tactile type="button" class="round edit" aria-label="Modifier le profil" onclick={() => (community.sheet = { kind: 'edit' })}><Icon name="pencil" size={18} /></button>
+      {:else}
+        <button use:tactile type="button" class="follow" class:on={followed} aria-label={followed ? `Ne plus suivre ${p.firstName}` : `Suivre ${p.firstName}`} onclick={() => community.toggleFollow(p.id)}>
+          {followed ? 'Abonné' : 'Suivre'}
+        </button>
+      {/if}
+    </div>
+    {#if p.bio}<p class="bio">{p.bio}</p>{/if}
+  </section>
+
+  <section class="card stat glass photo-card" aria-label="Parcours publiés">
+    <span class="k">🗺️ Parcours</span><b class="n rounded tabular">{v.stats.routes}</b>
+  </section>
+  <section class="card stat glass photo-card" aria-label="Abonnés">
+    <span class="k">👥 Abonnés</span><b class="n rounded tabular">{v.stats.followers}</b>
+  </section>
+  <section class="card stat glass photo-card" aria-label="J’aime reçus">
+    <span class="k">❤️ J’aime</span><b class="n rounded tabular">{v.stats.likes}</b>
+  </section>
+  <section class="card stat glass photo-card" aria-label="Sports">
+    <span class="k">Sports</span>
+    <b class="n emo">{#each p.sports as s (s)}<span title={SPORTS[s].label}>{SPORT_EMOJI[s]}</span>{:else}–{/each}</b>
+  </section>
+
+  {#if month}
+    <section class="card wide glass photo-card" aria-label="28 derniers jours">
+      <div class="row">
+        <span class="k">28 derniers jours</span>
+        <span class="k">{month.active} sortie{month.active > 1 ? 's' : ''}</span>
+      </div>
+      <b class="big rounded tabular">{kmText(month.total)}<small>km</small></b>
+      <ActivityBars />
+    </section>
+  {/if}
+
+  {#if v.routes.length}
+    <section class="card wide glass photo-card" aria-label="Parcours de {p.firstName}">
+      <span class="k">Parcours</span>
+      <ul class="routes">
+        {#each v.routes as r, i (r.id)}
+          <li style:--i={Math.min(i, 8)}>
+            <button use:tactile type="button" onclick={() => community.openRoute(r.id, r)}>
+              <span class="glyph"><RouteGlyph coords={decodePolyline(r.data.p, r.data.q)} size={44} active /></span>
+              <span class="rt">
+                <span class="rn">{r.name}</span>
+                <span class="rm tabular">{SPORT_EMOJI[r.sport]} {km(r.distanceM)} · ⛰️ {r.ascentM}{NNBSP}m{r.likes ? ` · ❤️ ${r.likes}` : ''}</span>
+              </span>
+              <Icon name="chevron" size={14} />
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if v.photos.length}
+    <section class="card wide glass photo-card" aria-label="Photos de sorties">
+      <span class="k">Photos</span>
+      <ul class="grid">
+        {#each v.photos as ph, i (ph.id)}
+          <li style:--i={Math.min(i, 12)}>
+            <button use:tactile type="button" aria-label="Photo {i + 1}" onclick={() => community.openPhotos(v.photos, i)}><img src={ph.thumb} alt="" loading="lazy" decoding="async" /></button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if !mine}
+    <div class="wide mod">
+      {#if more}
+        <button use:tactile type="button" class="text-btn" onclick={() => community.toggleBlock(p.id, p.firstName)}>{community.blocked.includes(p.id) ? 'Ne plus masquer' : 'Masquer'}</button>
+        <button use:tactile type="button" class="text-btn" onclick={() => community.startReport({ profileId: p.id }, `le profil de ${p.firstName}`)}>Signaler</button>
+      {:else}
+        <button use:tactile type="button" class="round more" aria-label="Plus d’options" onclick={() => (more = true)}><Icon name="more" size={20} /></button>
+      {/if}
     </div>
   {/if}
-{:else}
-  <div class="mod">
-    <button use:tactile type="button" class="text-btn" onclick={() => community.toggleBlock(p.id, p.firstName)}>
-      {community.blocked.includes(p.id) ? `Ne plus masquer ${p.firstName}` : `Masquer ${p.firstName}`}
-    </button>
-    <button use:tactile type="button" class="text-btn" onclick={() => community.startReport({ profileId: p.id }, `le profil de ${p.firstName}`)}>Signaler ce profil</button>
-  </div>
-{/if}
+</div>
 
 <style>
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    margin-bottom: 12px;
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-bottom: 8px;
   }
-  .who {
+  .card {
+    display: grid;
+    gap: 6px;
     min-width: 0;
-    margin-bottom: 4px;
+    border-radius: 26px;
+    padding: 14px 16px;
+    animation: card-in 560ms var(--spring) both;
   }
-  .me-ph {
-    position: relative;
-    flex: none;
-    border-radius: 50%;
-    transition: transform 240ms var(--spring);
-  }
-  .me-ph:active {
-    transform: scale(0.95);
-  }
-  .me-badge {
-    position: absolute;
-    right: -2px;
-    bottom: -2px;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    color: var(--on-tint);
-    background: var(--tint);
-    box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.35);
-  }
-  .me-busy {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.35);
-    animation: busy 1s ease-in-out infinite alternate;
-  }
-  @keyframes busy {
-    to {
-      opacity: 0.4;
-    }
-  }
-  .add-bio {
-    display: block;
-    min-height: 32px;
-    margin: 0 0 4px;
-    padding: 0;
-  }
-  .tabs {
-    margin: 0 0 12px;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
-    margin: 0 0 18px;
-    padding: 0;
-    list-style: none;
-    border-radius: 14px;
-    overflow: hidden;
-  }
-  .grid li {
-    aspect-ratio: 1;
-    animation: cell-in 380ms var(--spring) calc(var(--i, 0) * 30ms) both;
-  }
-  @keyframes cell-in {
+  .cards > :nth-child(2) { animation-delay: 60ms; }
+  .cards > :nth-child(3) { animation-delay: 100ms; }
+  .cards > :nth-child(4) { animation-delay: 140ms; }
+  .cards > :nth-child(5) { animation-delay: 180ms; }
+  .cards > :nth-child(n + 6) { animation-delay: 220ms; }
+  @keyframes card-in {
     from {
       opacity: 0;
-      scale: 0.92;
+      translate: 0 14px;
+      scale: 0.97;
     }
   }
-  .grid button {
-    width: 100%;
-    height: 100%;
-    display: block;
-    background: var(--fill-2);
+  .hero,
+  .wide {
+    grid-column: 1 / -1;
   }
-  .grid img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .id {
+    flex: 1;
+    min-width: 0;
   }
   h2 {
     margin: 0;
@@ -245,111 +188,181 @@
     font-size: 0.875rem;
     color: var(--label-2);
   }
-  .sports {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 10px;
-    margin: 0 0 6px;
-  }
-  .sp {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.8125rem;
-    color: var(--label);
-  }
-  .sp :global(.icon) {
-    color: var(--tint);
-  }
   .bio {
-    margin: 0 0 8px;
+    margin: 6px 0 0;
     font-size: 0.9375rem;
-    line-height: 1.45;
-    white-space: pre-line;
-  }
-  .pstats {
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    margin: 0;
-  }
-  .pstats div {
-    display: grid;
-    justify-items: center;
-    gap: 2px;
-    text-align: center;
-  }
-  .pstats dt {
-    font-size: 0.6875rem;
-    color: var(--label-2);
-    font-weight: 500;
-  }
-  .pstats dd {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 650;
-  }
-  .acts {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 18px;
-  }
-  .acts .pill {
-    flex: 1;
-  }
-  .lh {
-    margin: 0 0 8px;
-  }
-  .none {
-    margin: 0 4px 18px;
-  }
-  .link {
-    width: 100%;
+    line-height: 1.4;
     color: var(--label);
-    text-decoration: none;
-    text-align: left;
+    white-space: pre-line;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .link :global(.icon:last-child) {
+  .ph {
+    position: relative;
+    flex: none;
+    border-radius: 50%;
+  }
+  .ph-badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: var(--tint);
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.4);
+  }
+  .ph-busy {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.35);
+  }
+  .edit,
+  .more {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    color: var(--label);
+    background: var(--fill-2);
+  }
+  .follow {
+    flex: none;
+    min-height: 38px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-weight: 650;
+    font-size: 0.9375rem;
+    color: #fff;
+    background: var(--tint);
+    transition: transform 240ms var(--spring);
+  }
+  .follow.on {
+    background: var(--fill-2);
+  }
+  .follow:active {
+    transform: scale(0.95);
+  }
+  .k {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--label-2);
+  }
+  .stat .n {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .stat .emo {
+    font-size: 1.625rem;
+    letter-spacing: 0.06em;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+  }
+  .big {
+    font-size: 2.5rem;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .big small {
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--label-2);
+    margin-left: 4px;
+  }
+  .routes {
+    list-style: none;
+    margin: 2px -8px -6px;
+    padding: 0;
+  }
+  .routes li + li {
+    border-top: 0.5px solid var(--separator);
+  }
+  .routes button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 16px;
+    text-align: left;
     color: var(--label-3);
   }
-  .danger-link {
-    display: block;
-    margin: 14px auto 6px;
-    min-height: 44px;
-    padding: 0 12px;
-    color: #ff3b30;
-    font-weight: 500;
+  .routes button:active {
+    background: var(--fill-2);
   }
-  .confirm {
-    margin-top: 14px;
-    padding: 14px;
-    border-radius: 18px;
-    background: color-mix(in srgb, #ff3b30 10%, transparent);
+  .glyph :global(.glyph) {
+    background: rgba(255, 255, 255, 0.1);
   }
-  .confirm p {
-    margin: 0 0 12px;
-    font-size: 0.875rem;
-    line-height: 1.4;
+  .glyph :global(.glyph path) {
+    stroke: #fff;
   }
-  .confirm-acts {
-    display: flex;
-    gap: 8px;
-  }
-  .confirm-acts .pill {
+  .rt {
     flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
   }
-  .pill.danger {
-    background: #ff3b30;
-    color: #fff;
+  .rn {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--label);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rm {
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .grid li {
+    aspect-ratio: 1;
+  }
+  .grid button {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .grid img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
   .mod {
     display: flex;
     justify-content: center;
-    gap: 16px;
-    margin-top: 8px;
+    gap: 18px;
   }
   .mod .text-btn {
     color: var(--label-2);
-    font-size: 0.875rem;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
   }
 </style>

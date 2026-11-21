@@ -97,3 +97,22 @@ export function recentActivity(history: HistoryEntry[], now = Date.now()) {
   }
   return { weeks, month, monthCount, monthTime };
 }
+
+/** Couleur de chaque sport dans les graphiques d'activité (vives, lisibles sur le verre fumé). */
+export const SPORT_COLOR: Record<Sport, string> = { run: '#ff4f7b', trail: '#ffb340', road: '#5ac8fa', gravel: '#8ee35f' };
+
+/** Les 28 derniers jours : distance par jour et sport dominant du jour (le plus ancien d'abord). */
+export function last28(history: HistoryEntry[], now = Date.now()) {
+  const day0 = new Date(now);
+  day0.setHours(0, 0, 0, 0);
+  const from = day0.getTime() - 27 * 86400000;
+  const days = Array.from({ length: 28 }, () => ({ m: 0, by: {} as Partial<Record<Sport, number>> }));
+  for (const h of history) {
+    const k = Math.floor((h.date - from) / 86400000);
+    if (k < 0 || k > 27) continue;
+    days[k].m += h.distanceM;
+    days[k].by[h.route.s] = (days[k].by[h.route.s] ?? 0) + h.distanceM;
+  }
+  const out = days.map((d) => ({ m: d.m, sport: (Object.entries(d.by).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as Sport | null }));
+  return { days: out, total: out.reduce((a, d) => a + d.m, 0), active: out.filter((d) => d.m > 0).length };
+}

@@ -26,6 +26,8 @@
   let years = $state<number | null>(me?.practiceYears ?? null);
   let bio = $state(me?.bio ?? '');
   let avatar = $state<string | null>(me?.avatar ?? null);
+  let confirmDelete = $state(false);
+  let deleting = $state(false);
   let avatarBusy = $state(false);
   let picker = $state<HTMLInputElement>();
   const uid = community.session?.userId ?? 'moi';
@@ -161,7 +163,81 @@
   <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Enregistrement…' : creating ? 'Créer mon profil' : 'Enregistrer'}</button>
 </form>
 
+{#if !creating}
+  <!-- Le compte, rangé ici pour alléger le profil. -->
+  <h3 class="field-label acct-h">Compte</h3>
+  <div class="group">
+    <button use:tactile type="button" class="row link" onclick={() => community.signOut()}>
+      <span class="row-icon"><Icon name="signout" size={20} /></span><span class="row-label">Se déconnecter</span>
+    </button>
+    <a class="row link" href={pageUrl('confidentialite.html')} target="_blank" rel="noopener">
+      <span class="row-icon"><Icon name="lock" size={20} /></span><span class="row-label">Confidentialité</span><Icon name="chevron" size={14} />
+    </a>
+    <a class="row link" href={pageUrl('conditions.html')} target="_blank" rel="noopener">
+      <span class="row-icon"><Icon name="shield" size={20} /></span><span class="row-label">Conditions d’utilisation</span><Icon name="chevron" size={14} />
+    </a>
+  </div>
+  {#if !confirmDelete}
+    <button use:tactile type="button" class="danger-link" onclick={() => (confirmDelete = true)}>Supprimer mon compte</button>
+  {:else}
+    <div class="confirm" role="group" aria-label="Confirmer la suppression du compte">
+      <p><b>Supprimer ton compte ?</b> Profil, parcours publiés, photos, j’aime et commentaires sont effacés, sans retour possible.</p>
+      <div class="confirm-acts">
+        <button use:tactile type="button" class="pill" onclick={() => (confirmDelete = false)}>Annuler</button>
+        <button use:tactile type="button" class="pill danger" disabled={deleting} onclick={async () => {
+            deleting = true;
+            haptic('warn');
+            await community.deleteAccount();
+            deleting = false;
+          }}>{deleting ? 'Suppression…' : 'Supprimer'}</button>
+      </div>
+    </div>
+  {/if}
+{/if}
+
 <style>
+  .acct-h {
+    margin: 22px 0 8px;
+  }
+  .link {
+    width: 100%;
+    color: var(--label);
+    text-decoration: none;
+    text-align: left;
+  }
+  .link :global(.icon:last-child) {
+    color: var(--label-3);
+  }
+  .danger-link {
+    display: block;
+    margin: 14px auto 6px;
+    min-height: 44px;
+    padding: 0 12px;
+    color: #ff3b30;
+    font-weight: 500;
+  }
+  .confirm {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    background: color-mix(in srgb, #ff3b30 10%, transparent);
+  }
+  .confirm p {
+    margin: 0 0 12px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+  .confirm-acts {
+    display: flex;
+    gap: 8px;
+  }
+  .confirm-acts .pill {
+    flex: 1;
+  }
+  .pill.danger {
+    background: #ff3b30;
+    color: #fff;
+  }
   .ph {
     display: grid;
     justify-items: center;

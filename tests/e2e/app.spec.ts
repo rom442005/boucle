@@ -145,7 +145,7 @@ test('marquer un parcours comme fait puis le retrouver dans l’historique', asy
   // Sur iPhone, les réglages couvrent l'écran : on redescend vers la carte, d'où s'ouvrent Mes parcours.
   if (!(await page.getByRole('button', { name: /Mes parcours/ }).first().isVisible())) await page.getByRole('button', { name: 'Fermer les réglages' }).click();
   await page.getByRole('button', { name: /Mes parcours/ }).first().click();
-  await page.getByRole('radio', { name: /Historique/ }).click();
+  await page.getByRole('button', { name: /^🕒 Sorties/ }).click();
   await expect(page.getByRole('region', { name: 'Ce mois-ci' })).toBeVisible();
   const rows = page.getByRole('list', { name: 'Historique des sorties' }).getByRole('button');
   await expect(rows).toHaveCount(1);
