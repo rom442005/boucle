@@ -50,6 +50,20 @@ async function compose(page: Page) {
   await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
 }
 
+/**
+ * iPhone, « Choisir sur la carte » : on touche la carte une fois le panneau replié. Sur une machine lente
+ * (contrôle du lundi sur GitHub), le premier toucher peut tomber pendant le mouvement : on réessaie.
+ */
+async function tapMap(page: Page, x: number, y: number, placed: () => Promise<boolean>) {
+  await expect(page.getByRole('button', { name: /Taille du panneau : réduit/ })).toBeAttached({ timeout: 5000 }).catch(() => {});
+  await expect(async () => {
+    await page.waitForTimeout(500);
+    if (await placed()) return;
+    await page.touchscreen.tap(x, y);
+    await expect.poll(placed, { timeout: 2500 }).toBe(true);
+  }).toPass({ timeout: 20_000 });
+}
+
 async function createLoop(page: Page) {
   if (await page.getByRole('button', { name: 'Faire une boucle' }).count()) await compose(page);
   await page.getByRole('button', { name: /Créer la boucle/ }).click();
@@ -232,8 +246,7 @@ test('aller simple : arrivée libre, ou placée en touchant la carte', async ({ 
     const dialog = page.getByRole('dialog', { name: 'Choisir l’arrivée' });
     await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Touche la carte' })).toBeVisible();
-    await page.waitForTimeout(800); // le panneau finit de descendre
-    await page.touchscreen.tap(box.x + box.width * 0.7, box.y + box.height * 0.3);
+    await tapMap(page, box.x + box.width * 0.7, box.y + box.height * 0.3, async () => (await page.locator('.mk-dest').count()) > 0);
   }
   await expect(page.getByText('Arrivée placée ici')).toBeVisible();
   const flag = page.locator('.mk-dest');
@@ -268,8 +281,8 @@ test('imposer plusieurs points de passage dans une boucle', async ({ page, brows
       await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
     } else {
       await dialog.getByRole('button', { name: /Choisir sur la carte/ }).click();
-      await page.waitForTimeout(800); // le panneau finit de descendre
-      await page.touchscreen.tap(box.x + box.width * fx, box.y + box.height * fy);
+      const before = await page.locator('.mk-via').count();
+      await tapMap(page, box.x + box.width * fx, box.y + box.height * fy, async () => (await page.locator('.mk-via').count()) > before);
     }
     await expect(page.getByText('Point de passage placé ici').last()).toBeVisible();
   };
