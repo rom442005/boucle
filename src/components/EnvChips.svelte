@@ -9,37 +9,50 @@
   let { selected, ontoggle }: { selected: EnvClass[]; ontoggle: (e: EnvClass) => void } = $props();
 
   const ICON: Record<EnvClass, IconName> = { forest: 'tree', water: 'waves', park: 'park', fields: 'grains', urban: 'buildings' };
+  /* Sur une seule ligne (Romain) : cinq tuiles égales, l'icône au-dessus d'un nom court. */
+  const SHORT: Record<EnvClass, string> = { forest: 'Forêt', water: 'Eau', park: 'Parcs', fields: 'Campagne', urban: 'Ville' };
 </script>
 
 <div class="chips" role="group" aria-label="Milieu traversé">
   {#each ENV_ORDER as e (e)}
     {@const on = selected.includes(e)}
-    <button use:tactile type="button" class="chip" class:on aria-pressed={on} style:--c="var(--env-{e})" onclick={() => {
+    <button
+      use:tactile
+      type="button"
+      class="chip"
+      class:on
+      aria-pressed={on}
+      aria-label={ENVS[e].label}
+      title={ENVS[e].label}
+      style:--c="var(--env-{e})"
+      onclick={() => {
         haptic('tap');
         ontoggle(e);
-      }}>
-      <span class="ic"><Icon name={ICON[e]} size={app.wide ? 18 : 16} fill={on} /></span>
-      {ENVS[e].label}
+      }}
+    >
+      <span class="ic"><Icon name={ICON[e]} size={app.wide ? 21 : 19} fill={on} /></span>
+      <span class="lb">{SHORT[e]}</span>
     </button>
   {/each}
 </div>
 
 <style>
   .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
   }
   .chip {
-    display: inline-flex;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    min-height: 38px;
-    padding: 0 14px 0 10px;
-    border-radius: 999px;
+    justify-content: center;
+    gap: 3px;
+    min-height: 56px;
+    padding: 6px 2px 5px;
+    border-radius: 16px;
     background: var(--fill-2);
-    font-size: 0.9375rem;
-    font-weight: 500;
     color: var(--label);
     transition:
       background-color 200ms var(--ease-out),
@@ -47,19 +60,30 @@
       transform 240ms var(--spring);
   }
   .chip:active {
-    transform: scale(0.95);
+    transform: scale(0.94);
   }
   .ic {
     color: var(--c);
     display: inline-grid;
   }
+  .lb {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
   .chip.on {
-    background: color-mix(in srgb, var(--c) 18%, transparent);
+    background: color-mix(in srgb, var(--c) 22%, transparent);
     box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 85%, transparent);
-    font-weight: 600;
     animation: chip-pop 460ms var(--spring-bouncy);
   }
-  /* Choisi : la pastille rebondit légèrement. */
+  .chip.on .lb {
+    font-weight: 650;
+  }
+  /* Choisi : la tuile rebondit légèrement. */
   @keyframes chip-pop {
     from {
       transform: scale(0.9);
@@ -67,13 +91,19 @@
   }
   @media (max-width: 859px) {
     .chips {
-      gap: 6px;
+      gap: 5px;
     }
     .chip {
-      min-height: 32px;
-      padding: 0 12px 0 9px;
-      gap: 5px;
-      font-size: 0.875rem;
+      min-height: 52px;
+      border-radius: 14px;
+    }
+    .lb {
+      font-size: 0.6875rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chip.on {
+      animation: none;
     }
   }
 </style>

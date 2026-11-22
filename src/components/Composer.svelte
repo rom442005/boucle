@@ -5,6 +5,7 @@
   import EnvChips from './EnvChips.svelte';
   import InstallGuide from './InstallGuide.svelte';
   import Stops from './Stops.svelte';
+  import DrawPad from './DrawPad.svelte';
   import { app } from '../lib/state.svelte';
   import { isDesktop, isIOS, isStandalone } from '../lib/platform';
   import { asSwitch, haptic, nativeSwitch, tactile } from '../lib/haptics';
@@ -35,6 +36,8 @@
   }
   function setShape(s: Shape) {
     app.params.shape = s;
+    // Un dessin se court en boucle : le carnet se replie pour un aller-retour ou un aller simple.
+    if (s !== 'loop') app.drawOpen = false;
     app.persist();
   }
   function toggle(key: 'avoidBusy' | 'lit' | 'water' | 'headwind') {
@@ -78,7 +81,6 @@
     min={def.distance.min}
     max={def.distance.max}
     step={def.distance.step}
-    mid={def.ruler.km.mid}
     every={def.ruler.km.every}
     display={kmSetting(p.distanceKm)}
     unit="km"
@@ -86,7 +88,8 @@
     onchange={setDistance}
   />
 
-  <div class="fold" data-fold>
+  <!-- Un dessin décide seul du chemin : le relief et le milieu ne comptent plus (grisés). -->
+  <div class="fold" class:muted={app.drawActive} inert={app.drawActive} data-fold>
   <Ruler
     id="elevation"
     label="Dénivelé positif"
@@ -94,7 +97,6 @@
     min={0}
     max={def.elevation.max}
     step={def.elevation.step}
-    mid={def.ruler.dplus.mid}
     every={def.ruler.dplus.every}
     display={(p.elevation ?? 0).toLocaleString('fr-FR')}
     unit="m"
@@ -108,7 +110,9 @@
 
   <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="env-l">
     <h3 id="env-l" class="field-label">Milieu</h3>
-    <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
+    <div class="fold" class:muted={app.drawActive} inert={app.drawActive}>
+      <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
+    </div>
   </section>
 
   <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="shape-l">
@@ -119,8 +123,11 @@
       options={(Object.keys(SHAPES) as Shape[]).map((s) => ({ value: s, label: SHAPES[s].label }))}
       onchange={setShape}
     />
-    <!-- Sur Mac, ces lieux sont en haut de la colonne, sous le départ. -->
-    {#if !app.wide}
+    {#if p.shape === 'loop'}
+      <DrawPad />
+    {/if}
+    <!-- Sur Mac, ces lieux sont en haut de la colonne, sous le départ. Un dessin n'a pas de point de passage. -->
+    {#if !app.wide && !app.drawActive}
       <Stops />
     {/if}
   </section>
@@ -243,6 +250,10 @@
   }
   .fold {
     display: grid;
+    transition: opacity 320ms var(--ease-out);
+  }
+  .fold.muted {
+    opacity: 0.32;
   }
   @media (max-width: 859px) {
     .composer {

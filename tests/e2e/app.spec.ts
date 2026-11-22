@@ -126,6 +126,56 @@ test('changer de sport adapte les réglages', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Remettre dénivelé positif sur indifférent/ })).toBeVisible();
 });
 
+test('dessiner le parcours : la boucle suit le dessin', async ({ page }) => {
+  await open(page);
+  await compose(page);
+  // Replié tant qu'on ne le touche pas.
+  const toggle = page.getByRole('button', { name: 'Dessiner le parcours' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.pad')).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // Un trait à main levée (souris ou doigt), avec son point de départ…
+  const pad = page.locator('.pad');
+  await pad.scrollIntoViewIfNeeded();
+  const b = (await pad.boundingBox())!;
+  await page.mouse.move(b.x + b.width * 0.3, b.y + b.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width * 0.7, b.y + b.height * 0.35, { steps: 8 });
+  await page.mouse.move(b.x + b.width * 0.5, b.y + b.height * 0.75, { steps: 8 });
+  await page.mouse.up();
+  await expect(pad.locator('circle.start')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Annuler le dernier trait' }).click();
+  await expect(pad.locator('circle.start')).toHaveCount(0);
+  // … ou une forme toute prête. Le relief et le milieu ne comptent plus : grisés.
+  await page.getByRole('button', { name: 'Étoile' }).click();
+  await expect(page.getByRole('button', { name: 'Étoile' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.fold.muted')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Tracer mon dessin' }).click();
+  await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
+  const folded = page.getByRole('button', { name: /Taille du panneau : réduit/ });
+  if (await folded.count()) await folded.click();
+  await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Ressemblance au dessin : \d+/)).toBeVisible();
+  // Les propositions portent le nom de la forme.
+  await expect(page.getByRole('option').first()).toContainText(/Étoile( par|$)/);
+});
+
+test('lieux sur la carte : cinq icônes, sans défiler', async ({ page }) => {
+  await open(page);
+  const bar = page.getByRole('group', { name: 'Lieux à voir sur la carte' });
+  await expect(bar).toBeVisible();
+  const box = (await bar.boundingBox())!;
+  for (const name of ['Pistes d’athlétisme', 'Parcs et jardins', 'Lacs, étangs et rivières', 'Bois et forêts', 'Fontaines d’eau potable']) {
+    const btn = bar.getByRole('button', { name: new RegExp('^' + name) });
+    const r = (await btn.boundingBox())!;
+    expect(r.x).toBeGreaterThanOrEqual(box.x - 1);
+    expect(r.x + r.width).toBeLessThanOrEqual(box.x + box.width + 1);
+  }
+  const parks = bar.getByRole('button', { name: /^Parcs et jardins/ });
+  await parks.click();
+  await expect(parks).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('chercher un point de départ par adresse', async ({ page }) => {
   await open(page);
   await compose(page);

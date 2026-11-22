@@ -186,7 +186,7 @@
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
     addCityDots();
-    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar']) {
+    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar', 'art']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -245,6 +245,19 @@
     m.addLayer({ id: 'alt-casing', type: 'line', source: 'alt', layout: round, paint: { 'line-color': casing, 'line-width': zw(5, 9), 'line-opacity': ALT_OPACITY.casing } });
     m.addLayer({ id: 'alt-line', type: 'line', source: 'alt', layout: round, paint: { 'line-color': theme === 'dark' ? '#98989D' : '#8E8E93', 'line-opacity': altLineOpacity(), 'line-width': zw(3, 5.5) } });
     m.addLayer({ id: 'alt-hit', type: 'line', source: 'alt', paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 24 } });
+    // Mode Dessin : le dessin tel qu'il a été posé, en pointillés blancs sous le parcours, pour comparer.
+    m.addLayer({
+      id: 'art-ghost',
+      type: 'line',
+      source: 'art',
+      layout: round,
+      paint: {
+        'line-color': '#FFFFFF',
+        'line-opacity': theme === 'dark' ? 0.62 : 0.85,
+        'line-width': zw(2, 3.5),
+        'line-dasharray': [0.1, 2],
+      },
+    });
     // Côte ou descente mise en avant : un halo de sa couleur sous le tracé.
     m.addLayer({
       id: 'climb-hl',
@@ -1567,7 +1580,7 @@
       lastDrawn = null;
       lastAltCount = 0;
       app.revealK = 1;
-      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen']) setData(id, EMPTY);
+      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen', 'art']) setData(id, EMPTY);
       if (lastTick !== -1 && app.phase === 'compose' && app.start) {
         const D = untrack(() => app.params.distanceKm) * 1000;
         const ring = circlePolygon(app.start.coord, D / 3.7);
@@ -1584,6 +1597,7 @@
     const altCount = alt.features.length;
     setData('alt', alt);
     setData('water', pointsFC(r.waterPoints));
+    setData('art', r.art ? lineFeature(r.art.ghost) : EMPTY);
     const fresh = tick !== lastTick;
     lastTick = tick;
     // Le parcours affiché n'a pas changé (les autres propositions arrivent, les sols sont connus) :

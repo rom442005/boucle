@@ -17,7 +17,6 @@
     min,
     max,
     step,
-    mid,
     every,
     display,
     unit,
@@ -34,8 +33,7 @@
     max: number;
     /** valeur d'une graduation */
     step: number;
-    /** graduation moyenne, et graduation chiffrée (en unités de la valeur) */
-    mid: number;
+    /** graduation chiffrée (en unités de la valeur) : seule à être marquée en blanc */
     every: number;
     display: string;
     unit: string;
@@ -210,10 +208,9 @@
 
   $effect(() => () => stopGlide());
 
-  // Graduations : trois motifs répétés (fine, moyenne, chiffrée), calés sur les bonnes valeurs.
-  const midW = $derived((mid / step) * GAP);
+  // Graduations : deux motifs répétés, les fines (discrètes) et les chiffrées (blanches, sous leur nombre).
+  // Plus de graduation moyenne blanche entre deux unités (Romain : « des barres blanches en plus »).
   const majW = $derived((every / step) * GAP);
-  const midOff = $derived(px(Math.ceil(min / mid - 1e-9) * mid));
   const majOff = $derived(px(Math.ceil(min / every - 1e-9) * every));
   const labels = $derived.by(() => {
     const out: number[] = [];
@@ -262,8 +259,8 @@
     <div class="track" style:width="{px(max)}px" style:transform="translate3d({(width / 2 - px(pos)).toFixed(2)}px, 0, 0)">
       <div
         class="ticks"
-        style:background-size="{majW}px 22px, {midW}px 15px, {GAP}px 9px"
-        style:background-position="{majOff - 1}px 0, {midOff - 0.5}px 0, 0 0"
+        style:background-size="{majW}px 22px, {GAP}px 9px"
+        style:background-position="{majOff - 1}px 0, -0.5px 0"
       ></div>
       {#each labels as v (v)}
         <span class="lb tabular" style:left="{px(v)}px">{fmt(v)}</span>
@@ -368,9 +365,9 @@
     left: 0;
     right: 0;
     height: 22px;
+    /* La graduation chiffrée cache la fine qui tombe au même endroit (elle est dessinée par-dessus). */
     background-image:
       linear-gradient(to right, var(--tick-3, var(--label)) 0 2px, transparent 2px),
-      linear-gradient(to right, var(--tick-2, var(--label-2)) 0 1.5px, transparent 1.5px),
       linear-gradient(to right, var(--tick-1, var(--label-3)) 0 1px, transparent 1px);
     background-repeat: repeat-x;
   }

@@ -54,6 +54,8 @@ export interface Match {
   distance: number;
   elevation: number | null;
   env: number | null;
+  /** ressemblance au dessin (mode Dessin), de 0 à 1 */
+  art?: number;
   score: number;
 }
 
@@ -82,6 +84,8 @@ export interface Route {
   waterPoints: LngLat[];
   durationS: number;
   match?: Match;
+  /** mode Dessin : le dessin tel qu'il a été posé sur la carte, et la ressemblance (0 à 1) */
+  art?: { ghost: LngLat[]; fit: number };
   tags?: string[];
   params?: Params;
   createdAt: number;

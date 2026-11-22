@@ -247,7 +247,7 @@
               <span class="bar" style:transform="scaleX({app.progress?.ratio ?? 0.05})"></span>
               <span class="busy-text">{app.progress?.message ?? 'Recherche…'}</span>
             {:else}
-              {SHAPES[app.params.shape].cta}
+              {app.drawOpen && app.params.shape === 'loop' ? 'Tracer mon dessin' : SHAPES[app.params.shape].cta}
             {/if}
           </button>
           {#if busy}
@@ -355,7 +355,7 @@
         </div>
         <div class="start-wide">
           <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} />
-          {#if app.wide}<Stops />{/if}
+          {#if app.wide && !app.drawActive}<Stops />{/if}
         </div>
       {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
         <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->

@@ -57,6 +57,10 @@
     if (!x.params) return [];
     const p = x.params;
     const out: Fit[] = [];
+    if (x.art) {
+      const k = percent(x.art.fit);
+      out.push({ ok: x.art.fit >= 0.8, text: `✏️ Ressemblance au dessin : ${k}`, short: `Ressemblance ${k}` });
+    }
     const dErr = Math.abs(x.lengthM / 1000 - p.distanceKm) / p.distanceKm;
     const exact = dErr < 0.005;
     out.push({
@@ -246,7 +250,7 @@
         {#if !cr}<button use:tactile type="button" class="round edit" aria-label="Renommer le parcours" onclick={startEdit}><Icon name="pencil" size={18} /></button>{/if}
       {/if}
     </div>
-    <p class="kind">{SPORTS[r.sport].long} · {SHAPES[r.shape].label}</p>
+    <p class="kind">{SPORTS[r.sport].long} · {r.art ? 'Dessin' : SHAPES[r.shape].label}</p>
     {#if cr?.description}<p class="desc">{cr.description}</p>{/if}
     {#if cr}<PhotoStrip r={cr} />{/if}
     {#if doneText}<p class="done-line"><Icon name="done" size={16} fill />{doneText}</p>{/if}

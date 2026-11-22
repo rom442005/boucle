@@ -111,19 +111,29 @@ import imagesF from '@phosphor-icons/core/assets/fill/images-fill.svg?raw';
 import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
 import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw';
 import grid from '@phosphor-icons/core/assets/regular/squares-four.svg?raw';
+import scribble from '@phosphor-icons/core/assets/regular/scribble-loop.svg?raw';
+import circle from '@phosphor-icons/core/assets/regular/circle.svg?raw';
+import square from '@phosphor-icons/core/assets/regular/square.svg?raw';
+import undo from '@phosphor-icons/core/assets/regular/arrow-counter-clockwise.svg?raw';
+
+/* Piste d'athlétisme (pas d'équivalent chez Phosphor) : un anneau en forme de stade, même trait. */
+const track =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16"><rect x="20" y="52" width="216" height="152" rx="76"/><rect x="76" y="108" width="104" height="40" rx="20"/></svg>';
+const trackF =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path fill-rule="evenodd" d="M96 44h64a84 84 0 0 1 0 168H96a84 84 0 0 1 0-168Zm0 56a28 28 0 0 0 0 56h64a28 28 0 0 0 0-56Z"/></svg>';
 export const ICONS = {
   run, hike, bicycle, bike, tree, waves, park, grains, buildings, search, locate, cube, bookmark, list, back, chevron,
   down, close, again, swap, share, download, link, play, stop, trash, pencil, check, approx, warning, wind, drop, bulb, road,
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
   heart, chat, users, user, signout, report, send, prohibit, lock, key, eye, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
-  camera, images, caretLeft, caretRight, grid,
+  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {
   run: runF, hike: hikeF, bicycle: bicycleF, bike: bikeF, tree: treeF, waves: wavesF, park: parkF, grains: grainsF,
   buildings: buildingsF, locate: locateF, cube: cubeF, bookmark: bookmarkF, drop: dropF, star: starF, done: doneF, diamond: diamondF,
-  heart: heartF, chat: chatF, users: usersF, user: userF, camera: cameraF, images: imagesF,
+  heart: heartF, chat: chatF, users: usersF, user: userF, camera: cameraF, images: imagesF, track: trackF,
 };
 
 export type IconName = keyof typeof ICONS;

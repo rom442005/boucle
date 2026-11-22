@@ -363,6 +363,49 @@ export async function routeJobs(jobs: Job[], c: Costing, signal?: AbortSignal): 
   return out;
 }
 
+/* ------------------------- Suivre une forme dessinée ------------------------- */
+
+/** Un morceau de chemin qui suit la forme, et la partie de la forme qu'il couvre (indices des points). */
+export interface TracePiece {
+  res: RouteResult;
+  from: number;
+  to: number;
+}
+
+interface VTraceTrip extends VTrip {
+  locations?: { original_index?: number }[];
+}
+
+/**
+ * Chemin praticable le plus proche d'une forme (« map matching ») : le serveur cherche, rue après rue, le
+ * trajet qui colle le mieux à la suite de points. Là où rien ne passe près de la forme (un fleuve sans
+ * pont, un grand terrain fermé), le chemin peut se couper en morceaux : ils sont rendus dans l'ordre de la
+ * forme, à relier ensuite. Rayon de recherche au maximum permis par le serveur (100 m).
+ */
+export async function traceRoute(shape: LngLat[], c: Costing, signal?: AbortSignal, options: Record<string, number> = {}): Promise<TracePiece[]> {
+  const d = await post<{ trip: VTraceTrip; alternates?: { trip: VTraceTrip }[] }>(
+    'trace_route',
+    {
+      shape: shape.map(([lon, lat]) => ({ lon, lat })),
+      costing: c.costing,
+      costing_options: { [c.costing]: c.options },
+      shape_match: 'map_snap',
+      trace_options: { search_radius: 100, gps_accuracy: 50, breakage_distance: 3000, turn_penalty_factor: 300, ...options },
+      elevation_interval: ELEV_STEP,
+      directions_options: { units: 'kilometers', language: 'fr-FR', directions_type: 'maneuvers' },
+    },
+    signal,
+  );
+  const trips = [d.trip, ...(d.alternates ?? []).map((a) => a.trip)];
+  const out: TracePiece[] = [];
+  for (const t of trips) {
+    const idx = (t.locations ?? []).map((l) => l.original_index).filter((x): x is number => typeof x === 'number');
+    if (!idx.length || !t.legs?.length) continue;
+    out.push({ res: parseTrip(t), from: Math.min(...idx), to: Math.max(...idx) });
+  }
+  return out.sort((a, b) => a.from - b.from);
+}
+
 /** Répartition des sols et part sur grands axes, d'après les tronçons réellement empruntés. */
 export async function surfaceSplit(
   coords: LngLat[],

@@ -7,7 +7,7 @@ export interface SportDef {
   distance: { min: number; max: number; step: number; def: number };
   elevation: { max: number; step: number };
   /** règle graduée des réglages : graduation moyenne et graduation chiffrée (en km, puis en m de D+) */
-  ruler: { km: { mid: number; every: number }; dplus: { mid: number; every: number } };
+  ruler: { km: { every: number }; dplus: { every: number } };
   /** null : pas de choix de sol (vélo de route, toujours goudronné) */
   surfaces: Record<Surface, string> | null;
   surfaceHint: Record<Surface, string> | null;
@@ -24,7 +24,7 @@ export const SPORTS: Record<Sport, SportDef> = {
     long: 'Course sur route',
     distance: { min: 1, max: 42, step: 0.1, def: 10 },
     elevation: { max: 800, step: 10 },
-    ruler: { km: { mid: 0.5, every: 1 }, dplus: { mid: 50, every: 100 } },
+    ruler: { km: { every: 1 }, dplus: { every: 100 } },
     surfaces: { a: 'Bitume', b: 'Mixte', c: 'Chemins' },
     surfaceHint: {
       a: 'Rues et trottoirs, le moins de chemins possible.',
@@ -41,7 +41,7 @@ export const SPORTS: Record<Sport, SportDef> = {
     long: 'Trail',
     distance: { min: 3, max: 60, step: 0.5, def: 15 },
     elevation: { max: 3000, step: 10 },
-    ruler: { km: { mid: 1, every: 5 }, dplus: { mid: 50, every: 100 } },
+    ruler: { km: { every: 5 }, dplus: { every: 100 } },
     surfaces: { a: 'Roulant', b: 'Sentiers', c: 'Technique' },
     surfaceHint: {
       a: 'Chemins larges et pistes, faciles à courir.',
@@ -58,7 +58,7 @@ export const SPORTS: Record<Sport, SportDef> = {
     long: 'Vélo de route',
     distance: { min: 10, max: 200, step: 1, def: 50 },
     elevation: { max: 3000, step: 10 },
-    ruler: { km: { mid: 5, every: 10 }, dplus: { mid: 50, every: 100 } },
+    ruler: { km: { every: 10 }, dplus: { every: 100 } },
     surfaces: null,
     surfaceHint: null,
     defaultSurface: 'a',
@@ -71,7 +71,7 @@ export const SPORTS: Record<Sport, SportDef> = {
     long: 'Gravel et VTT',
     distance: { min: 10, max: 150, step: 1, def: 40 },
     elevation: { max: 2500, step: 10 },
-    ruler: { km: { mid: 5, every: 10 }, dplus: { mid: 50, every: 100 } },
+    ruler: { km: { every: 10 }, dplus: { every: 100 } },
     surfaces: { a: 'Mixte', b: 'Chemins', c: 'VTT' },
     surfaceHint: {
       a: 'Petites routes et chemins roulants.',

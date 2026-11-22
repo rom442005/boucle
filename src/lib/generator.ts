@@ -1,5 +1,5 @@
 import type { EnvClass, GenProgress, LngLat, Params, Place, Profile, Route, Settings } from './types';
-import { bearing, cumulative, destination, haversine, localProjector, resample, similarity, type BBox } from './geo';
+import { bearing, cumulative, destination, haversine, localProjector, resample, similarity, simplify, type BBox } from './geo';
 import { eleAt, elevationStats } from './elevation';
 import {
   chainSize,
@@ -19,7 +19,9 @@ import {
 } from './valhalla';
 import { buildEnvRaster, desirability, envShare, envSplit, meanDesirability, pullToward, trackShare, type Desirability, type EnvRaster } from './environment';
 import { drinkingWater, weather, type Weather } from './services';
-import { routeName } from './naming';
+import { artName, routeName } from './naming';
+import { drawingLoops } from './art';
+import { hasDrawing, PRESET_NAMES, type Drawing } from './drawing';
 import { applyCuts, removeSpurs } from './spurs';
 import { avoidPoints, closureTrim, deadEnds, departureBearing, findRetraces, type Retrace } from './retrace';
 import { loadTerrain, type Terrain } from './terrain';
@@ -44,6 +46,8 @@ export interface GenerateOptions {
   destination?: Place | null;
   /** points de passage imposés : des endroits à visiter forcément (l'ordre de passage est optimisé) */
   vias?: Place[];
+  /** mode Dessin : la boucle reproduit ce dessin (points de passage, relief et milieux ne comptent plus) */
+  drawing?: Drawing | null;
   params: Params;
   settings: Settings;
   seed: number;
@@ -267,6 +271,8 @@ interface Cand {
   plan: Plan;
   built: Built;
   heading: number | null;
+  /** mode Dessin : le dessin posé et la ressemblance */
+  art?: { ghost: LngLat[]; fit: number };
 }
 
 interface SearchOpts {
@@ -563,7 +569,12 @@ async function runSearch(c: Ctx, plans: Plan[], o: SearchOpts): Promise<Cand[]> 
 /* ----------------------------------- Point d'entrée ----------------------------------- */
 
 export async function generate(o: GenerateOptions): Promise<GenerateResult> {
-  const { params: p, start, settings, signal } = o;
+  const { start, settings, signal } = o;
+  // Mode Dessin : une boucle qui suit le dessin ; le relief, les milieux, le vent et les points de passage
+  // ne peuvent plus être tenus (c'est le dessin qui décide du chemin).
+  const art = hasDrawing(o.drawing) ? o.drawing : null;
+  const p: Params = art ? { ...o.params, shape: 'loop', elevation: null, envs: [], headwind: false } : o.params;
+  if (art) o = { ...o, vias: [], destination: null };
   const rnd = mulberry32(o.seed);
   const sport = SPORTS[p.sport];
   const D = p.distanceKm * 1000;
@@ -591,6 +602,9 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     areaR = D / 1.5 + 700;
   } else if (p.shape === 'outback') {
     areaR = D / 2 / 1.15 + 700;
+  } else if (art) {
+    // Le départ est sur le dessin : le dessin peut s'étendre loin d'un seul côté.
+    areaR = D / 2.6 + 700;
   } else {
     areaR = D / 4 + 700;
   }
@@ -615,9 +629,9 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   const des = raster0 ? desirability(raster0, p.envs, unpavedWeight(p)) : null;
 
   const bike = sport.bike;
-  const kind = `${p.shape}:${bike ? 'b' : 'f'}`;
+  const kind = art ? `art:${bike ? 'b' : 'f'}` : `${p.shape}:${bike ? 'b' : 'f'}`;
   const rKey = ratioKey(start.coord, kind);
-  const defRatio = p.shape === 'outback' ? (bike ? 1.22 : 1.28) : bike ? 1.25 : 1.32;
+  const defRatio = art ? (bike ? 1.7 : 1.42) : p.shape === 'outback' ? (bike ? 1.22 : 1.28) : bike ? 1.25 : 1.32;
   const ctx: Ctx = {
     p,
     start: start.coord,
@@ -645,7 +659,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     cleanStart: false,
     minStem: Infinity,
     headingTries: 0,
-    deadline: Date.now() + 9000,
+    deadline: Date.now() + (art ? 13000 : 9000),
     lastError: null,
   };
 
@@ -662,7 +676,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
         const water = p.water ? await within(waterP, 1500, [] as LngLat[]) : [];
         if (signal?.aborted) return;
         const a = analyse(cand, ctx, raster, water, settings);
-        a.route.name = routeName((cand.half ?? cand.res).maneuvers, p.shape, start.coord, cand.far, dest ? o.destination?.name : undefined);
+        a.route.name = nameOf(cand);
         if (vias.length) a.route.vias = orderedVias(o.vias!, cand);
         pin.route = a.route;
         o.onPartial!({ routes: [a.route], note: null, weather: wx });
@@ -670,9 +684,17 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     };
   }
 
+  /** Nom d'une proposition : les voies les plus parcourues ; pour un dessin, la forme d'abord. */
+  const nameOf = (cand: Cand) =>
+    cand.art
+      ? artName(art?.preset ? PRESET_NAMES[art.preset] : 'Dessin', cand.res.maneuvers)
+      : routeName((cand.half ?? cand.res).maneuvers, p.shape, start.coord, cand.far, dest ? o.destination?.name : undefined);
+
   let candidates: Cand[] = [];
   const S = start.coord;
-  if (p.shape === 'loop') {
+  if (art) {
+    candidates = await artLoops(ctx, art);
+  } else if (p.shape === 'loop') {
     if (!vias.length) candidates = await loops(ctx);
     else if (via) candidates = await viaLoops(ctx, via);
     else {
@@ -690,6 +712,8 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
 
   if (!candidates.length) {
     const e = ctx.lastError;
+    if (art && !(e && e.status === 0))
+      throw new GenerateError('Ce dessin ne trouve pas assez de rues autour du départ. Essaie une autre distance, ou un dessin plus simple.');
     throw new GenerateError(
       e && (e.code === 171 || e.status === 0 || e.code === 154)
         ? routingMessage(e)
@@ -698,7 +722,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   }
 
   // Rapport longueur / figure de ce quartier, pour la prochaine fois.
-  if (!vias.length && p.shape !== 'oneway') saveRatio(rKey, ctx.ratio);
+  if (art || (!vias.length && p.shape !== 'oneway')) saveRatio(rKey, ctx.ratio);
 
   report('Comparaison des propositions…', 0.9);
   await partial;
@@ -733,12 +757,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     if (picked.length === 3) break;
     if (!picked.includes(a) && picked.every((q) => similarity(q.route.coords, a.route.coords) < 0.92)) picked.push(a);
   }
-  for (const a of picked) {
-    a.route.name =
-      pin?.route && a.cand === pin.cand
-        ? pin.route.name
-        : routeName((a.cand.half ?? a.cand.res).maneuvers, p.shape, start.coord, a.cand.far, dest ? o.destination?.name : undefined);
-  }
+  for (const a of picked) a.route.name = pin?.route && a.cand === pin.cand ? pin.route.name : nameOf(a.cand);
 
   const routes = picked.map((a) => a.route);
   if (vias.length) picked.forEach((a, i) => (routes[i].vias = orderedVias(o.vias!, a.cand)));
@@ -799,6 +818,50 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
 
   report('Terminé', 1);
   return { routes, note, weather: wx };
+}
+
+/* ---------------------------------- Dessin ---------------------------------- */
+
+/** Boucles qui reproduisent le dessin (voir art.ts), en propositions comme les autres. */
+async function artLoops(c: Ctx, drawing: Drawing): Promise<Cand[]> {
+  const plan = makePlan({ rank: 0, status: 'done', target: c.D, windAlign: 0, initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: c.start, anchors: [] }) });
+  // Une même proposition garde le même objet (celle montrée tout de suite est retrouvée à la fin).
+  const made = new Map<object, Cand>();
+  const toCand = (a: Awaited<ReturnType<typeof drawingLoops>>['cands'][number]): Cand => {
+    let cand = made.get(a);
+    if (!cand) {
+      cand = {
+        res: a.res,
+        far: a.far,
+        windAlign: 0,
+        L: a.L,
+        err: a.err,
+        rt: null,
+        plan,
+        built: { job: { points: [] }, size: 0, far: a.far, anchors: [] },
+        heading: null,
+        art: { ghost: a.ghost, fit: a.fit },
+      };
+      made.set(a, cand);
+    }
+    return cand;
+  };
+  const out = await drawingLoops({
+    drawing,
+    start: c.start,
+    D: c.D,
+    sport: c.p.sport,
+    costing: c.costing,
+    ratio: c.ratio,
+    deadline: c.deadline,
+    signal: c.signal,
+    report: c.report,
+    onGood: (a) => c.onGood?.(toCand(a)),
+  });
+  c.ratio = out.ratio;
+  c.lastError = out.lastError;
+  // Les bonnes propositions passent avant ; les autres ne servent que faute de mieux.
+  return out.cands.map(toCand);
 }
 
 /* ---------------------------------- Boucles ---------------------------------- */
@@ -1413,7 +1476,9 @@ function analyse(cand: Cand, c: Ctx, raster: EnvRaster | null, water: LngLat[], 
   const allowance = Math.min(1000, 0.1 * D) / D;
   const distCost = p.shape === 'loop' && signed > 0 ? (signed <= allowance ? 1.4 * signed : 1.4 * allowance + 3 * (signed - allowance)) : 3 * distErr;
   const elevErr = p.elevation != null ? Math.abs(st.ascent - p.elevation) / Math.max(p.elevation, 50) : 0;
-  const score =
+  // Dessin : la ressemblance d'abord, puis la distance.
+  const fit = cand.art?.fit ?? null;
+  const score = fit != null ? distCost + 3 * (1 - fit) + (p.water && !waterPoints.length ? 0.2 : 0) :
     distCost +
     1.2 * Math.min(1.5, elevErr) +
     (share != null ? 1.1 * (1 - Math.min(1, share * 1.25)) : 0) +
@@ -1445,8 +1510,10 @@ function analyse(cand: Cand, c: Ctx, raster: EnvRaster | null, water: LngLat[], 
       distance: 1 - distErr,
       elevation: p.elevation != null ? Math.max(0, 1 - elevErr) : null,
       env: share,
+      ...(fit != null ? { art: fit } : {}),
       score,
     },
+    ...(cand.art ? { art: { ghost: simplify(cand.art.ghost, 2), fit: cand.art.fit } } : {}),
     params: { ...p, envs: [...p.envs] },
     createdAt: Date.now(),
   };
@@ -1470,6 +1537,13 @@ function tag(routes: Route[], p: Params) {
     best.tags!.push('Meilleur accord');
   }
   const free = () => routes.filter((r) => r.tags!.length === 0);
+  if (routes[0].art) {
+    // Dessin : celle qui lui ressemble le plus, si elle se distingue.
+    const pool = free();
+    const top = [...pool].sort((a, b) => (b.art?.fit ?? 0) - (a.art?.fit ?? 0))[0];
+    if (top && routes.every((r) => r === top || (top.art?.fit ?? 0) >= (r.art?.fit ?? 0) + 0.03)) top.tags!.push('Le plus fidèle');
+    return;
+  }
   const give = (pickFn: (rs: Route[]) => Route | undefined, label: string, ok: (best: Route, others: Route[]) => boolean) => {
     const pool = free();
     if (!pool.length) return;

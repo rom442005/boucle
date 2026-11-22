@@ -23,6 +23,7 @@ import {
 import { generate, GenerateError, type GenerateResult } from './generator';
 import { reverse, weather, type Weather } from './services';
 import type { ZoneKind } from './zones';
+import { hasDrawing, packDrawing, type Drawing } from './drawing';
 import type { MapType } from './mapstyle';
 import { reverseRoute } from './routegeo';
 import { elevationStats } from './elevation';
@@ -33,6 +34,16 @@ import { slug } from './format';
 import { ELEV_STEP, heights } from './valhalla';
 import { haptic } from './haptics';
 import { isNativeApp } from './platform';
+
+const DRAW_KEY = 'boucle.dessin.v1';
+function loadDrawing(): Drawing | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAW_KEY) ?? 'null') as Drawing | null;
+    return d && Array.isArray(d.strokes) ? d : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Adresse publique de l'app (liens de partage), aussi depuis l'app iPhone. */
 const PUBLIC_URL = 'https://rom442005.github.io/boucle/';
@@ -101,6 +112,31 @@ class AppState {
   zonesShown = false;
   toggleZone(z: ZoneKind) {
     this.zones = this.zones.includes(z) ? this.zones.filter((x) => x !== z) : [...this.zones, z];
+  }
+
+  /** mode Dessin : le dessin du carnet (gardé d'une visite à l'autre) et le carnet déplié (= mode actif) */
+  drawing = $state.raw<Drawing | null>(loadDrawing());
+  drawOpen = $state(false);
+  /** la prochaine boucle suivra le dessin */
+  get drawActive(): boolean {
+    return this.drawOpen && this.params.shape === 'loop' && hasDrawing(this.drawing);
+  }
+  setDrawing(d: Drawing | null) {
+    this.drawing = d;
+    try {
+      if (d && hasDrawing(d)) localStorage.setItem(DRAW_KEY, JSON.stringify(packDrawing(d)));
+      else localStorage.removeItem(DRAW_KEY);
+    } catch {
+      /* stockage indisponible : le dessin reste pour cette visite */
+    }
+  }
+  toggleDraw() {
+    this.drawOpen = !this.drawOpen;
+    // Un dessin se court en boucle.
+    if (this.drawOpen && this.params.shape !== 'loop') {
+      this.params.shape = 'loop';
+      this.persist();
+    }
   }
 
   search = $state<null | PlaceKind>(null);
@@ -359,6 +395,11 @@ class AppState {
   async create(reroll = false) {
     if (this.generating) return;
     this.error = null;
+    if (this.drawOpen && this.params.shape === 'loop' && !hasDrawing(this.drawing)) {
+      haptic('warn');
+      this.error = 'Dessine une forme dans le cadre, ou choisis-en une.';
+      return;
+    }
     if (!this.start) {
       const c = await this.useMyPosition('start');
       if (!c) {
@@ -399,6 +440,7 @@ class AppState {
         start: $state.snapshot(this.start!) as Place,
         destination: this.destination ? ($state.snapshot(this.destination) as Place) : null,
         vias: $state.snapshot(this.vias) as Place[],
+        drawing: this.drawActive ? this.drawing : null,
         params: $state.snapshot(this.params) as Params,
         settings: $state.snapshot(this.settings) as Settings,
         seed: this.seed,

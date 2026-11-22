@@ -1,4 +1,5 @@
 import type { FilterSpecification } from 'maplibre-gl';
+import type { IconName } from './icons';
 
 /*
  * Lieux à mettre en valeur sur la carte, depuis le petit bloc sous la météo : pistes d'athlétisme, parcs,
@@ -13,6 +14,8 @@ export interface ZoneDef {
   /** nom pour les lecteurs d'écran */
   long: string;
   emoji: string;
+  /** icône de la barre des lieux (et sa version pleine quand le lieu est montré) */
+  icon: IconName;
   color: string;
   /** zoom à partir duquel les tuiles les contiennent */
   minZoom: number;
@@ -30,6 +33,7 @@ export const ZONES: Record<ZoneKind, ZoneDef> = {
     label: 'Pistes',
     long: 'Pistes d’athlétisme',
     emoji: '🏟️',
+    icon: 'track',
     color: '#FF6A3D',
     minZoom: 12,
     pin: true,
@@ -40,6 +44,7 @@ export const ZONES: Record<ZoneKind, ZoneDef> = {
     label: 'Parcs',
     long: 'Parcs et jardins',
     emoji: '🌳',
+    icon: 'park',
     color: '#34C759',
     minZoom: 0,
     pin: false,
@@ -50,6 +55,7 @@ export const ZONES: Record<ZoneKind, ZoneDef> = {
     label: 'Eau',
     long: 'Lacs, étangs et rivières',
     emoji: '💧',
+    icon: 'waves',
     color: '#0A84FF',
     minZoom: 0,
     pin: false,
@@ -60,6 +66,7 @@ export const ZONES: Record<ZoneKind, ZoneDef> = {
     label: 'Forêts',
     long: 'Bois et forêts',
     emoji: '🌲',
+    icon: 'tree',
     color: '#1FA463',
     minZoom: 0,
     pin: false,
@@ -70,6 +77,7 @@ export const ZONES: Record<ZoneKind, ZoneDef> = {
     label: 'Fontaines',
     long: 'Fontaines d’eau potable',
     emoji: '🚰',
+    icon: 'drop',
     color: '#5AC8FA',
     minZoom: 14,
     pin: true,

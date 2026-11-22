@@ -23,7 +23,7 @@ function tileTemplate(): Promise<string> {
 }
 
 const tileCache = new Map<string, Promise<VectorTile | null>>();
-function loadTile(z: number, x: number, y: number, signal?: AbortSignal): Promise<VectorTile | null> {
+export function loadTile(z: number, x: number, y: number, signal?: AbortSignal): Promise<VectorTile | null> {
   const key = `${z}/${x}/${y}`;
   let p = tileCache.get(key);
   if (!p) {
@@ -41,13 +41,13 @@ function loadTile(z: number, x: number, y: number, signal?: AbortSignal): Promis
   return p;
 }
 
-const lonToX = (lon: number) => (lon + 180) / 360;
-const latToY = (lat: number) => {
+export const lonToX = (lon: number) => (lon + 180) / 360;
+export const latToY = (lat: number) => {
   const s = Math.sin((lat * Math.PI) / 180);
   return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
 };
-const xToLon = (x: number) => x * 360 - 180;
-const yToLat = (y: number) => (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI;
+export const xToLon = (x: number) => x * 360 - 180;
+export const yToLat = (y: number) => (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI;
 
 export const ENV_PRIORITY: EnvClass[] = ['water', 'forest', 'park', 'fields', 'urban'];
 

@@ -28,6 +28,17 @@ export function routeName(maneuvers: Maneuver[], shape: Shape, start: LngLat, fa
   return shape === 'outback' ? `Aller-retour vers le ${dir}` : `Boucle par le ${dir}`;
 }
 
+/** Nom d'un parcours dessiné : la forme, puis la voie la plus parcourue (« Cœur par quai de la Fosse »). */
+export function artName(label: string, maneuvers: Maneuver[]): string {
+  const totals = new Map<string, number>();
+  for (const m of maneuvers) {
+    const name = m.names.map(cleanName).find((n) => n.length > 2 && !GENERIC.test(n));
+    if (name) totals.set(name, (totals.get(name) ?? 0) + m.length);
+  }
+  const top = [...totals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return top && top.length <= 34 ? `${label} par ${lowerFirst(top)}` : label;
+}
+
 /* Les types de voie s'écrivent en minuscule au milieu d'un titre : « Quai de Versailles et parc de Procé ». */
 const TYPES = /^(Rue|Avenue|Boulevard|Quai|Parc|Chemin|All[ée]e|Promenade|Place|Pont|Route|Impasse|Square|Cours|Mail|Esplanade|Sentier|Voie|Passage|Jardin|Bois|For[eê]t|Rond-point|Berge|Rive|Corniche|Digue|Sente|Venelle|Ruelle)\b/;
 function lowerFirst(n: string): string {
