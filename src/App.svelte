@@ -33,9 +33,10 @@
   import TabBar from './components/TabBar.svelte';
   import Backdrop from './components/Backdrop.svelte';
   import TodayCard from './components/TodayCard.svelte';
+  import ZonesCard from './components/ZonesCard.svelte';
+  import HealthLink from './components/HealthLink.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
-  import { smoothly } from './lib/motion';
-  import { liquidAlready, liquidMove, liquidStart } from './lib/lens';
+  import { liquidTabs } from './lib/lens';
   import { mix, sceneTone } from './lib/scene.svelte';
   import { PAYSAGE_BG } from './lib/mapstyle';
   import { links } from './lib/links.svelte';
@@ -101,7 +102,7 @@
     return () => wideQuery.removeEventListener('change', onWide);
   });
 
-  const SHEET_TITLE = { auth: 'Communauté', publish: 'Publier', edit: 'Mon profil', report: 'Signaler' } as const;
+  const SHEET_TITLE = { auth: 'Communauté', publish: 'Publier', edit: 'Mon profil', health: 'Apple Santé', report: 'Signaler' } as const;
   /** La connexion demandée par l'onglet Profil : elle en fait partie, l'onglet reste allumé. */
   const profileAuth = $derived(community.sheet?.kind === 'auth' && community.sheet.tab === 'profile');
   const headTitle = $derived(
@@ -201,17 +202,10 @@
   const TABS = ['create', 'community', 'library', 'profile'] as const;
   const TAB_LABEL = { create: 'Créer', community: 'Communauté', library: 'Mes parcours', profile: 'Profil' } as const;
   const TAB_ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;
+  // Mac : la même lentille de verre liquide que sur iPhone (lens.ts) ; la page change d'un coup, sans fondu.
   function goTab(t: (typeof TABS)[number]) {
-    smoothly(() => changeTab(t));
+    changeTab(t);
   }
-  // Mac : la même lentille de verre liquide que sur iPhone (lens.ts), de l'onglet quitté vers le nouveau.
-  let tabsNav = $state<HTMLElement>();
-  let prevTab = -1;
-  $effect(() => {
-    const i = TABS.indexOf(tab);
-    if (prevTab >= 0 && prevTab !== i && !liquidAlready(tabsNav, i)) liquidMove(tabsNav, prevTab, i);
-    prevTab = i;
-  });
   function changeTab(t: (typeof TABS)[number]) {
     community.sheet = null;
     if (t === 'create') {
@@ -277,10 +271,10 @@
           <span class="logo" aria-hidden="true">
             <svg viewBox="0 0 1024 1024" width="36" height="36"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path class="logo-trace" pathLength="1" d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
           </span>
-          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} bind:this={tabsNav}>
+          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} use:liquidTabs={{ active: TABS.indexOf(tab), pick: (i) => goTab(TABS[i]) }}>
             <span class="tab-on" aria-hidden="true"></span>
             {#each TABS as t (t)}
-              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onpointerdown={() => liquidStart(tabsNav, TABS.indexOf(tab), TABS.indexOf(t))} onclick={() => goTab(t)}>
+              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onclick={() => goTab(t)}>
                 {#if t === 'profile' && community.me}
                   <Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} />
                 {:else}
@@ -297,7 +291,13 @@
 
 {#if app.phase !== 'follow'}
   {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
-  {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}<TodayCard />{/if}
+  {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
+    <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
+    <div class="widgets">
+      <TodayCard />
+      <ZonesCard />
+    </div>
+  {/if}
   <!-- Légende seulement quand les volumes sont visibles (à partir du zoom 13). -->
   {#if app.terrain3d && app.zoom >= 13.2 && !app.pickOnMap && !scene}
     <BuildingsLegend />
@@ -421,6 +421,8 @@
                 app.showToast('Profil enregistré');
                 if (community.me) void community.openProfile(community.me.id);
               }} />
+          {:else if sh.kind === 'health'}
+            <HealthLink />
           {:else if sh.kind === 'report'}
             <ReportForm target={sh.target} label={sh.label} />
           {/if}
@@ -628,6 +630,26 @@
   }
   .navbtn-space {
     width: 40px;
+  }
+  /* Widgets posés sur la carte, l'un sous l'autre : météo, puis lieux à mettre en valeur. */
+  .widgets {
+    position: fixed;
+    z-index: 15;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 12px;
+    width: min(300px, calc(100vw - 96px));
+    display: grid;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .widgets > :global(*) {
+    pointer-events: auto;
+  }
+  @media (min-width: 860px) {
+    .widgets {
+      left: 408px;
+      top: 76px;
+    }
   }
   /* ▶ Suivre : bulle rose de verre liquide, comme la bulle « Faire une boucle ». */
   .play {

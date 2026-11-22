@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CountUp from './CountUp.svelte';
   import { app } from '../lib/state.svelte';
   import { sunTimes } from '../lib/sun';
   import { clock } from '../lib/conditions';
@@ -35,7 +36,7 @@
 <section class="today glass photo-card on-photo" aria-label="Aujourd’hui">
   <div class="sky">
     <span class="emo" aria-hidden="true">{w ? skyEmoji(w.code, w.isDay) : '🌤️'}</span>
-    <span class="temp rounded tabular">{w ? `${Math.round(w.temperature)}°` : '–°'}</span>
+    <span class="temp rounded tabular">{#if w}<CountUp value={Math.round(w.temperature)} duration={700} delay={420} />°{:else}–°{/if}</span>
     <span class="where">
       {#if place}<b>{place}</b>{/if}
       {#if sun}<span>{sun.emoji} {sun.text}</span>{/if}
@@ -45,12 +46,9 @@
 </section>
 
 <style>
+  /* Placée par App.svelte (colonne des widgets sur la carte), avec le bloc des lieux dessous. */
   .today {
-    position: fixed;
-    z-index: 15;
-    top: calc(env(safe-area-inset-top, 0px) + 12px);
-    left: 12px;
-    width: min(300px, calc(100vw - 96px));
+    position: relative;
     display: grid;
     padding: 12px 16px;
     border-radius: 28px;
@@ -63,12 +61,6 @@
       opacity: 0;
       translate: 0 -14px;
       scale: 0.96;
-    }
-  }
-  @media (min-width: 860px) {
-    .today {
-      left: 408px;
-      top: 76px;
     }
   }
   .sky {

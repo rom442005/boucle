@@ -3,6 +3,8 @@
   import Avatar from './Avatar.svelte';
   import RouteGlyph from './RouteGlyph.svelte';
   import ActivityBars from './ActivityBars.svelte';
+  import CountUp from './CountUp.svelte';
+  import HealthCard from './HealthCard.svelte';
   import { community } from '../lib/community.svelte';
   import { app } from '../lib/state.svelte';
   import { LEVELS } from '../lib/community/types';
@@ -39,11 +41,15 @@
     await community.changeAvatar(file);
     avatarBusy = false;
   }
-  // Mon profil : les chiffres de Strava et de Santé, s'ils sont reliés.
+  // Mon profil : les chiffres de Strava et de Santé, s'ils sont reliés ; relus au retour dans l'app (après le
+  // raccourci « Boucle Santé », qui vient d'envoyer les données au serveur).
   $effect(() => {
     if (!mine) return;
     void links.loadStrava();
     void links.loadHealth();
+    const back = () => document.visibilityState === 'visible' && void links.loadHealth();
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
   });
   const st = $derived(mine && links.strava?.connected ? links.strava : null);
   // Reçues par le serveur : elles s'affichent sur tous les appareils, pas seulement sur le téléphone.
@@ -81,13 +87,13 @@
   </section>
 
   <section class="card stat glass photo-card" aria-label="Parcours publiés">
-    <span class="k">🗺️ Parcours</span><b class="n rounded tabular">{v.stats.routes}</b>
+    <span class="k">🗺️ Parcours</span><b class="n rounded"><CountUp value={v.stats.routes} /></b>
   </section>
   <section class="card stat glass photo-card" aria-label="Abonnés">
-    <span class="k">👥 Abonnés</span><b class="n rounded tabular">{v.stats.followers}</b>
+    <span class="k">👥 Abonnés</span><b class="n rounded"><CountUp value={v.stats.followers} /></b>
   </section>
   <section class="card stat glass photo-card" aria-label="J’aime reçus">
-    <span class="k">❤️ J’aime</span><b class="n rounded tabular">{v.stats.likes}</b>
+    <span class="k">❤️ J’aime</span><b class="n rounded"><CountUp value={v.stats.likes} /></b>
   </section>
   <section class="card stat glass photo-card" aria-label="Sports">
     <span class="k">Sports</span>
@@ -104,6 +110,16 @@
     <section class="card link glass photo-card" aria-label={healthPlatform === 'android' ? 'Health Connect' : 'Apple Santé'}>
       <span class="k">❤️ Santé</span>
       <button use:tactile type="button" class="link-btn" disabled={links.healthBusy} onclick={() => links.connectHealth()}>{links.healthBusy ? 'Accord…' : 'Relier'}</button>
+    </section>
+  {:else if mine && !hd && (links.healthByShortcut || links.healthElsewhere)}
+    <!-- Sans l'app : Santé passe par le raccourci de l'iPhone (feuille « Apple Santé »). -->
+    <section class="card wide glass photo-card link-wide" aria-label="Apple Santé">
+      <span class="heart" aria-hidden="true">❤️</span>
+      <span class="lt">
+        <b>Apple Santé</b>
+        <span class="k">{links.healthByShortcut ? 'Tes pas, ta distance, ton énergie et plus, chaque jour ici.' : 'À relier depuis ton iPhone, puis visible ici aussi.'}</span>
+      </span>
+      <button use:tactile type="button" class="link-btn" onclick={() => (community.sheet = { kind: 'health' })}>{links.healthByShortcut ? 'Relier' : 'Comment'}</button>
     </section>
   {/if}
 
@@ -125,17 +141,18 @@
   {/if}
 
   {#if hd}
-    <section class="card stat glass photo-card" aria-label="Pas par jour">
-      <span class="k">👣 Pas / jour</span><b class="n rounded tabular">{hd.steps.toLocaleString('fr-FR')}</b>
+    <HealthCard {hd} onsync={links.healthByShortcut ? () => links.runShortcut() : undefined} />
+    <section class="card stat glass photo-card" aria-label="Pas par jour, moyenne sur 7 jours">
+      <span class="k">👣 Moy. 7 jours</span><b class="n rounded"><CountUp value={hd.steps} /></b>
     </section>
     <section class="card stat glass photo-card" aria-label="Fréquence cardiaque au repos">
-      <span class="k">❤️ Au repos</span><b class="n rounded tabular">{hd.restingHr != null ? Math.round(hd.restingHr) : '–'}<small>bpm</small></b>
+      <span class="k">❤️ Au repos</span><b class="n rounded">{#if hd.restingHr != null}<CountUp value={Math.round(hd.restingHr)} />{:else}–{/if}<small>bpm</small></b>
     </section>
     <section class="card stat glass photo-card" aria-label="VO2 max">
-      <span class="k">🫁 VO2 max</span><b class="n rounded tabular">{hd.vo2max != null ? hd.vo2max.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '–'}</b>
+      <span class="k">🫁 VO2 max</span><b class="n rounded">{#if hd.vo2max != null}<CountUp value={hd.vo2max} decimals={1} />{:else}–{/if}</b>
     </section>
-    <section class="card stat glass photo-card" aria-label="Entraînements, 28 jours">
-      <span class="k">⌚ 28 jours</span><b class="n rounded tabular">{kmText(hd.distance)}<small>km</small></b>
+    <section class="card stat glass photo-card" aria-label={hd.distance ? 'Sorties, 28 jours' : 'Marche et course, 28 jours'}>
+      <span class="k">{hd.distance ? '⌚ Sorties 28 j' : '🚶 28 jours'}</span><b class="n rounded"><CountUp value={(hd.distance || hd.walk28) / 1000} decimals={(hd.distance || hd.walk28) < 100000 ? 1 : 0} /><small>km</small></b>
     </section>
     {#if hd.last}
       <section class="card wide glass photo-card" aria-label="Dernière sortie">
@@ -152,7 +169,7 @@
         <span class="k">28 derniers jours</span>
         <span class="k">{month.active} sortie{month.active > 1 ? 's' : ''}</span>
       </div>
-      <b class="big rounded tabular">{kmText(month.total)}<small>km</small></b>
+      <b class="big rounded"><CountUp value={month.total / 1000} decimals={month.total < 100000 ? 1 : 0} /><small>km</small></b>
       <ActivityBars />
     </section>
   {/if}
@@ -345,6 +362,49 @@
   .link {
     align-content: space-between;
     min-height: 104px;
+  }
+  .link-wide {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .heart {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 1.25rem;
+    background: rgba(255, 55, 95, 0.22);
+    animation: heart-beat 1400ms var(--ease-out) 700ms 2;
+  }
+  @keyframes heart-beat {
+    14% {
+      transform: scale(1.14);
+    }
+    28% {
+      transform: scale(1);
+    }
+    42% {
+      transform: scale(1.1);
+    }
+    70% {
+      transform: scale(1);
+    }
+  }
+  .lt {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+  .lt b {
+    font-size: 1rem;
+  }
+  .link-wide .link-btn {
+    flex: none;
+    background: var(--tint);
   }
   .link-btn {
     justify-self: start;

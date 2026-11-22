@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import Segmented from './Segmented.svelte';
-  import RangeField from './RangeField.svelte';
+  import Ruler from './Ruler.svelte';
   import EnvChips from './EnvChips.svelte';
   import InstallGuide from './InstallGuide.svelte';
   import Stops from './Stops.svelte';
@@ -10,7 +10,7 @@
   import { asSwitch, haptic, nativeSwitch, tactile } from '../lib/haptics';
   import { SHAPES, SPORTS, SPORT_ORDER } from '../lib/sports';
   import { kmSetting, pace, speed } from '../lib/format';
-  import type { Shape, Surface } from '../lib/types';
+  import type { Shape } from '../lib/types';
   import type { IconName } from '../lib/icons';
 
   const SPORT_ICON: Record<string, IconName> = { run: 'run', trail: 'hike', road: 'bicycle', gravel: 'bike' };
@@ -35,10 +35,6 @@
   }
   function setShape(s: Shape) {
     app.params.shape = s;
-    app.persist();
-  }
-  function setSurface(s: Surface) {
-    app.params.surface = s;
     app.persist();
   }
   function toggle(key: 'avoidBusy' | 'lit' | 'water' | 'headwind') {
@@ -75,33 +71,35 @@
     onchange={(s) => app.setSport(s)}
   />
 
-  <RangeField
+  <Ruler
     id="distance"
     label="Distance"
     value={p.distanceKm}
     min={def.distance.min}
     max={def.distance.max}
     step={def.distance.step}
+    mid={def.ruler.km.mid}
+    every={def.ruler.km.every}
     display={kmSetting(p.distanceKm)}
     unit="km"
     valuetext="{kmSetting(p.distanceKm)} kilomètres"
-    tickEvery={def.bike ? 5 : 1}
     onchange={setDistance}
   />
 
   <div class="fold" data-fold>
-  <RangeField
+  <Ruler
     id="elevation"
     label="Dénivelé positif"
     value={p.elevation ?? 0}
     min={0}
     max={def.elevation.max}
     step={def.elevation.step}
-    display={String(p.elevation ?? 0)}
+    mid={def.ruler.dplus.mid}
+    every={def.ruler.dplus.every}
+    display={(p.elevation ?? 0).toLocaleString('fr-FR')}
     unit="m"
     off={p.elevation == null}
     valuetext="{p.elevation ?? 0} mètres de dénivelé positif"
-    tickEvery={def.bike ? 100 : 50}
     onchange={(v) => setElevation(v)}
     onreset={() => setElevation(null)}
   />
@@ -126,18 +124,6 @@
       <Stops />
     {/if}
   </section>
-
-  {#if def.surfaces && def.surfaceHint}
-    <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="surf-l">
-      <h3 id="surf-l" class="field-label">Sol</h3>
-      <Segmented
-        label="Type de sol"
-        value={p.surface}
-        options={(['a', 'b', 'c'] as Surface[]).map((s) => ({ value: s, label: def.surfaces![s] }))}
-        onchange={setSurface}
-      />
-    </section>
-  {/if}
 
   <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="opt-l">
     <h3 id="opt-l" class="field-label">Options</h3>

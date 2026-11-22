@@ -18,14 +18,15 @@
     <h4>{title}</h4>
     {#if note}<span class="note">{note}</span>{/if}
   </div>
-  <div class="bar" aria-hidden="true">
+  <!-- La barre se remplit de gauche à droite, puis la légende arrive ligne par ligne. -->
+  <div class="bar grow-x" aria-hidden="true">
     {#each shown as i (i.key)}
       <span style:flex-grow={i.value / total} style:background={i.color}></span>
     {/each}
   </div>
   <ul>
-    {#each shown as i (i.key)}
-      <li><span class="dot" style:background={i.color}></span>{i.label}<b class="tabular">{percent(i.value)}</b></li>
+    {#each shown as i, k (i.key)}
+      <li class="rise" style:--i={k} style:--d="280ms"><span class="dot" style:background={i.color}></span>{i.label}<b class="tabular">{percent(i.value)}</b></li>
     {/each}
   </ul>
 </section>

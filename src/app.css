@@ -769,6 +769,55 @@ textarea {
   background: var(--tint-soft);
 }
 
+/*
+ * Fil rouge du mouvement (DESIGN.md) : ce qui apparaît monte un peu et se pose sur un ressort (rise), ce qui
+ * s'ouvre d'un bouton jaillit de lui (pop), un graphique pousse depuis sa base (grow-x, grow-y). Toujours
+ * « backwards » : une animation finie ne laisse rien derrière elle (sinon le verre des blocs ne floute plus).
+ * --i donne le rang dans une cascade, --d un délai de départ.
+ */
+.rise {
+  animation: rise-in 560ms var(--spring) backwards;
+  animation-delay: calc(var(--d, 0ms) + var(--i, 0) * 55ms);
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+    scale: 0.975;
+  }
+}
+.pop {
+  transform-origin: var(--origin, center);
+  animation: pop-in 420ms var(--spring-bouncy) backwards;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: 0.88;
+  }
+}
+.grow-x {
+  transform-origin: left center;
+  animation: grow-x 820ms var(--spring) backwards;
+  animation-delay: calc(var(--d, 180ms) + var(--i, 0) * 60ms);
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.grow-y {
+  transform-origin: center bottom;
+  animation: grow-y 700ms var(--spring) backwards;
+  animation-delay: calc(var(--d, 180ms) + var(--i, 0) * 45ms);
+}
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
 /* Une liste qui apparaît arrive en cascade (rang --i, plafonné par le composant). */
 .li,
 .cascade {

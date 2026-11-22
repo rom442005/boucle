@@ -374,6 +374,133 @@ create policy "ma santé" on public.health_days for all to authenticated using (
 revoke all on public.health_days from anon;
 grant select, insert, update, delete on public.health_days to authenticated;
 
+-- ---------------------------------------------------------------- Santé par le raccourci iPhone
+
+-- Sur iPhone sans l'app native (site installé sur l'écran d'accueil), Apple Santé n'est lisible que par un
+-- raccourci de l'app Raccourcis : « Boucle Santé » (public/sante/, scripts/make-shortcut.py) lit les 28
+-- derniers jours, jour par jour, et les envoie ici avec une clé personnelle. La clé n'est gardée que hachée
+-- (SHA-256) ; une nouvelle remplace l'ancienne ; elle ne sert qu'à écrire ses propres journées.
+alter table public.health_days add column if not exists walk_m int;
+alter table public.health_days add column if not exists active_kcal int;
+alter table public.health_days add column if not exists exercise_min int;
+
+create table if not exists public.health_keys (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  key_hash text not null unique,
+  created_at timestamptz not null default now(),
+  used_at timestamptz
+);
+alter table public.health_keys enable row level security;
+revoke all on public.health_keys from anon, authenticated;
+
+-- Nouvelle clé pour le raccourci (rendue une seule fois, l'ancienne cesse de marcher).
+create or replace function public.health_key_new() returns text
+language plpgsql security definer set search_path = public, extensions
+as $$
+declare k text;
+begin
+  if auth.uid() is null then raise exception 'Connecte-toi pour continuer.'; end if;
+  k := translate(encode(extensions.gen_random_bytes(18), 'base64'), '+/', '-_');
+  insert into public.health_keys (user_id, key_hash)
+  values (auth.uid(), encode(extensions.digest(k, 'sha256'), 'hex'))
+  on conflict (user_id) do update set key_hash = excluded.key_hash, created_at = now(), used_at = null;
+  return k;
+end $$;
+revoke all on function public.health_key_new() from public, anon;
+grant execute on function public.health_key_new() to authenticated;
+
+-- Délier Santé : plus de clé, et les journées reçues sont effacées.
+create or replace function public.health_unlink() returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if auth.uid() is null then return; end if;
+  delete from public.health_keys where user_id = auth.uid();
+  delete from public.health_days where user_id = auth.uid();
+end $$;
+revoke all on function public.health_unlink() from public, anon;
+grant execute on function public.health_unlink() to authenticated;
+
+-- Nombre tel que le raccourci l'écrit (« 8 452 », « 5,2 », « 1,234.5 ») : un dernier séparateur suivi de
+-- 1, 2 ou 4 chiffres et plus (ou de 3 pour une distance, une fréquence, une VO2 max) est la virgule décimale ;
+-- les autres séparent les milliers.
+create or replace function public.health_num(t text, kind text) returns real
+language plpgsql immutable
+as $$
+declare s text := regexp_replace(coalesce(t, ''), '[^0-9.,]', '', 'g'); m text[];
+begin
+  if s = '' then return null; end if;
+  m := regexp_match(s, '^(.*)[.,]([0-9]+)$');
+  if m is not null and (length(m[2]) <> 3 or kind in ('walk', 'vo2', 'rest')) then
+    return (regexp_replace(m[1], '[.,]', '', 'g') || '.' || m[2])::real;
+  end if;
+  return regexp_replace(s, '[.,]', '', 'g')::real;
+exception when others then
+  return null;
+end $$;
+
+-- Réception d'un envoi du raccourci (sans session) : une ligne par mesure et par jour,
+-- « mesure<TAB>AAAA-MM-JJ<TAB>valeur<TAB>unité ». Rend le nombre de valeurs gardées.
+create or replace function public.health_push(k text, d text) returns int
+language plpgsql security definer set search_path = public, extensions
+as $$
+declare
+  uid uuid;
+  ln text;
+  p text[];
+  kind text;
+  dy date;
+  v real;
+  unit text;
+  n int := 0;
+begin
+  select user_id into uid from public.health_keys where key_hash = encode(extensions.digest(btrim(coalesce(k, '')), 'sha256'), 'hex');
+  if uid is null then raise exception 'Clé Boucle inconnue : recopie-la depuis ton profil.' using errcode = '28000'; end if;
+  if length(coalesce(d, '')) > 100000 then raise exception 'Envoi trop long.'; end if;
+  update public.health_keys set used_at = now() where user_id = uid;
+  foreach ln in array string_to_array(replace(coalesce(d, ''), E'\r', ''), E'\n') loop
+    p := string_to_array(btrim(ln), E'\t');
+    if coalesce(array_length(p, 1), 0) < 3 then continue; end if;
+    kind := btrim(p[1]);
+    if kind not in ('steps', 'walk', 'kcal', 'exercise', 'rest', 'vo2') then continue; end if;
+    begin
+      dy := btrim(p[2])::date;
+    exception when others then
+      continue;
+    end;
+    if dy > current_date + 1 or dy < current_date - 90 then continue; end if;
+    v := public.health_num(p[3], kind);
+    if v is null or v < 0 then continue; end if;
+    unit := lower(btrim(coalesce(p[4], '')));
+    if kind = 'walk' then v := v * (case when unit like 'mi%' then 1609.344 when unit = 'm' then 1 else 1000 end); end if;
+    if kind = 'kcal' and unit like 'kj%' then v := v / 4.184; end if;
+    if kind = 'exercise' and unit in ('h', 'hr', 'hrs') then v := v * 60; end if;
+    insert into public.health_days as h (user_id, day, source, steps, walk_m, active_kcal, exercise_min, resting_hr, vo2max, updated_at)
+    values (
+      uid, dy, 'ios',
+      case when kind = 'steps' then round(v) end,
+      case when kind = 'walk' then round(v) end,
+      case when kind = 'kcal' then round(v) end,
+      case when kind = 'exercise' then round(v) end,
+      case when kind = 'rest' then v end,
+      case when kind = 'vo2' then v end,
+      now()
+    )
+    on conflict (user_id, day) do update set
+      steps = coalesce(excluded.steps, h.steps),
+      walk_m = coalesce(excluded.walk_m, h.walk_m),
+      active_kcal = coalesce(excluded.active_kcal, h.active_kcal),
+      exercise_min = coalesce(excluded.exercise_min, h.exercise_min),
+      resting_hr = coalesce(excluded.resting_hr, h.resting_hr),
+      vo2max = coalesce(excluded.vo2max, h.vo2max),
+      updated_at = now();
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.health_push(text, text) from public;
+grant execute on function public.health_push(text, text) to anon, authenticated;
+
 -- ---------------------------------------------------------------------------------------------
 -- Espace d'administration : une ligne par membre, avec tout ce qui le concerne, lisible dans le tableau
 -- de bord Supabase (Table Editor, schéma « admin », vue « membres »). Ce schéma n'est pas publié par l'API :
@@ -407,7 +534,8 @@ select
   (select max(h.updated_at) from public.health_days h where h.user_id = u.id) as sante_dernier_envoi,
   (select h.source from public.health_days h where h.user_id = u.id order by h.updated_at desc limit 1) as sante_telephone,
   exists (select 1 from public.strava_links s where s.user_id = u.id) as strava_relie,
-  (select count(*) from public.reports rp where rp.profile_id = u.id and rp.status = 'open') as signalements_ouverts
+  (select count(*) from public.reports rp where rp.profile_id = u.id and rp.status = 'open') as signalements_ouverts,
+  exists (select 1 from public.health_keys hk where hk.user_id = u.id) as sante_raccourci
 from auth.users u
 left join public.profiles p on p.id = u.id
 left join public.profiles_private pp on pp.id = u.id

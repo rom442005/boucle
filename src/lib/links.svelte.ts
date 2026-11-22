@@ -4,7 +4,7 @@ import { STRAVA_CLIENT_ID } from './community/config';
 import { CommunityError, type StravaData } from './community/types';
 import { askHealth, healthPlatform, healthStillAllowed, installHealthConnect, openHealthSettings, readHealthDays, summarize, type HealthSummary } from './health';
 import type { HealthDay } from './community/types';
-import { isNativeApp } from './platform';
+import { isAndroid, isIOS, isNativeApp } from './platform';
 import { haptic } from './haptics';
 
 /*
@@ -12,6 +12,10 @@ import { haptic } from './haptics';
  * l'application et les jetons) et Apple Santé (lecture directe sur l'iPhone, dans l'app native).
  */
 const HEALTH_KEY = 'boucle.sante';
+/** le raccourci « Boucle Santé » a été installé sur cet iPhone */
+const SHORTCUT_KEY = 'boucle.raccourci';
+/** nom du raccourci (celui du fichier public/sante/…), pour le lancer depuis l'app */
+export const SHORTCUT_NAME = 'Boucle Sante';
 const STATE = 'boucle-strava';
 
 function flag(key: string, v?: string | null): string | null {
@@ -33,6 +37,10 @@ class Links {
   /** l'app de ce téléphone a l'accord de Santé / Health Connect et envoie ses données */
   healthOn = $state(flag(HEALTH_KEY) === '1');
   healthBusy = $state(false);
+  /** raccourci « Boucle Santé » installé sur cet iPhone (site sur l'écran d'accueil, sans l'app) */
+  shortcutOn = $state(flag(SHORTCUT_KEY) === '1');
+  /** clé du raccourci, montrée une fois après sa création */
+  shortcutKey = $state<string | null>(null);
   private syncedAt = 0;
 
   get health(): HealthSummary | null {
@@ -46,6 +54,45 @@ class Links {
   /** ce téléphone peut envoyer ses données (app iPhone ou Android) */
   get healthCanSend() {
     return healthPlatform != null;
+  }
+  /**
+   * iPhone sans l'app (site sur l'écran d'accueil ou Safari) : Santé passe par le raccourci « Boucle Santé »
+   * de l'app Raccourcis, qui envoie au serveur avec une clé personnelle.
+   */
+  get healthByShortcut() {
+    return isIOS && !isNativeApp;
+  }
+  /** ailleurs (Mac, Android sans l'app) : on relie Santé depuis l'iPhone */
+  get healthElsewhere() {
+    return !isNativeApp && !isIOS && !isAndroid;
+  }
+
+  /** Nouvelle clé pour le raccourci (l'ancienne cesse de marcher), gardée à l'écran le temps de la copier. */
+  async newShortcutKey() {
+    this.healthBusy = true;
+    try {
+      this.shortcutKey = await community.healthKey();
+      haptic('success');
+    } catch (e) {
+      app.showToast(e instanceof CommunityError ? e.message : 'Clé impossible à créer pour le moment.');
+    } finally {
+      this.healthBusy = false;
+    }
+  }
+  /** Le raccourci est ajouté : l'app s'en souvient (bouton « Envoyer maintenant » sur le profil). */
+  shortcutAdded() {
+    this.shortcutOn = true;
+    flag(SHORTCUT_KEY, '1');
+  }
+  /** Lance le raccourci dans l'app Raccourcis : il lit Santé et l'envoie ; au retour, le profil relit le serveur. */
+  runShortcut() {
+    haptic('tap');
+    this.shortcutAdded();
+    location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT_NAME)}`;
+  }
+  /** Lien de téléchargement du raccourci signé (servi avec l'app). */
+  get shortcutFile() {
+    return `${import.meta.env.BASE_URL}sante/${encodeURIComponent(SHORTCUT_NAME)}.shortcut`;
   }
 
   /** Vers Strava, qui demande l'accord puis revient ici avec un code. */
@@ -179,6 +226,9 @@ class Links {
   async disconnectHealth() {
     this.healthOn = false;
     flag(HEALTH_KEY, null);
+    this.shortcutOn = false;
+    this.shortcutKey = null;
+    flag(SHORTCUT_KEY, null);
     try {
       if (community.signedIn) await community.clearHealth();
       this.healthDays = [];

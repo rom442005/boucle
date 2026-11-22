@@ -6,6 +6,8 @@ export interface SportDef {
   long: string;
   distance: { min: number; max: number; step: number; def: number };
   elevation: { max: number; step: number };
+  /** règle graduée des réglages : graduation moyenne et graduation chiffrée (en km, puis en m de D+) */
+  ruler: { km: { mid: number; every: number }; dplus: { mid: number; every: number } };
   /** null : pas de choix de sol (vélo de route, toujours goudronné) */
   surfaces: Record<Surface, string> | null;
   surfaceHint: Record<Surface, string> | null;
@@ -20,8 +22,9 @@ export const SPORTS: Record<Sport, SportDef> = {
   run: {
     label: 'Course',
     long: 'Course sur route',
-    distance: { min: 1, max: 42, step: 0.5, def: 10 },
+    distance: { min: 1, max: 42, step: 0.1, def: 10 },
     elevation: { max: 800, step: 10 },
+    ruler: { km: { mid: 0.5, every: 1 }, dplus: { mid: 50, every: 100 } },
     surfaces: { a: 'Bitume', b: 'Mixte', c: 'Chemins' },
     surfaceHint: {
       a: 'Rues et trottoirs, le moins de chemins possible.',
@@ -36,8 +39,9 @@ export const SPORTS: Record<Sport, SportDef> = {
   trail: {
     label: 'Trail',
     long: 'Trail',
-    distance: { min: 3, max: 60, step: 1, def: 15 },
-    elevation: { max: 3000, step: 25 },
+    distance: { min: 3, max: 60, step: 0.5, def: 15 },
+    elevation: { max: 3000, step: 10 },
+    ruler: { km: { mid: 1, every: 5 }, dplus: { mid: 50, every: 100 } },
     surfaces: { a: 'Roulant', b: 'Sentiers', c: 'Technique' },
     surfaceHint: {
       a: 'Chemins larges et pistes, faciles à courir.',
@@ -52,8 +56,9 @@ export const SPORTS: Record<Sport, SportDef> = {
   road: {
     label: 'Vélo',
     long: 'Vélo de route',
-    distance: { min: 10, max: 200, step: 5, def: 50 },
-    elevation: { max: 3000, step: 50 },
+    distance: { min: 10, max: 200, step: 1, def: 50 },
+    elevation: { max: 3000, step: 10 },
+    ruler: { km: { mid: 5, every: 10 }, dplus: { mid: 50, every: 100 } },
     surfaces: null,
     surfaceHint: null,
     defaultSurface: 'a',
@@ -64,8 +69,9 @@ export const SPORTS: Record<Sport, SportDef> = {
   gravel: {
     label: 'Gravel',
     long: 'Gravel et VTT',
-    distance: { min: 10, max: 150, step: 5, def: 40 },
-    elevation: { max: 2500, step: 50 },
+    distance: { min: 10, max: 150, step: 1, def: 40 },
+    elevation: { max: 2500, step: 10 },
+    ruler: { km: { mid: 5, every: 10 }, dplus: { mid: 50, every: 100 } },
     surfaces: { a: 'Mixte', b: 'Chemins', c: 'VTT' },
     surfaceHint: {
       a: 'Petites routes et chemins roulants.',

@@ -22,6 +22,7 @@ import {
 } from './persist';
 import { generate, GenerateError, type GenerateResult } from './generator';
 import { reverse, weather, type Weather } from './services';
+import type { ZoneKind } from './zones';
 import type { MapType } from './mapstyle';
 import { reverseRoute } from './routegeo';
 import { elevationStats } from './elevation';
@@ -92,6 +93,15 @@ class AppState {
   onCommunityUse: ((id: string) => void) | null = null;
   flags = $state<Record<string, boolean>>(loadFlags());
   weather = $state.raw<Weather | null>(null);
+  /** lieux mis en valeur sur la carte (bloc sous la météo) */
+  zones = $state<ZoneKind[]>([]);
+  /** combien de petits lieux (pistes, fontaines) sont à l'écran, compté par la carte */
+  zoneCounts = $state.raw<Partial<Record<ZoneKind, number>>>({});
+  /** le bloc des lieux est à l'écran (la carte compte alors les lieux à chaque arrêt) */
+  zonesShown = false;
+  toggleZone(z: ZoneKind) {
+    this.zones = this.zones.includes(z) ? this.zones.filter((x) => x !== z) : [...this.zones, z];
+  }
 
   search = $state<null | PlaceKind>(null);
   pickOnMap = $state<null | PlaceKind>(null);
@@ -165,7 +175,8 @@ class AppState {
   constructor() {
     if (typeof window !== 'undefined') window.addEventListener('pagehide', () => this.persistNow());
     const last = loadLast();
-    if (last.params && SPORTS[last.params.sport]) this.params = { ...defaultParams(last.params.sport), ...last.params };
+    // Le sol ne se choisit plus (rubrique « Sol » retirée) : celui du sport, même si un ancien choix est gardé.
+    if (last.params && SPORTS[last.params.sport]) this.params = { ...defaultParams(last.params.sport), ...last.params, surface: SPORTS[last.params.sport].defaultSurface };
     if (last.start) this.start = last.start;
     if (last.destination) this.destination = last.destination;
     if (last.vias?.length) this.vias = last.vias.slice(0, MAX_VIAS);
@@ -545,7 +556,7 @@ class AppState {
     const p = this.params;
     p.shape = r.shape === 'oneway' ? 'loop' : r.shape;
     const step = def.distance.step;
-    p.distanceKm = Math.min(def.distance.max, Math.max(def.distance.min, Math.round(r.lengthM / 1000 / step) * step));
+    p.distanceKm = Math.min(def.distance.max, Math.max(def.distance.min, Math.round(Math.round(r.lengthM / 1000 / step) * step * 10) / 10));
     const e = def.elevation;
     p.elevation = r.ascent >= 20 ? Math.min(e.max, Math.round(r.ascent / e.step) * e.step) : null;
     this.persist();

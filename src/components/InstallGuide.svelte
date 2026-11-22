@@ -25,7 +25,7 @@
 
 {#snippet qrCard(inline: boolean, close: () => void)}
   {#if qr}
-    <div class="card" class:glass={!inline} class:glass-panel={!inline} class:inline role={inline ? 'group' : 'dialog'} aria-label="Installer Boucle sur l’iPhone">
+    <div class="card pop" style:--origin="top center" class:glass={!inline} class:glass-panel={!inline} class:inline role={inline ? 'group' : 'dialog'} aria-label="Installer Boucle sur l’iPhone">
       <div class="qr" aria-hidden="true">
         <svg viewBox="0 0 {qr.size} {qr.size}" width="148" height="148" shape-rendering="crispEdges"><rect width={qr.size} height={qr.size} fill="#fff" /><path d={qr.d} fill="#1c1c1e" /></svg>
       </div>

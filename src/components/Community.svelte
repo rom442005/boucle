@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CountUp from './CountUp.svelte';
   import Icon from './Icon.svelte';
   import CommunityItem from './CommunityItem.svelte';
   import ProfileView from './ProfileView.svelte';
@@ -77,7 +78,7 @@
       <div class="m">
         <span class="emo" aria-hidden="true">{topSport}</span>
         <b class="big rounded tabular">{community.loading && !community.feed.length ? '–' : count(community.feed.length)}<small>parcours</small></b>
-        <span class="side"><b class="rounded tabular">{authors}</b> membre{authors > 1 ? 's' : ''}</span>
+        <span class="side"><b class="rounded"><CountUp value={authors} /></b> membre{authors > 1 ? 's' : ''}</span>
       </div>
       <div class="sep"></div>
       <span class="k">28 derniers jours</span>

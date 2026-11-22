@@ -15,6 +15,7 @@
   import { ICONS } from '../lib/icons';
   import { bbox, cumulative, decodePolyline, haversine, pointAt } from '../lib/geo';
   import { community } from '../lib/community.svelte';
+  import { centerOf, zoneKey, ZONE_ORDER, ZONES, type ZoneKind } from '../lib/zones';
   import { km, kmValue, NNBSP } from '../lib/format';
   import { haptic, tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
@@ -361,6 +362,104 @@
       source: 'start-pt',
       layout: { 'icon-image': 'collider', 'icon-allow-overlap': true, 'icon-ignore-placement': false },
     });
+    addZoneLayers();
+  }
+
+  /*
+   * Lieux mis en valeur (bloc sous la météo) : la surface du lieu se colore sous les noms de la carte, son
+   * contour s'allume ; pistes et fontaines reçoivent un repère rond, visible même de loin. Tout est caché
+   * tant que le lieu n'est pas choisi.
+   */
+  function addZoneLayers() {
+    const m = map!;
+    const below = m.getStyle().layers.find((l) => l.type === 'symbol')?.id;
+    for (const k of ZONE_ORDER) {
+      const z = ZONES[k];
+      const base = { source: 'omt', 'source-layer': z.layer, filter: z.filter, layout: { visibility: 'none' as const } };
+      if (k === 'fountain') continue;
+      m.addLayer({ id: `zone-${k}-fill`, type: 'fill', ...base, paint: { 'fill-color': z.color, 'fill-opacity': k === 'track' ? 0.62 : 0.4, 'fill-opacity-transition': { duration: 500, delay: 0 } } }, below);
+      m.addLayer(
+        { id: `zone-${k}-line`, type: 'line', ...base, paint: { 'line-color': z.color, 'line-width': k === 'track' ? 2.4 : 1.6, 'line-blur': 0.6, 'line-opacity': 0.95 } },
+        below,
+      );
+      if (k === 'water') {
+        m.addLayer(
+          {
+            id: 'zone-water-river',
+            type: 'line',
+            source: 'omt',
+            'source-layer': 'waterway',
+            filter: ['!=', ['get', 'brunnel'], 'tunnel'],
+            layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': z.color, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 5], 'line-opacity': 0.9 },
+          },
+          below,
+        );
+      }
+    }
+    if (!m.getSource('zone-pins')) m.addSource('zone-pins', { type: 'geojson', data: EMPTY });
+    const before = m.getLayer('focus-veil') ? 'focus-veil' : undefined;
+    m.addLayer(
+      {
+        id: 'zone-pins-halo',
+        type: 'circle',
+        source: 'zone-pins',
+        paint: { 'circle-radius': 15, 'circle-color': ['get', 'color'], 'circle-opacity': 0.24, 'circle-blur': 0.35, 'circle-radius-transition': { duration: 650, delay: 0 } },
+      },
+      before,
+    );
+    m.addLayer(
+      {
+        id: 'zone-pins',
+        type: 'circle',
+        source: 'zone-pins',
+        paint: { 'circle-radius': 6.5, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 2.2 },
+      },
+      before,
+    );
+    showZones(app.zones);
+  }
+
+  /** Les calques des lieux choisis deviennent visibles, les autres se cachent. */
+  function showZones(on: ZoneKind[]) {
+    const m = map;
+    if (!m) return;
+    for (const k of ZONE_ORDER) {
+      for (const id of [`zone-${k}-fill`, `zone-${k}-line`, ...(k === 'water' ? ['zone-water-river'] : [])]) {
+        if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', on.includes(k) ? 'visible' : 'none');
+      }
+    }
+    countZones();
+  }
+
+  /**
+   * Repères des petits lieux choisis et compte de ceux qui sont à l'écran (pistes et fontaines), relus dans les
+   * tuiles chargées à chaque arrêt de la carte.
+   */
+  function countZones() {
+    const m = map;
+    if (!m || !m.getSource('zone-pins')) return;
+    const bounds = m.getBounds();
+    const counts: Partial<Record<ZoneKind, number>> = {};
+    const pins: GeoJSON.Feature[] = [];
+    for (const k of ZONE_ORDER) {
+      const z = ZONES[k];
+      if (!z.pin || m.getZoom() < z.minZoom - 0.01) continue;
+      const seen = new Set<string>();
+      let n = 0;
+      for (const f of m.querySourceFeatures('omt', { sourceLayer: z.layer, filter: z.filter })) {
+        const c = centerOf(f.geometry);
+        if (!c) continue;
+        const key = zoneKey(k, c);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (bounds.contains(c)) n++;
+        if (app.zones.includes(k)) pins.push({ type: 'Feature', properties: { color: z.color, kind: k }, geometry: { type: 'Point', coordinates: c } });
+      }
+      counts[k] = n;
+    }
+    app.zoneCounts = counts;
+    (m.getSource('zone-pins') as GeoJSONSource).setData({ type: 'FeatureCollection', features: pins });
   }
 
   /** Anneaux des villes du globe : aux couleurs du thème, et blanc sur les photos. */
@@ -1087,6 +1186,10 @@
       updateOrbit();
       checkLost();
     });
+    // Lieux sous la météo : repères et compte à jour à chaque arrêt de la carte (tuiles chargées).
+    map.on('idle', () => {
+      if (app.zonesShown || app.zones.length) countZones();
+    });
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     map.on('moveend', () => {
       clearTimeout(saveTimer);
@@ -1696,6 +1799,35 @@
       ...(reduce ? { duration: 0 } : far ? { curve: 1.55, speed: 1.25, maxDuration: 3600 } : { duration: 900 }),
     });
   });
+
+  // Lieux choisis sous la météo : ils s'allument ; s'il faut s'approcher pour les voir, la carte s'approche.
+  let zonesBefore: ZoneKind[] = [];
+  $effect(() => {
+    const on = [...app.zones];
+    if (!ready || !map) return;
+    untrack(() => {
+      showZones(on);
+      const added = on.filter((k) => !zonesBefore.includes(k));
+      zonesBefore = on;
+      const need = Math.max(0, ...added.map((k) => ZONES[k].minZoom));
+      if (added.length && map!.getZoom() < need) map!.easeTo({ zoom: need + 0.6, duration: reduce ? 0 : 900, padding: app.padding });
+      if (added.some((k) => ZONES[k].pin)) pingZones();
+    });
+  });
+  /** Les repères des lieux qu'on vient de choisir s'annoncent : leur halo s'ouvre. */
+  function pingZones() {
+    const m = map;
+    if (reduce || !m?.getLayer('zone-pins-halo')) return;
+    m.setPaintProperty('zone-pins-halo', 'circle-radius-transition', { duration: 0, delay: 0 });
+    m.setPaintProperty('zone-pins-halo', 'circle-radius', 3);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!m.getLayer('zone-pins-halo')) return;
+        m.setPaintProperty('zone-pins-halo', 'circle-radius-transition', { duration: 700, delay: 0 });
+        m.setPaintProperty('zone-pins-halo', 'circle-radius', 15);
+      }),
+    );
+  }
 
   // Suivi en direct : partie faite en gris, carte centrée sur la position.
   $effect(() => {

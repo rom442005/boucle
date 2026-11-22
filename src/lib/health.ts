@@ -103,11 +103,13 @@ export async function readHealthDays(): Promise<HealthDay[]> {
   const end = new Date();
   const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 27);
   const range = { startDate: start.toISOString(), endDate: end.toISOString() };
-  const [steps, rest, vo2, wk] = await Promise.all([
+  const [steps, rest, vo2, wk, walk, kcal] = await Promise.all([
     H.queryAggregated({ dataType: 'steps', ...range, bucket: 'day', aggregation: 'sum' }).catch(() => null),
     H.readSamples({ dataType: 'restingHeartRate', ...range, limit: 200 }).catch(() => null),
     H.readSamples({ dataType: 'vo2Max', ...range, limit: 50 }).catch(() => null),
     H.queryWorkouts({ ...range, limit: 300 }).catch(() => null),
+    H.queryAggregated({ dataType: 'distance', ...range, bucket: 'day', aggregation: 'sum' }).catch(() => null),
+    H.queryAggregated({ dataType: 'calories', ...range, bucket: 'day', aggregation: 'sum' }).catch(() => null),
   ]);
   // Tout a échoué (accord retiré, Health Connect saturé) : rien à envoyer, le serveur garde le dernier envoi.
   if (!steps && !rest && !vo2 && !wk) throw new Error('Santé illisible pour le moment');
@@ -116,11 +118,13 @@ export async function readHealthDays(): Promise<HealthDay[]> {
   const at = (when: Date) => {
     const k = dayKey(when);
     let d = days.get(k);
-    if (!d) days.set(k, (d = { day: k, steps: null, restingHr: null, vo2max: null, distance: 0, workouts: [], source: src }));
+    if (!d) days.set(k, (d = { day: k, steps: null, restingHr: null, vo2max: null, distance: 0, workouts: [], source: src, walkM: null, activeKcal: null, exerciseMin: null }));
     return d;
   };
   for (let i = 0; i < 28; i++) at(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i, 12));
   for (const s of steps?.samples ?? []) at(middle(s.startDate, s.endDate)).steps = Math.round(s.value);
+  for (const s of walk?.samples ?? []) at(middle(s.startDate, s.endDate)).walkM = Math.round(s.value);
+  for (const s of kcal?.samples ?? []) at(middle(s.startDate, s.endDate)).activeKcal = Math.round(s.value);
   for (const s of rest?.samples ?? []) {
     const d = at(new Date(s.startDate));
     if (d.restingHr == null) d.restingHr = s.value;
@@ -149,26 +153,56 @@ export async function readHealthDays(): Promise<HealthDay[]> {
 
 /** Ce que le profil affiche, d'après les journées reçues. */
 export interface HealthSummary {
+  /** le jour affiché : aujourd'hui s'il a des données, sinon le dernier jour reçu */
+  today: { day: string; isToday: boolean; steps: number | null; walkM: number | null; kcal: number | null; exercise: number | null };
+  /** les 7 derniers jours, du plus ancien au plus récent (pas) */
+  week: { day: string; steps: number }[];
+  /** moyenne des pas par jour sur 7 jours */
   steps: number;
   restingHr: number | null;
   vo2max: number | null;
+  /** sorties des 28 derniers jours (m, app native) */
   distance: number;
+  /** marche et course des 28 derniers jours (m) */
+  walk28: number;
   last: (HealthWorkout & { day: string }) | null;
   source: 'ios' | 'android';
+  /** dernier envoi reçu */
+  updatedAt: string | null;
 }
 
 export function summarize(days: HealthDay[]): HealthSummary | null {
   if (!days.length) return null;
-  const recent = days.slice(-7).filter((d) => d.steps != null);
   const lastOf = <K extends 'restingHr' | 'vo2max'>(k: K) => [...days].reverse().find((d) => d[k] != null)?.[k] ?? null;
   const all = days.flatMap((d) => d.workouts.map((w) => ({ ...w, day: d.day })));
   all.sort((a, b) => Date.parse(b.start) - Date.parse(a.start));
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const byDay = new Map(days.map((d) => [d.day, d]));
+  const shown = byDay.get(todayKey) ?? [...days].reverse().find((d) => d.steps != null || d.walkM != null) ?? days[days.length - 1];
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const k = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i));
+    return { day: k, steps: byDay.get(k)?.steps ?? 0 };
+  });
+  const recent = days.slice(-7).filter((d) => d.steps != null);
+  const updated = days.map((d) => d.updatedAt).filter(Boolean).sort().pop() ?? null;
   return {
+    today: {
+      day: shown.day,
+      isToday: shown.day === todayKey,
+      steps: shown.steps,
+      walkM: shown.walkM ?? null,
+      kcal: shown.activeKcal ?? null,
+      exercise: shown.exerciseMin ?? null,
+    },
+    week,
     steps: recent.length ? Math.round(recent.reduce((a, d) => a + (d.steps ?? 0), 0) / recent.length) : 0,
     restingHr: lastOf('restingHr'),
     vo2max: lastOf('vo2max'),
     distance: days.reduce((a, d) => a + d.distance, 0),
+    walk28: days.reduce((a, d) => a + (d.walkM ?? 0), 0),
     last: all[0] ? { ...all[0], source: appName(all[0].source) } : null,
     source: days[days.length - 1].source,
+    updatedAt: updated,
   };
 }

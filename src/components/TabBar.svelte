@@ -5,7 +5,7 @@
   import { community } from '../lib/community.svelte';
   import { haptic, tactile } from '../lib/haptics';
   import { smoothly } from '../lib/motion';
-  import { liquidAlready, liquidMove, liquidStart } from '../lib/lens';
+  import { liquidTabs } from '../lib/lens';
 
   /*
    * iPhone : quatre onglets en bas de l'écran (Créer, Communauté, Mes parcours, Profil) dans une capsule de
@@ -22,7 +22,6 @@
 
   let h = $state(0);
   let el = $state<HTMLElement>();
-  let nav = $state<HTMLElement>();
 
   // Place occupée en bas de l'écran (barre et marge sous elle, zone du geste comprise) : le contenu s'y arrête.
   $effect(() => {
@@ -37,20 +36,13 @@
   const SHORT = { create: 'Créer', community: 'Communauté', library: 'Parcours', profile: 'Profil' } as const;
   const ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;
 
-  // La lentille part dès le toucher (fluidité) ; un changement d'onglet venu d'ailleurs la lance aussi.
-  let prev = -1;
-  $effect(() => {
-    const i = TABS.indexOf(active);
-    if (prev >= 0 && prev !== i && !liquidAlready(nav, i)) liquidMove(nav, prev, i);
-    prev = i;
-  });
-  function press(t: typeof active) {
-    liquidStart(nav, TABS.indexOf(active), TABS.indexOf(t));
-  }
-
+  /*
+   * Changement d'onglet comme chez Deezer : la page change d'un coup (ses blocs entrent l'un après l'autre),
+   * sans fondu de tout l'écran, pendant que la lentille file (lens.ts) ; rien ne la fige en route.
+   */
   function go(t: typeof active) {
     if (t !== active) haptic('tap');
-    smoothly(() => change(t));
+    change(t);
   }
   function change(t: typeof active) {
     community.sheet = null;
@@ -72,7 +64,7 @@
 </script>
 
 <div class="dock" class:on-photo={onphoto} bind:offsetHeight={h} bind:this={el}>
-  <nav class="tabbar glass" aria-label="Sections" style:--at={TABS.indexOf(active)} bind:this={nav}>
+  <nav class="tabbar glass" aria-label="Sections" style:--at={TABS.indexOf(active)} use:liquidTabs={{ active: TABS.indexOf(active), pick: (i) => go(TABS[i]) }}>
     <span class="pill-on" aria-hidden="true"></span>
     {#each TABS as t (t)}
       <button
@@ -83,7 +75,6 @@
         aria-label={LABEL[t]}
         title={LABEL[t]}
         aria-current={active === t ? 'page' : undefined}
-        onpointerdown={() => press(t)}
         onclick={() => go(t)}
       >
         {#if t === 'profile' && community.me}
@@ -139,6 +130,8 @@
     grid-template-columns: repeat(4, 1fr);
     padding: 6px;
     border-radius: 999px;
+    /* Le doigt glisse le long de la barre (la lentille le suit) : pas de défilement ni de zoom ici. */
+    touch-action: none;
   }
   /* La bulle de l'onglet allumé : une lentille de verre qui éclaire ce qu'elle couvre. */
   .pill-on {

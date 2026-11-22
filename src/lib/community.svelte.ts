@@ -40,6 +40,7 @@ export type Sheet =
   | { kind: 'auth'; reason: string; then?: () => void; tab?: 'profile' }
   | { kind: 'publish' }
   | { kind: 'edit' }
+  | { kind: 'health' }
   | { kind: 'report'; target: ReportTarget; label: string };
 
 export type CommunityView = 'feed' | 'profile';
@@ -709,6 +710,10 @@ class CommunityState {
   }
   async clearHealth() {
     await (await this.api()).clearHealth();
+  }
+  /** Clé du raccourci « Boucle Santé » (iPhone sans l'app). */
+  async healthKey() {
+    return (await this.api()).healthKey();
   }
 
   /** Lien avec Strava, par la fonction du serveur (le compte Boucle doit être connecté). */

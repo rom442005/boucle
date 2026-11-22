@@ -80,7 +80,16 @@
 </div>
 
 <style>
+  @keyframes hud-in {
+    from {
+      opacity: 0;
+      translate: 0 -18px;
+      scale: 0.97;
+    }
+  }
+  /* Le tableau de bord du suivi descend se poser en haut de l'écran. */
   .hud {
+    animation: hud-in 640ms var(--spring) backwards;
     position: fixed;
     z-index: 25;
     top: calc(var(--safe-top) + 8px);

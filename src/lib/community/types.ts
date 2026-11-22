@@ -169,6 +169,12 @@ export interface HealthDay {
   distance: number;
   workouts: HealthWorkout[];
   source: 'ios' | 'android';
+  /** marche et course du jour (m), énergie active (kcal), temps d'exercice (min) */
+  walkM?: number | null;
+  activeKcal?: number | null;
+  exerciseMin?: number | null;
+  /** dernier envoi reçu par le serveur pour ce jour */
+  updatedAt?: string;
 }
 
 export class CommunityError extends Error {}
@@ -219,6 +225,8 @@ export interface CommunityBackend {
   healthDays(): Promise<HealthDay[]>;
   saveHealth(days: HealthDay[]): Promise<void>;
   clearHealth(): Promise<void>;
+  /** nouvelle clé pour le raccourci « Boucle Santé » de l'iPhone (l'ancienne cesse de marcher) */
+  healthKey(): Promise<string>;
   /** lien avec Strava (serveur en ligne seulement) */
   strava?(action: 'connect' | 'stats' | 'disconnect', code?: string): Promise<StravaData>;
   /** un parcours de la communauté vient d'être repris (favori, suivi, GPX) */

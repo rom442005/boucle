@@ -26,6 +26,20 @@ Tout est dans Supabase, accessible depuis Chrome :
 - **Les mots de passe ne se lisent nulle part**, ni par Romain ni par Claude : Supabase n'en garde qu'une empreinte (bcrypt). C'est voulu : une fuite de la base ne livrerait aucun mot de passe.
 - Le schéma `admin` n'est pas publié par l'API : l'app et les visiteurs n'y ont pas accès (vérifié : « Invalid schema: admin »).
 
+## Santé sur l'iPhone sans l'app (raccourci « Boucle Sante »)
+
+Apple ne laisse pas un site lire Santé. Sur l'iPhone, tant que l'app n'est pas installée, un raccourci de l'app Raccourcis fait le lien :
+
+- **Ce qu'il fait** : il lit les 28 derniers jours (pas, distance à pied, énergie active, exercice, fréquence au repos, VO2 max, totaux et moyennes du jour calculés par Santé) et les envoie à Supabase avec la clé personnelle du membre (fonction `health_push`). Le profil les affiche ensuite partout, Mac compris.
+- **Côté membre** : Profil, « Apple Santé », Relier : créer et copier sa clé, ajouter le raccourci (il demande la clé à l'import), le lancer une fois (autoriser Santé et l'envoi), puis, si on veut, une automatisation « tous les soirs à 21 h ».
+- **La clé** n'est gardée que hachée (table `health_keys`, inaccessible à l'app) ; une nouvelle remplace l'ancienne ; « Ne plus relier Santé » efface la clé et les journées (`health_unlink`). Colonne `sante_raccourci` dans `admin.membres`.
+- **Refaire le raccourci** (nouvelle mesure, autre adresse) : `python3 scripts/make-shortcut.py`. Il lit l'adresse et la clé publique de Supabase dans `.env.native.local`, écrit puis signe `public/sante/Boucle Sante.shortcut` (il faut être connecté à iCloud sur le Mac). Garder un nom **sans accent** : un « é » enregistré décomposé par macOS n'est plus trouvé par GitHub Pages, et l'app lance le raccourci par ce nom.
+- **Tester la réception sans rien écrire** : dans l'éditeur SQL de Supabase, un bloc `do $$ … $$` qui crée une clé d'essai, appelle `health_push`, lit `health_days`, puis lève une exception : tout est annulé.
+
+## Changer les photos de fond
+
+Les sources sont dans `public/scenes/SOURCES.md`. Télécharger depuis Unsplash en 4096 × 2731 (`sN-l.jpg`, `fit=crop&crop=entropy&q=86&fm=jpg&cs=srgb`) et 1440 × 3120 (`sN-m.jpg`, `q=84`), vérifier que l'original est assez grand (`?fm=json` donne `PixelWidth`), mettre à jour la teinte dans `src/lib/scenes.ts`, puis **changer `SCENES_V`** (scenes.ts) **et le nom du cache** `scenes-N` (vite.config.ts) : sinon les téléphones gardent les anciennes photos hors ligne.
+
 ## Construire et tester l'app Android
 
 Outils installés sur le Mac : SDK Android dans `~/Library/Android/sdk`, Java 21 (`/opt/homebrew/opt/openjdk@21`), émulateur `boucle` (Android 16, Health Connect intégré).
@@ -77,6 +91,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **22/11/2026** : santé sur l'iPhone sans l'app par le raccourci « Boucle Sante » (clé personnelle hachée, fonctions `health_key_new`, `health_push`, `health_unlink`, testées) et bloc Santé du profil (anneau, semaine, distance, énergie, exercice). Photos de fond en haute définition (7 remplacées), règles graduées pour la distance et le D+, rubrique « Sol » retirée, bloc des lieux sur la carte (pistes, parcs, eau, forêts, fontaines), lentille des onglets refaite sur un ressort continu, colonne Créer pleine hauteur sur Mac, animations d'apparition partout.
 - **22/11/2026** : mot de passe à la création du compte (reconnexion sans code), « Mot de passe oublié » par code, changement dans Modifier, Compte. Vue `admin.membres` dans Supabase. Premier lancement sur Mac : seul l'accueil est affiché. 20 photos de fond au lieu de 7.
 - **22/11/2026** : santé du téléphone sur Android (Health Connect) en plus de l'iPhone, testée sur émulateur : lecture, envoi, accès retiré (rien n'est effacé), règles d'accès de `health_days` vérifiées. Correction d'un blocage « Accord… » sur les deux téléphones.
 

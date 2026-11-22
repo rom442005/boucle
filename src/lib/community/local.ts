@@ -394,6 +394,11 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       if (db.health) delete db.health[u];
       save();
     },
+    async healthKey() {
+      need();
+      // Démonstration : rien ne part de l'appareil, la clé ne sert à rien hors ligne.
+      return `demo-${Math.random().toString(36).slice(2, 10)}`;
+    },
     async uploadAvatar(image) {
       await wait();
       if (!me()) throw new CommunityError('Connecte-toi pour continuer.');

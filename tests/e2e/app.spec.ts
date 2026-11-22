@@ -98,15 +98,31 @@ test('créer une boucle, comparer les propositions, parcourir le profil', async 
 test('changer de sport adapte les réglages', async ({ page }) => {
   await open(page);
   await compose(page);
+  const distance = page.getByRole('slider', { name: 'Distance' });
   await page.getByRole('radio', { name: 'Vélo' }).click();
-  await expect(page.locator('#distance')).toHaveValue('50');
+  await expect(distance).toHaveAttribute('aria-valuenow', '50');
+  // Plus de rubrique « Sol » : le sol suit le sport.
   await expect(page.getByRole('heading', { name: 'Sol' })).toHaveCount(0);
-  await page.getByRole('radio', { name: 'Gravel' }).click();
-  await expect(page.getByRole('radio', { name: 'VTT' })).toBeVisible();
   await page.getByRole('radio', { name: 'Course' }).click();
-  await expect(page.locator('#distance')).toHaveValue('10');
+  await expect(distance).toHaveAttribute('aria-valuenow', '10');
+  // Règle graduée : au dixième de kilomètre près, au clavier comme au doigt.
+  await distance.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(distance).toHaveAttribute('aria-valuenow', '10.2');
+  const box = (await distance.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  // 45 px vers la gauche = 5 graduations (0,5 km) ; le doigt s'arrête avant de se lever : pas d'élan.
+  await page.mouse.move(box.x + box.width / 2 - 45, box.y + box.height / 2, { steps: 10 });
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await expect(distance).toHaveAttribute('aria-valuenow', '10.7');
   // Le dénivelé passe d'« indifférent » à une valeur précise au premier geste.
-  await page.locator('#elevation').fill('150');
+  const dplus = page.getByRole('slider', { name: 'Dénivelé positif' });
+  await dplus.focus();
+  await page.keyboard.press('PageUp');
+  await expect(dplus).toHaveAttribute('aria-valuenow', '100');
   await expect(page.getByRole('button', { name: /Remettre dénivelé positif sur indifférent/ })).toBeVisible();
 });
 

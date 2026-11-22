@@ -124,9 +124,9 @@
   }
   img {
     position: absolute;
-    inset: -4%;
-    width: 108%;
-    height: 108%;
+    inset: -3%;
+    width: 106%;
+    height: 106%;
     object-fit: cover;
     opacity: 0;
     transition: opacity 1200ms var(--ease-out);
@@ -141,15 +141,19 @@
   img.in {
     opacity: 1;
   }
+  /*
+   * Zoom de 6 % au plus : avec la marge de 6 %, la photo n'est jamais agrandie au-delà de ce que ses pixels
+   * permettent (SCENE_OVERSCAN, scenes.ts), elle reste nette même sur un écran ultra-large.
+   */
   @keyframes drift {
     0% {
-      transform: scale(1.02) translate3d(1.2%, 0.8%, 0);
+      transform: scale(1) translate3d(1.4%, 0.9%, 0);
     }
     50% {
-      transform: scale(1.08) translate3d(-0.6%, -0.4%, 0);
+      transform: scale(1.035) translate3d(-0.3%, -0.2%, 0);
     }
     100% {
-      transform: scale(1.13) translate3d(-2.2%, -1.4%, 0);
+      transform: scale(1.06) translate3d(-1.4%, -0.9%, 0);
     }
   }
   .veil {

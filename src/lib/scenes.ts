@@ -4,26 +4,27 @@ import type { HistoryEntry } from './persist';
 /*
  * Paysages en fond des écrans sans parcours (accueil, réglages sur iPhone, profil, Mes parcours), sous des
  * blocs de verre. Vingt photos Unsplash (licence Unsplash, usage libre) servies avec l'app, en deux tailles :
- * portrait pour l'iPhone, très grande pour les écrans larges. Elles tournent toutes les cinq minutes, les
- * mêmes partout au même moment ; la teinte dominante de chacune attend qu'elle soit là.
+ * portrait pour l'iPhone (1440 × 3120), 4096 px de large pour les écrans larges, de quoi rester nettes en
+ * plein écran jusqu'aux écrans ultra-larges (3440 px), dérive comprise (sources : public/scenes/SOURCES.md). Elles tournent toutes les cinq minutes, les mêmes
+ * partout au même moment ; la teinte dominante de chacune attend qu'elle soit là.
  */
 export const SCENES = [
-  { file: 's1', tone: '#3d4a2a' },
+  { file: 's1', tone: '#514e36' },
   { file: 's2', tone: '#5d6170' },
   { file: 's3', tone: '#4f5d3c' },
-  { file: 's4', tone: '#7a8584' },
-  { file: 's5', tone: '#8d9c96' },
-  { file: 's6', tone: '#b77a68' },
+  { file: 's4', tone: '#828d94' },
+  { file: 's5', tone: '#48575b' },
+  { file: 's6', tone: '#765149' },
   { file: 's7', tone: '#2e5656' },
-  { file: 's8', tone: '#7f9296' },
+  { file: 's8', tone: '#59646f' },
   { file: 's9', tone: '#2c2c23' },
-  { file: 's10', tone: '#615b44' },
+  { file: 's10', tone: '#5a5a5f' },
   { file: 's11', tone: '#646c6b' },
   { file: 's12', tone: '#6d7d9e' },
   { file: 's13', tone: '#936132' },
   { file: 's14', tone: '#6d5d95' },
   { file: 's15', tone: '#5b5454' },
-  { file: 's16', tone: '#4f655f' },
+  { file: 's16', tone: '#413323' },
   { file: 's17', tone: '#858885' },
   { file: 's18', tone: '#4c5c5d' },
   { file: 's19', tone: '#505c53' },
@@ -36,8 +37,22 @@ export const SCENE_MS = 5 * 60 * 1000;
 /** La photo du moment (la même sur tous les écrans, d'un lancement à l'autre). */
 export const sceneAt = (t = Date.now()) => Math.floor(t / SCENE_MS) % SCENES.length;
 
-const big = () => typeof window !== 'undefined' && window.innerWidth * (window.devicePixelRatio || 1) > 1400;
-export const sceneUrl = (i: number) => `${import.meta.env.BASE_URL}scenes/${SCENES[i].file}-${big() ? 'l' : 'm'}.jpg`;
+/** Marge de la photo autour de l'écran (106 %) multipliée par le zoom le plus fort de sa dérive (1,06). */
+export const SCENE_OVERSCAN = 1.124;
+/**
+ * La taille qui reste nette sur cet écran : la portrait (1440 × 3120) pour un téléphone en hauteur, sinon la
+ * grande (4096 × 2731), en comptant les pixels réels de l'écran et la marge de la dérive.
+ */
+function size(): 'm' | 'l' {
+  if (typeof window === 'undefined') return 'l';
+  const d = window.devicePixelRatio || 1;
+  const w = innerWidth * d * SCENE_OVERSCAN;
+  const h = innerHeight * d * SCENE_OVERSCAN;
+  return h > w && Math.max(w / 1440, h / 3120) <= 1.08 ? 'm' : 'l';
+}
+/** Version des fichiers : une nouvelle série change d'adresse, l'ancienne gardée hors ligne n'est plus servie. */
+const SCENES_V = 2;
+export const sceneUrl = (i: number) => `${import.meta.env.BASE_URL}scenes/${SCENES[i].file}-${size()}.jpg?v=${SCENES_V}`;
 
 const warmed = new Set<number>();
 /** Télécharge et décode une photo à l'avance : elle apparaîtra sans attendre. */

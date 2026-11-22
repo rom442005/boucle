@@ -135,6 +135,13 @@
 </div>
 
 <style>
+  @keyframes search-in {
+    from {
+      opacity: 0;
+      translate: 0 -10px;
+      scale: 0.98;
+    }
+  }
   .scrim {
     position: fixed;
     inset: 0;
@@ -146,7 +153,9 @@
     right: auto;
     width: 408px;
   }
+  /* La recherche s'ouvre en se posant, sans saut. */
   .search {
+    animation: search-in 420ms var(--spring) backwards;
     position: fixed;
     z-index: 40;
     left: 8px;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CountUp from './CountUp.svelte';
   import Icon from './Icon.svelte';
   import { tactile } from '../lib/haptics';
   import RouteGlyph from './RouteGlyph.svelte';
@@ -75,8 +76,8 @@
     <div class="card-top"><span class="k">🗓️ {monthTitle}</span><span class="k">⏱️ {month.time ? duration(month.time) : '0 min'}</span></div>
     <div class="m">
       <span class="emo" aria-hidden="true">{mainSport}</span>
-      <b class="big rounded tabular">{month.km.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}<small>km</small></b>
-      <span class="side"><b class="rounded tabular">{month.count}</b> sortie{month.count > 1 ? 's' : ''}</span>
+      <b class="big rounded"><CountUp value={month.km} decimals={month.km < 100 ? 1 : 0} /><small>km</small></b>
+      <span class="side"><b class="rounded"><CountUp value={month.count} /></b> sortie{month.count > 1 ? 's' : ''}</span>
     </div>
     <div class="sep"></div>
     <span class="k">28 derniers jours</span>
@@ -84,10 +85,10 @@
   </section>
 
   <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'favoris'} aria-pressed={app.libTab === 'favoris'} onclick={() => (app.libTab = 'favoris')}>
-    <span class="k">⭐ Favoris</span><b class="n rounded tabular">{app.library.length}</b>
+    <span class="k">⭐ Favoris</span><b class="n rounded"><CountUp value={app.library.length} /></b>
   </button>
   <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'historique'} aria-pressed={app.libTab === 'historique'} onclick={() => (app.libTab = 'historique')}>
-    <span class="k">🕒 Sorties</span><b class="n rounded tabular">{app.history.length}</b>
+    <span class="k">🕒 Sorties</span><b class="n rounded"><CountUp value={app.history.length} /></b>
   </button>
 
   <section class="card wide glass photo-card list-card" aria-label={app.libTab === 'favoris' ? 'Parcours favoris' : 'Historique des sorties'}>

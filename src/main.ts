@@ -8,6 +8,8 @@ const app = mount(App, { target: document.getElementById('app')! });
 
 // Dans l'app iPhone (coque Capacitor), pas de service worker : les mises à jour passent par l'App Store.
 if (import.meta.env.PROD && import.meta.env.MODE !== 'native' && 'serviceWorker' in navigator) {
+  // Anciennes photos de fond (2 560 px, floues sur grand écran), remplacées par la série HD : place libérée.
+  if ('caches' in window) void caches.delete('scenes').catch(() => {});
   void import('virtual:pwa-register').then(({ registerSW }) =>
     registerSW({
       immediate: true,

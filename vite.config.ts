@@ -44,10 +44,11 @@ export default defineConfig(({ command, isPreview, mode }) => ({
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
-            // Photos de fond (paysages) : fixes pour une version, gardées après la première vue.
+            // Photos de fond (paysages) : fixes pour une version, gardées après la première vue. Nouvelle série de
+            // photos : nouveau nom de cache (et ?v= dans scenes.ts), main.ts efface l'ancien.
             urlPattern: ({ url }) => url.pathname.includes('/scenes/'),
             handler: 'CacheFirst',
-            options: { cacheName: 'scenes', expiration: { maxEntries: 20 }, cacheableResponse: { statuses: [0, 200] } },
+            options: { cacheName: 'scenes-2', expiration: { maxEntries: 20 }, cacheableResponse: { statuses: [0, 200] } },
           },
           {
             // Tuiles vectorielles et polices de la carte : elles ne changent pas pour une version donnée.

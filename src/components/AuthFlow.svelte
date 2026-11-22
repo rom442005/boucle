@@ -107,7 +107,7 @@
   {/if}
 
   {#if step === 'login'}
-    <form class="step" onsubmit={login} novalidate>
+    <form class="step rise" onsubmit={login} novalidate>
       <input class="input" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Adresse mail" aria-label="Adresse e-mail" bind:value={email} use:autofocus required />
       <PasswordField bind:value={password} autocomplete="current-password" bare />
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
@@ -118,7 +118,7 @@
       </div>
     </form>
   {:else if step === 'email'}
-    <form class="step" onsubmit={send} novalidate>
+    <form class="step rise" onsubmit={send} novalidate>
       <input class="input" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="Adresse mail" aria-label="Adresse e-mail" bind:value={email} use:autofocus required />
       {#if community.demo}
         <p class="demo" role="note" aria-label="Démonstration : comptes sur cet appareil, code 123456.">🧪 Démo · code <b class="tabular">123456</b></p>
@@ -130,7 +130,7 @@
       </div>
     </form>
   {:else if step === 'code'}
-    <form class="step" onsubmit={verify} novalidate>
+    <form class="step rise" onsubmit={verify} novalidate>
       {#if community.demo}
         <p class="sent"><Icon name="mail" size={18} />Aucun e-mail envoyé pour l’instant : saisis <b>123456</b>.</p>
       {:else}

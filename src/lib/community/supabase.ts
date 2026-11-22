@@ -447,7 +447,20 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       const since = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
       const { data, error } = await sb.from('health_days').select('*').eq('user_id', me).gte('day', since).order('day');
       if (error) fail(error, 'Santé indisponible pour le moment.');
-      return ((data ?? []) as { day: string; steps: number | null; resting_hr: number | null; vo2max: number | null; distance_m: number; workouts: HealthDay['workouts']; source: HealthDay['source'] }[]).map((r) => ({
+      type Row = {
+        day: string;
+        steps: number | null;
+        resting_hr: number | null;
+        vo2max: number | null;
+        distance_m: number;
+        workouts: HealthDay['workouts'];
+        source: HealthDay['source'];
+        walk_m: number | null;
+        active_kcal: number | null;
+        exercise_min: number | null;
+        updated_at: string;
+      };
+      return ((data ?? []) as Row[]).map((r) => ({
         day: r.day,
         steps: r.steps,
         restingHr: r.resting_hr,
@@ -455,6 +468,10 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
         distance: r.distance_m,
         workouts: r.workouts ?? [],
         source: r.source,
+        walkM: r.walk_m,
+        activeKcal: r.active_kcal,
+        exerciseMin: r.exercise_min,
+        updatedAt: r.updated_at,
       }));
     },
     async saveHealth(days) {
@@ -470,6 +487,9 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
           distance_m: Math.round(d.distance),
           workouts: d.workouts,
           source: d.source,
+          walk_m: d.walkM ?? null,
+          active_kcal: d.activeKcal ?? null,
+          exercise_min: d.exerciseMin ?? null,
           updated_at: new Date().toISOString(),
         })),
       );
@@ -477,8 +497,17 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
     },
     async clearHealth() {
       const me = await need();
-      const { error } = await sb.from('health_days').delete().eq('user_id', me);
-      if (error) fail(error, 'Effacement impossible pour le moment.');
+      // La clé du raccourci part avec les journées (fonction du serveur) ; sinon, au moins les journées.
+      const { error } = await sb.rpc('health_unlink');
+      if (!error) return;
+      const { error: e2 } = await sb.from('health_days').delete().eq('user_id', me);
+      if (e2) fail(e2, 'Effacement impossible pour le moment.');
+    },
+    async healthKey() {
+      await need();
+      const { data, error } = await sb.rpc('health_key_new');
+      if (error || typeof data !== 'string') fail(error, 'Clé impossible à créer pour le moment.');
+      return data as string;
     },
     async strava(action, code) {
       const { data, error } = await sb.functions.invoke('strava', { body: { action, code } });

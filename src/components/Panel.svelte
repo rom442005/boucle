@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import { app, type Detent } from '../lib/state.svelte';
   import { haptic, tactile } from '../lib/haptics';
+  import { reducedMotion } from '../lib/motion';
 
   let {
     header,
@@ -82,6 +83,28 @@
   });
 
   const height = $derived(dragH ?? heights[app.detent]);
+
+  /*
+   * Mac : la colonne glisse vers le centre (Communauté, Mes parcours, profils) ou en revient, sur un ressort et
+   * par un simple déplacement que la carte graphique joue seule ; sa largeur change d'un coup, son contenu
+   * entre bloc par bloc. Pendant un fondu (View Transitions), c'est la transition qui la déplace.
+   */
+  let panelEl = $state<HTMLElement>();
+  let leftBefore: number | null = null;
+  $effect.pre(() => {
+    void centered;
+    if (panelEl && app.wide) leftBefore = panelEl.getBoundingClientRect().left;
+  });
+  $effect(() => {
+    void centered;
+    const el = panelEl;
+    const before = leftBefore;
+    leftBefore = null;
+    if (!el || !app.wide || before == null) return;
+    const dx = before - el.getBoundingClientRect().left;
+    if (Math.abs(dx) < 2 || document.documentElement.classList.contains('vt') || reducedMotion()) return;
+    el.animate([{ translate: `${dx}px 0` }, { translate: '0 0' }], { duration: 620, easing: 'cubic-bezier(0.2, 1.08, 0.3, 1)' });
+  });
 
   $effect(() => {
     const onResize = () => {
@@ -210,6 +233,7 @@
 <div class="probe" bind:this={probe} aria-hidden="true"></div>
 
 <section
+  bind:this={panelEl}
   class="panel glass glass-panel"
   class:solid
   class:wide={app.wide}
@@ -313,10 +337,17 @@
     right: auto;
     width: 384px;
     border-radius: 28px;
-    /* Hors changement d'onglet (qui a sa propre transition), la colonne glisse sur un ressort. */
-    transition:
-      left 640ms var(--spring),
-      width 640ms var(--spring);
+    /* La colonne change de place par un déplacement animé (script ci-dessus), pas par sa position. */
+    transition: none;
+  }
+  /*
+   * Créer (colonne de gauche) : toute la hauteur de la fenêtre dès que le menu, au centre, ne la recouvre pas
+   * (fenêtre de 1 190 px de large ou plus).
+   */
+  @media (min-width: 1190px) {
+    .panel.wide:not(.centered) {
+      top: 12px;
+    }
   }
   /* Communauté, Mes parcours, profils : la colonne glisse au centre de l'écran et s'élargit un peu. */
   .panel.wide.centered {
