@@ -5,7 +5,7 @@
   import { community } from '../lib/community.svelte';
   import { haptic, tactile } from '../lib/haptics';
   import { smoothly } from '../lib/motion';
-  import { liquidMove, liquidPress } from '../lib/lens';
+  import { liquidAlready, liquidMove, liquidStart } from '../lib/lens';
 
   /*
    * iPhone : quatre onglets en bas de l'écran (Créer, Communauté, Mes parcours, Profil) dans une capsule de
@@ -37,16 +37,15 @@
   const SHORT = { create: 'Créer', community: 'Communauté', library: 'Parcours', profile: 'Profil' } as const;
   const ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;
 
-  // La lentille : à chaque changement d'onglet, de l'ancien vers le nouveau.
+  // La lentille part dès le toucher (fluidité) ; un changement d'onglet venu d'ailleurs la lance aussi.
   let prev = -1;
   $effect(() => {
     const i = TABS.indexOf(active);
-    if (prev >= 0 && prev !== i) liquidMove(nav, prev, i);
+    if (prev >= 0 && prev !== i && !liquidAlready(nav, i)) liquidMove(nav, prev, i);
     prev = i;
   });
-  /** Sous le doigt, sur l'onglet déjà allumé, la lentille gonfle sur place. */
   function press(t: typeof active) {
-    if (t === active) liquidPress(nav, TABS.indexOf(t));
+    liquidStart(nav, TABS.indexOf(active), TABS.indexOf(t));
   }
 
   function go(t: typeof active) {
@@ -106,8 +105,11 @@
 
 <style>
   /* Une seule ligne qui flotte au-dessus du bas de l'écran : la capsule des onglets, puis la bulle rose. */
-  .dock {
+  /* Nom de transition seulement pendant un changement d'onglet (sinon le verre ne floute plus le fond). */
+  :global(html.vt) .dock {
     view-transition-name: tabbar;
+  }
+  .dock {
     position: fixed;
     z-index: 22;
     left: 0;
@@ -118,7 +120,7 @@
     align-items: center;
     padding: 0 16px;
     pointer-events: none;
-    animation: bar-in 560ms var(--spring) both;
+    animation: bar-in 560ms var(--spring) backwards;
   }
   .dock > * {
     pointer-events: auto;
@@ -148,7 +150,6 @@
     border-radius: 999px;
     background: var(--tint-soft);
     translate: calc(var(--at) * 100%) 0;
-    transition: translate 560ms var(--spring-bouncy);
     transform-origin: center;
   }
   /* Au repos, comme Deezer : une pastille plus sombre que la barre, à peine liserée. */

@@ -405,7 +405,7 @@
   }
   /* Les propositions arrivent l'une après l'autre, du flou au net. */
   .card {
-    animation: card-in 520ms var(--ease-out) both;
+    animation: card-in 520ms var(--ease-out) backwards;
     animation-delay: calc(var(--i, 0) * 70ms + 80ms);
   }
   @keyframes card-in {

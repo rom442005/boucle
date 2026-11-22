@@ -64,7 +64,7 @@
     align-items: end;
     justify-items: center;
     padding: calc(env(safe-area-inset-top, 0px) + 20px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
-    animation: veil-in 600ms var(--ease-out) both;
+    animation: veil-in 600ms var(--ease-out) backwards;
     overflow-y: auto;
   }
   @keyframes veil-in {
@@ -76,7 +76,7 @@
     width: min(440px, 100%);
     display: grid;
     gap: 28px;
-    animation: card-rise 720ms var(--spring) 120ms both;
+    animation: card-rise 720ms var(--spring) 120ms backwards;
   }
   @keyframes card-rise {
     from {

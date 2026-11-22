@@ -107,7 +107,7 @@
     border-radius: 14px;
     overflow: hidden;
     background: var(--fill-2);
-    animation: pic-in 360ms var(--spring) both;
+    animation: pic-in 360ms var(--spring) backwards;
   }
   @keyframes pic-in {
     from {

@@ -483,3 +483,13 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **Crisp icons**: no drop-shadow on icons anywhere (it read as blurred and clipped).
 - **Bottom strip**: iOS 26 can leave an unpainted band under the tab bar (WebKit bug with fixed layouts and the home-indicator inset); the page background and browser theme colour now take the tone of the bottom of the screen (Paysage mixed with the photo of the moment), so the band melts into the screen instead of showing as a grey rectangle.
 
+## Update 22/11/2026 (menu fixe, verre réparé)
+
+- **Mac menu fixed at top centre** (`header.menu`, glass capsule: logo, four tabs, iPhone): the same place on every tab; panels start under it (`top: 76px`), the Today card too; map framing keeps 100 px at the top.
+- **The glass blur was broken** (cards looked like flat tint, hard to read): two causes, both now fixed and worth remembering.
+  1. A permanent `view-transition-name` on a container makes it a backdrop root in Chromium/WebKit: its glass children no longer see the photo behind. Names (`panel`, `tabbar`, `menu-mac`) are now set only under `html.vt`, i.e. during a tab change.
+  2. Entrance animations that fade `opacity` with `animation-fill-mode: both` stay "in effect" forever and isolate the element: all of them now use `backwards` (same look, released at the end).
+- **Legibility**: photo-card glass `rgba(10,12,14,0.4)`, no backdrop brightening, `--label-2` at 82 % white, a slightly stronger text shadow.
+- **Lens fluidity**: transform and opacity only (no layout per frame), 400 ms, starts on pointer down, lighter backdrop blur (4 px); the resting pill no longer slides under the lens.
+- **Living photos**: Ken Burns drift 28 s alternate (scale 1.02 → 1.13 with a 3 % pan) and, on Mac, a gentle parallax away from the pointer (up to 18 × 12 px).
+

@@ -33,7 +33,7 @@
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--label);
-    animation: legend-in 420ms var(--spring-soft) both;
+    animation: legend-in 420ms var(--spring-soft) backwards;
     transition: bottom 620ms var(--sheet-ease);
   }
   .legend.wide {

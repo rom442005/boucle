@@ -215,7 +215,7 @@
     min-width: 0;
     border-radius: 26px;
     padding: 14px 16px;
-    animation: card-in 560ms var(--spring) both;
+    animation: card-in 560ms var(--spring) backwards;
   }
   .cards > :nth-child(2) { animation-delay: 60ms; }
   .cards > :nth-child(3) { animation-delay: 100ms; }

@@ -56,7 +56,7 @@
     border-radius: 28px;
     --g-bg: rgba(24, 26, 28, 0.62);
     --blur: 22px;
-    animation: today-in 700ms var(--spring) 200ms both;
+    animation: today-in 700ms var(--spring) 200ms backwards;
   }
   @keyframes today-in {
     from {
@@ -68,7 +68,7 @@
   @media (min-width: 860px) {
     .today {
       left: 408px;
-      top: 12px;
+      top: 76px;
     }
   }
   .sky {

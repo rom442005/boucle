@@ -139,7 +139,7 @@
     grid-template-rows: auto 1fr auto;
     color: #fff;
     background: rgba(0, 0, 0, 0.94);
-    animation: lb-in 260ms var(--ease-out) both;
+    animation: lb-in 260ms var(--ease-out) backwards;
   }
   @keyframes lb-in {
     from {
@@ -177,7 +177,7 @@
     max-height: 100%;
     object-fit: contain;
     transition: translate 320ms var(--spring);
-    animation: img-in 360ms var(--ease-out) both;
+    animation: img-in 360ms var(--ease-out) backwards;
   }
   .dragging img {
     transition: none;

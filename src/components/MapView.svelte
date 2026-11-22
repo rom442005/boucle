@@ -2121,7 +2121,7 @@
     background: #fff;
     box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.45);
     cursor: pointer;
-    animation: mk-photo-in 480ms var(--spring) both;
+    animation: mk-photo-in 480ms var(--spring) backwards;
   }
   :global(.mk-photo img) {
     width: 100%;
@@ -2164,7 +2164,7 @@
     font-variant-numeric: tabular-nums;
     cursor: pointer;
     white-space: nowrap;
-    animation: climb-in 380ms var(--spring-bouncy) 900ms both;
+    animation: climb-in 380ms var(--spring-bouncy) 900ms backwards;
     transition: box-shadow 200ms var(--ease-out);
   }
   :global(.mk-climb .ic) {
@@ -2240,7 +2240,7 @@
       0 0 0 2.5px #fff;
     opacity: 0.94;
     animation:
-      aim-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both,
+      aim-in 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards,
       aim-float 1.6s ease-in-out 200ms infinite;
   }
   .aim-pin span {

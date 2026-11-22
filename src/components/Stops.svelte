@@ -60,7 +60,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    animation: line-in 380ms var(--spring) both;
+    animation: line-in 380ms var(--spring) backwards;
   }
   @keyframes line-in {
     from {

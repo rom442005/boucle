@@ -671,7 +671,7 @@ textarea {
 
 /* Bandeau d'information ou d'erreur */
 .banner {
-  animation: banner-in 360ms var(--ease-out) both;
+  animation: banner-in 360ms var(--ease-out) backwards;
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -772,7 +772,7 @@ textarea {
 /* Une liste qui apparaît arrive en cascade (rang --i, plafonné par le composant). */
 .li,
 .cascade {
-  animation: cascade-in 420ms var(--ease-out) both;
+  animation: cascade-in 420ms var(--ease-out) backwards;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 @keyframes cascade-in {
@@ -969,9 +969,9 @@ textarea {
   --tint-deep: #ffb3c4;
   --tint-soft: rgba(255, 70, 110, 0.3);
   --label: #ffffff;
-  --label-2: rgba(255, 255, 255, 0.76);
-  --label-3: rgba(255, 255, 255, 0.5);
-  --separator: rgba(255, 255, 255, 0.16);
+  --label-2: rgba(255, 255, 255, 0.82);
+  --label-3: rgba(255, 255, 255, 0.56);
+  --separator: rgba(255, 255, 255, 0.18);
   --fill: rgba(255, 255, 255, 0.24);
   --fill-2: rgba(255, 255, 255, 0.14);
   --fill-group: rgba(255, 255, 255, 0.1);
@@ -993,8 +993,9 @@ textarea {
   --env-urban: #c9c5bb;
   --ok: #30d158;
 }
+/* Verre des blocs sur la photo : assez fumé pour lire sur un ciel clair (Romain : « un peu de mal à lire »). */
 .photo-card {
-  --g-bg: rgba(10, 12, 14, 0.3);
+  --g-bg: rgba(10, 12, 14, 0.4);
   --blur: 30px;
   --sat: 1.45;
   --g-shadow: var(--shadow-glass);
@@ -1026,9 +1027,7 @@ textarea {
 }
 .on-photo .photo-card,
 .photo-card.on-photo {
-  -webkit-backdrop-filter: blur(var(--blur, 30px)) saturate(var(--sat, 1.45)) brightness(1.05);
-  backdrop-filter: blur(var(--blur, 30px)) saturate(var(--sat, 1.45)) brightness(1.05);
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.16);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.24);
 }
 /* Les boutons ronds de verre gonflent sous le doigt, comme une bulle, puis reviennent avec un rebond. */
 .on-photo .round {
@@ -1077,9 +1076,11 @@ textarea {
   border-radius: 999px;
   opacity: 0;
   pointer-events: none;
-  background: rgba(255, 255, 255, 0.07);
-  -webkit-backdrop-filter: blur(9px) saturate(1.7) brightness(1.06);
-  backdrop-filter: blur(9px) saturate(1.7) brightness(1.06);
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+  background: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(4px) saturate(1.6);
+  backdrop-filter: blur(4px) saturate(1.6);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.8),
     inset 0 -1px 1.5px rgba(255, 255, 255, 0.32),
@@ -1095,17 +1096,18 @@ textarea {
   display: grid;
   box-sizing: border-box;
   transform-origin: 0 0;
+  will-change: transform;
 }
 .lens-view > * {
   pointer-events: none;
 }
 /* Pendant le fondu d'un changement d'onglet, les barres d'onglets restent vivantes : la lentille se voit en entier. */
 ::view-transition-old(tabbar),
-::view-transition-old(tabs-mac) {
+::view-transition-old(menu-mac) {
   display: none;
 }
 ::view-transition-new(tabbar),
-::view-transition-new(tabs-mac) {
+::view-transition-new(menu-mac) {
   animation: none;
 }
 

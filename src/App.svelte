@@ -35,7 +35,7 @@
   import TodayCard from './components/TodayCard.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
   import { smoothly } from './lib/motion';
-  import { liquidMove, liquidPress } from './lib/lens';
+  import { liquidAlready, liquidMove, liquidStart } from './lib/lens';
   import { mix, sceneTone } from './lib/scene.svelte';
   import { PAYSAGE_BG } from './lib/mapstyle';
   import { links } from './lib/links.svelte';
@@ -209,7 +209,7 @@
   let prevTab = -1;
   $effect(() => {
     const i = TABS.indexOf(tab);
-    if (prevTab >= 0 && prevTab !== i) liquidMove(tabsNav, prevTab, i);
+    if (prevTab >= 0 && prevTab !== i && !liquidAlready(tabsNav, i)) liquidMove(tabsNav, prevTab, i);
     prevTab = i;
   });
   function changeTab(t: (typeof TABS)[number]) {
@@ -268,6 +268,33 @@
 <MapView />
 {#if backdropOn}<Backdrop visible={scene} />{/if}
 
+{#if app.wide && !welcome && app.phase !== 'follow'}
+  <!--
+    Mac : le menu (logo, quatre sections, iPhone) reste toujours à la même place, en haut au centre, quel que
+    soit l'onglet ; les panneaux commencent dessous (Romain : « qu'il ne bouge pas dans tous les sens »).
+  -->
+  <header class="menu glass glass-panel" aria-label="Menu">
+          <span class="logo" aria-hidden="true">
+            <svg viewBox="0 0 1024 1024" width="36" height="36"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path class="logo-trace" pathLength="1" d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
+          </span>
+          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} bind:this={tabsNav}>
+            <span class="tab-on" aria-hidden="true"></span>
+            {#each TABS as t (t)}
+              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onpointerdown={() => liquidStart(tabsNav, TABS.indexOf(tab), TABS.indexOf(t))} onclick={() => goTab(t)}>
+                {#if t === 'profile' && community.me}
+                  <Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} />
+                {:else}
+                  <Icon name={TAB_ICON[t]} size={21} fill={tab === t} />
+                {/if}
+              </button>
+            {/each}
+          </nav>
+          <button use:tactile type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
+            <Icon name="phone" size={18} />
+          </button>
+        </header>
+{/if}
+
 {#if app.phase !== 'follow'}
   {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
   {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}<TodayCard />{/if}
@@ -283,29 +310,6 @@
   <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
   <Panel solid={fullsheet && !photo} {photo} {headless} centered={app.phase === 'community' || app.phase === 'library' || community.sheet?.kind === 'auth'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet || (!app.wide && (app.phase === 'results' || app.phase === 'detail')) ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
-      {#if app.wide}
-        <!-- Le logo, puis les quatre sections en icônes : une seule ligne, sans le nom de l'app. -->
-        <div class="brand">
-          <span class="logo" aria-hidden="true">
-            <svg viewBox="0 0 1024 1024" width="36" height="36"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path class="logo-trace" pathLength="1" d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
-          </span>
-          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} bind:this={tabsNav}>
-            <span class="tab-on" aria-hidden="true"></span>
-            {#each TABS as t (t)}
-              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onpointerdown={() => tab === t && liquidPress(tabsNav, TABS.indexOf(t))} onclick={() => goTab(t)}>
-                {#if t === 'profile' && community.me}
-                  <Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} />
-                {:else}
-                  <Icon name={TAB_ICON[t]} size={21} fill={tab === t} />
-                {/if}
-              </button>
-            {/each}
-          </nav>
-          <button use:tactile type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
-            <Icon name="phone" size={18} />
-          </button>
-        </div>
-      {/if}
       {#if app.wide && showInstall}
         <InstallGuide mode="card" onclose={() => (showInstall = false)} />
       {/if}
@@ -473,11 +477,32 @@
 </div>
 
 <style>
-  .brand {
+  /* Nom de transition seulement pendant un changement d'onglet (sinon le verre ne floute plus le fond). */
+  :global(html.vt) .menu {
+    view-transition-name: menu-mac;
+  }
+  .menu {
+    position: fixed;
+    z-index: 24;
+    top: 14px;
+    left: 50%;
+    translate: -50% 0;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 2px 0 14px;
+    padding: 6px 8px 6px 6px;
+    border-radius: 999px;
+    animation: menu-in 520ms var(--spring) backwards;
+  }
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      translate: -50% -12px;
+    }
+  }
+  .menu .tabs {
+    flex: none;
+    width: 272px;
   }
   .logo {
     display: grid;
@@ -509,7 +534,6 @@
   }
   /* Quatre sections en icônes, une pastille glisse sous la section active. */
   .tabs {
-    view-transition-name: tabs-mac;
     position: relative;
     flex: 1;
     display: grid;
@@ -530,7 +554,6 @@
       0 3px 8px rgba(0, 0, 0, 0.1),
       0 1px 1px rgba(0, 0, 0, 0.04);
     transform: translateX(calc(var(--at) * 100%));
-    transition: transform 480ms var(--spring-bouncy);
   }
   .tab {
     position: relative;
@@ -583,7 +606,7 @@
     padding: 0 0 8px;
   }
   .sheet {
-    animation: cascade-in 320ms var(--ease-out) both;
+    animation: cascade-in 320ms var(--ease-out) backwards;
   }
   .sheet-card {
     padding: 22px 18px 14px;

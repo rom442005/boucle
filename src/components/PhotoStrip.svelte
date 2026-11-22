@@ -80,7 +80,7 @@
     scroll-snap-align: start;
     background: var(--fill-2);
     transition: transform 240ms var(--spring);
-    animation: tile-in 420ms var(--spring) calc(var(--i, 0) * 40ms) both;
+    animation: tile-in 420ms var(--spring) calc(var(--i, 0) * 40ms) backwards;
   }
   @keyframes tile-in {
     from {

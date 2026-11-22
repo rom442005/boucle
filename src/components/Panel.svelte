@@ -100,7 +100,7 @@
   // Zone de carte masquée par le panneau : sert à cadrer les parcours.
   $effect(() => {
     if (app.wide) {
-      app.padding = { top: 40, bottom: app.route ? 210 : 40, left: centered ? 40 : 384 + 40, right: 80 };
+      app.padding = { top: 100, bottom: app.route ? 210 : 40, left: centered ? 40 : 384 + 40, right: 80 };
     } else if (dragH == null) {
       // Pendant la composition, la barre du départ occupe le haut ; ensuite, la carte est libre jusqu'en haut.
       const top = app.phase === 'compose' ? 128 : 40;
@@ -286,7 +286,7 @@
     will-change: height;
     contain: layout paint;
     /* À l'ouverture, le panneau monte du bas de l'écran, avec un léger rebond. */
-    animation: panel-rise 640ms var(--sheet-ease) both;
+    animation: panel-rise 640ms var(--sheet-ease) backwards;
   }
   @keyframes panel-rise {
     from {
@@ -305,8 +305,9 @@
   .panel.dragging {
     transition: none;
   }
+  /* Mac : sous le menu fixe en haut au centre (App.svelte). */
   .panel.wide {
-    top: 12px;
+    top: 76px;
     left: 12px;
     bottom: 12px;
     right: auto;
@@ -325,8 +326,12 @@
   :global(html.vt) .panel {
     transition: none;
   }
-  /* Le panneau garde son identité pendant un changement d'onglet : il glisse d'une place à l'autre. */
-  .panel {
+  /*
+   * Le panneau garde son identité pendant un changement d'onglet : il glisse d'une place à l'autre. Le nom
+   * n'est posé que pendant la transition : en permanence, il isolerait le panneau et ses blocs de verre ne
+   * verraient plus la photo derrière eux (plus de flou, texte difficile à lire).
+   */
+  :global(html.vt) .panel {
     view-transition-name: panel;
   }
   .top {
@@ -410,7 +415,7 @@
     right: 0;
     bottom: 0;
     border-radius: 0;
-    animation: panel-fade 420ms var(--ease-out) both;
+    animation: panel-fade 420ms var(--ease-out) backwards;
   }
   @keyframes panel-fade {
     from {
