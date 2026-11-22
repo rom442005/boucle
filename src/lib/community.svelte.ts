@@ -37,7 +37,7 @@ const PUBLISHED_KEY = 'boucle.publies.v1';
 
 /** Écran du panneau qui remplace le contenu habituel le temps d'une action (sans fenêtre par-dessus). */
 export type Sheet =
-  | { kind: 'auth'; reason: string; then?: () => void }
+  | { kind: 'auth'; reason: string; then?: () => void; tab?: 'profile' }
   | { kind: 'publish' }
   | { kind: 'edit' }
   | { kind: 'report'; target: ReportTarget; label: string };
@@ -185,10 +185,10 @@ class CommunityState {
    * Une action qui demande un compte : faite tout de suite si l'on est connecté (profil complet),
    * sinon après la connexion, qui s'ouvre dans le panneau.
    */
-  async requireAccount(reason: string, then: () => void) {
+  async requireAccount(reason: string, then: () => void, tab?: 'profile') {
     await this.start();
     if (this.signedIn) then();
-    else this.sheet = { kind: 'auth', reason, then };
+    else this.sheet = { kind: 'auth', reason, then, tab };
   }
 
   /* ------------------------------------------ Compte ------------------------------------------ */
@@ -323,19 +323,49 @@ class CommunityState {
     return app.userPos ?? app.start?.coord ?? null;
   }
 
+  /**
+   * Les trois fils (Autour de toi, Abonnements, Populaires), gardés pour le filtre de sport en cours : leurs
+   * chiffres s'affichent sur les blocs-onglets et changer d'onglet montre tout de suite le fil, rafraîchi ensuite.
+   */
+  private feeds: Partial<Record<FeedKind, CommunityRoute[]>> = {};
+  feedCounts = $state<Record<FeedKind, number | null>>({ nearby: null, following: null, popular: null });
+
+  private async fetchKind(kind: FeedKind) {
+    const b = await this.api();
+    const list = (await b.feed({ kind, center: this.center(), sport: this.sport })).filter((r) => !this.blocked.includes(r.authorId));
+    this.feeds[kind] = list;
+    this.feedCounts = { ...this.feedCounts, [kind]: list.length };
+    return list;
+  }
+
+  /** Une modification d'un parcours (j'aime, retrait, publication, blocage) vaut pour tous les fils gardés. */
+  private patchFeeds(change: (list: CommunityRoute[]) => CommunityRoute[]) {
+    this.feed = change(this.feed);
+    for (const k of Object.keys(this.feeds) as FeedKind[]) {
+      this.feeds[k] = change(this.feeds[k]!);
+      this.feedCounts = { ...this.feedCounts, [k]: this.feeds[k]!.length };
+    }
+  }
+
   async loadFeed() {
+    const kind = this.feedKind;
+    const kept = this.feeds[kind];
+    if (kept) this.feed = kept;
     this.loading = true;
     this.error = null;
     try {
-      const b = await this.api();
-      const list = await b.feed({ kind: this.feedKind, center: this.center(), sport: this.sport });
-      this.feed = list.filter((r) => !this.blocked.includes(r.authorId));
+      const list = await this.fetchKind(kind);
+      if (kind === this.feedKind) this.feed = list;
     } catch (e) {
-      this.error = e instanceof CommunityError ? e.message : 'Communauté indisponible pour le moment.';
-      this.feed = [];
+      if (kind === this.feedKind) {
+        this.error = e instanceof CommunityError ? e.message : 'Communauté indisponible pour le moment.';
+        this.feed = [];
+      }
     } finally {
       this.loading = false;
     }
+    // Les deux autres fils, sans attendre : leurs chiffres arrivent, leur onglet s'ouvrira déjà rempli.
+    for (const k of ['nearby', 'following', 'popular'] as const) if (k !== kind) void this.fetchKind(k).catch(() => {});
   }
 
   setFeedKind(k: FeedKind) {
@@ -346,6 +376,8 @@ class CommunityState {
 
   setSport(s: Sport | null) {
     this.sport = this.sport === s ? null : s;
+    this.feeds = {};
+    this.feedCounts = { nearby: null, following: null, popular: null };
     void this.loadFeed();
   }
 
@@ -530,7 +562,7 @@ class CommunityState {
 
   private patchRoute(r: CommunityRoute) {
     if (this.current?.id === r.id) this.current = r;
-    this.feed = this.feed.map((x) => (x.id === r.id ? r : x));
+    this.patchFeeds((list) => list.map((x) => (x.id === r.id ? r : x)));
     if (this.viewing) this.viewing = { ...this.viewing, routes: this.viewing.routes.map((x) => (x.id === r.id ? r : x)) };
   }
 
@@ -588,7 +620,7 @@ class CommunityState {
   async unpublish(r: CommunityRoute) {
     try {
       await (await this.api()).unpublish(r.id);
-      this.feed = this.feed.filter((x) => x.id !== r.id);
+      this.patchFeeds((list) => list.filter((x) => x.id !== r.id));
       for (const [local, remote] of Object.entries(this.published)) if (remote === r.id) delete this.published[local];
       writeFlag(PUBLISHED_KEY, JSON.stringify(this.published));
       if (this.viewing) this.viewing = { ...this.viewing, routes: this.viewing.routes.filter((x) => x.id !== r.id) };
@@ -638,6 +670,7 @@ class CommunityState {
       writeFlag(PUBLISHED_KEY, JSON.stringify(this.published));
       this.sheet = null;
       this.feed = [out, ...this.feed.filter((x) => x.id !== out.id)];
+      this.feeds = {};
       haptic('success');
       app.showToast('Publié dans la Communauté');
       if (opts.photos?.length) void this.addPhotos(opts.photos, out);
@@ -705,7 +738,7 @@ class CommunityState {
   }
 
   async openMyProfile() {
-    await this.requireAccount('Connecte-toi pour retrouver ton profil.', () => void this.openProfile(this.me!.id));
+    await this.requireAccount('Connecte-toi pour retrouver ton profil.', () => void this.openProfile(this.me!.id), 'profile');
   }
 
   toggleFollow(userId: string) {
@@ -732,7 +765,7 @@ class CommunityState {
         await (await this.api()).block(userId, on);
         this.blocked = on ? [...this.blocked, userId] : this.blocked.filter((x) => x !== userId);
         if (on) {
-          this.feed = this.feed.filter((r) => r.authorId !== userId);
+          this.patchFeeds((list) => list.filter((r) => r.authorId !== userId));
           this.comments = this.comments.filter((c) => c.authorId !== userId);
           this.photos = this.photos.filter((p) => p.authorId !== userId);
           if (this.following.includes(userId)) await (await this.api()).follow(userId, false);

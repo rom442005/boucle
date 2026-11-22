@@ -22,7 +22,7 @@
   const away = $derived(from ? haversine(from, r.start) : null);
 </script>
 
-<li class="c-li li" style:--i={Math.min(i, 8)}>
+<li class="c-li li glass photo-card" style:--i={Math.min(i, 8)}>
   <button use:tactile type="button" class="c-open" onclick={() => community.openRoute(r.id, r)}>
     <!-- La sortie en image : sa première photo, sinon le tracé en grand sur la teinte du sport. -->
     <span class="c-media" class:photo={!!r.cover} style:--tone={SPORT_TONE[r.sport]}>
@@ -136,8 +136,14 @@
   .c-ph {
     pointer-events: none;
   }
+  /* Un bloc de verre par parcours, sur la photo ; hors de l'écran, il n'est pas dessiné (défilement fluide). */
   .c-li {
     display: grid;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 300px;
+  }
+  .c-li.photo-card {
+    padding: 0;
   }
   .c-open {
     display: grid;

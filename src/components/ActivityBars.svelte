@@ -1,20 +1,22 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
-  import { last28, SPORT_COLOR } from '../lib/scenes';
+  import { last28, SPORT_COLOR, type DayEntry } from '../lib/scenes';
   import { SPORTS } from '../lib/sports';
   import type { Sport } from '../lib/types';
 
   /*
    * Les 28 derniers jours en barres, une par jour, colorées par sport (aujourd'hui cerclé), avec la légende
-   * des sports pratiqués : la carte « Température » d'une app santé, appliquée aux sorties.
+   * des sports pratiqués : la carte « Température » d'une app santé, appliquée aux sorties (ou, dans la
+   * Communauté, aux parcours publiés).
    */
-  const data = $derived(last28(app.history));
+  let { entries = null, label = 'Distance par jour, 28 derniers jours' }: { entries?: DayEntry[] | null; label?: string } = $props();
+  const data = $derived(last28(entries ?? app.history));
   const top = $derived(Math.max(...data.days.map((d) => d.m), 1));
   const sports = $derived([...new Set(data.days.map((d) => d.sport).filter(Boolean))] as Sport[]);
 </script>
 
 <div class="act">
-  <ol class="bars" aria-label="Distance par jour, 28 derniers jours">
+  <ol class="bars" aria-label={label}>
     {#each data.days as d, i (i)}
       <li
         class:today={i === 27}

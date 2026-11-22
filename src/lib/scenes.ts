@@ -115,7 +115,10 @@ export function recentActivity(history: HistoryEntry[], now = Date.now()) {
 export const SPORT_COLOR: Record<Sport, string> = { run: '#ff4f7b', trail: '#ffb340', road: '#5ac8fa', gravel: '#8ee35f' };
 
 /** Les 28 derniers jours : distance par jour et sport dominant du jour (le plus ancien d'abord). */
-export function last28(history: HistoryEntry[], now = Date.now()) {
+/** Une sortie, ou un parcours publié : sa date, sa longueur, son sport. */
+export type DayEntry = Pick<HistoryEntry, 'date' | 'distanceM'> & { route: { s: Sport } };
+
+export function last28(history: DayEntry[], now = Date.now()) {
   const day0 = new Date(now);
   day0.setHours(0, 0, 0, 0);
   const from = day0.getTime() - 27 * 86400000;

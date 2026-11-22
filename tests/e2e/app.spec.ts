@@ -528,6 +528,8 @@ test('mot de passe : reconnexion sans code, puis mot de passe oublié', async ({
     await page.getByRole('button', { name: 'Modifier le profil' }).click();
     await page.getByRole('button', { name: 'Se déconnecter' }).click();
     await tabs.getByRole('button', { name: 'Profil', exact: true }).click();
+    // Sans compte, l'onglet Profil reste allumé : la connexion est sa page (pas celle de la Communauté).
+    await expect(tabs.getByRole('button', { name: 'Profil', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.getByRole('button', { name: 'J’ai déjà un compte' }).click();
   };
   await signOut();

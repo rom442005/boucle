@@ -191,6 +191,24 @@ components:
 
 # Design System: Boucle
 
+## Fil rouge (direction artistique, 22/11/2026)
+
+À relire avant chaque écran, chaque bloc, chaque retouche. Source : les 5 images de Romain, gardées sur le Mac dans `references/` (hors dépôt) : calendrier en verre sur une route de montagne, app Panora sur fond de montagne, pastilles de réservation en verre chaud, widgets santé « Next Period / Temperature », onboarding en verre avec choix à émojis. Tout nouvel écran se juge contre elles.
+
+1. **Le monde, c'est la photo.** Chaque écran sans tracé à lire (accueil, connexion, Communauté, Mes parcours, profils, réglages sur iPhone) se pose sur une photo de paysage plein cadre (20 en rotation, `public/scenes/`), jamais sur un fond uni ni sur la carte. La carte n'apparaît que lorsqu'un parcours doit se lire (proposition, détail, suivi, réglages sur Mac).
+2. **Des blocs de verre posés sur la photo.** Verre fumé teinté par la photo (flou 30 px, voile sombre de 30 à 44 %), liseré clair d'un demi-pixel, rayon de 26 à 32 px (pastilles entièrement rondes), ombre longue et douce. Jamais de bloc dans un bloc. Sur Mac, une colonne centrée de 460 px ; sur iPhone, pleine largeur, 16 px de marge.
+3. **La composition des widgets santé.** En tête, un grand bloc récapitulatif : étiquette en haut à gauche, détail en haut à droite, un chiffre héros, un trait fin, puis une petite visualisation des 28 derniers jours. Ensuite des petits blocs deux par ligne (étiquette + chiffre), qui servent aussi d'onglets. Puis le contenu, en blocs larges.
+4. **Les chiffres parlent.** Grands, en graisse 600, arrondis et tabulaires, unité petite à côté. Étiquettes d'un ou deux mots, en blanc à 70 %. Aucun petit texte explicatif.
+5. **La couleur vient de la photo.** Le rose #FF2D55 seulement pour l'action principale et ce qui est choisi ; les couleurs des sports seulement dans les graphiques et les pastilles de légende. Sélection : pastille blanche pleine au texte sombre (comme « Weekly »), ou liseré blanc de 2 px autour d'un bloc.
+6. **Des graphiques fins.** Barres par jour sur 28 jours (aujourd'hui cerclé), courbe douce avec un point lumineux, piste en pointillés, légende en pastilles de couleur.
+7. **Icônes et émojis.** Icônes au trait fin (Phosphor regular) pour les actions ; un émoji par étiquette pour situer (🗓️ ⏱️ 📍 ❤️ 👣 🔥) ; boutons ronds en verre (flèche, réglage, +).
+8. **Les contrôles.** Action principale : pastille rose pleine (blanche pleine sur une photo très sombre, comme « Continue ») ; liens texte en blanc sur la photo ; choix en lignes de verre avec émoji et coche ; onglets en capsule de verre où une pastille glisse.
+9. **Le mouvement.** La photo dérive lentement et se fond toutes les 5 minutes ; les blocs montent en cascade avec un léger ressort ; le panneau glisse au centre sur Mac. Rien ne clignote.
+10. **Une seule grammaire.** Un nouvel écran reprend d'abord les blocs existants (`.cards`, `.card.wide`, `.tabcard`, `.photo-card`, `ActivityBars`) ; s'il en faut un nouveau, il rejoint ce fichier.
+
+**Avant de livrer :** photo derrière ? Seulement des blocs de verre ? Un chiffre héros par bloc ? Des étiquettes d'un ou deux mots ? Le rose réservé à l'action ? Lisible sur la photo la plus claire (s8, s17) comme sur la plus sombre (s9, s20) ?
+
+
 ## Overview
 
 **Creative North Star: "The Map Under Glass"**
@@ -436,4 +454,9 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **First launch on Mac:** only the welcome card floats on the photo; the composer panel is not rendered until the welcome closes, then slides in as usual.
 - **Password:** creating an account is still e-mail, then a 6-digit code (it proves the address), then the profile, which now ends with a password field (eye toggle, `PasswordField.svelte`, 8 characters minimum). Signing in is e-mail and password on one card; "Mot de passe oublié" sends a code and asks for the new password on the same card. The password can be changed in Modifier, Compte, Mot de passe. A visually hidden username field carries the e-mail so password managers file the credential correctly.
 - **Rotation:** 20 landscapes (lakes, forest bridge, golden valley, sea at dusk, desert road, misty hills, Dolomites, Milky Way…), each with its dominant tone, so the five-minute cycle repeats every 100 minutes.
+
+## Update 22/11/2026 (Communauté on the photo)
+
+- **Communauté** now follows Mes parcours exactly (fil rouge): on the photo, a wide summary block (feed title, place or follow count, sport emoji + route count hero, members on the right, hairline, 28-day bars of published kilometres with the sport legend), then three tab blocks on one row (Autour, Suivis, Populaires: label alone on top, emoji beside the big count, white 2 px ring when chosen), sport chips as glass pills (chosen = solid white pill, dark text), then one glass block per route (`.c-li.glass.photo-card`, `content-visibility: auto`). Empty and error states are wide glass blocks with the dashed loop. The three feeds are kept in memory per sport filter (`community.feedCounts`), so tab counts are real and switching is instant.
+- **Sign-in** always sits on the photo, as a glass block (`.sheet-card`). From the Profil tab it belongs to that tab: Profil stays lit, the title reads "Profil", no close button. On iPhone, any photo screen keeps the panel at full height, even when a tab change asks for half.
 

@@ -726,8 +726,10 @@ textarea {
 /* Chaque parcours est sa propre carte, aux coins concentriques de l'image qu'elle porte. */
 .c-list > li {
   border-radius: 28px;
-  background: var(--fill-group);
   overflow: hidden;
+}
+.c-list > li:not(.glass) {
+  background: var(--fill-group);
 }
 .c-empty {
   display: grid;

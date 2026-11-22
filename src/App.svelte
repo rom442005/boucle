@@ -86,9 +86,13 @@
   });
 
   const SHEET_TITLE = { auth: 'Communauté', publish: 'Publier', edit: 'Mon profil', report: 'Signaler' } as const;
+  /** La connexion demandée par l'onglet Profil : elle en fait partie, l'onglet reste allumé. */
+  const profileAuth = $derived(community.sheet?.kind === 'auth' && community.sheet.tab === 'profile');
   const headTitle = $derived(
     community.sheet
-      ? SHEET_TITLE[community.sheet.kind]
+      ? profileAuth
+        ? 'Profil'
+        : SHEET_TITLE[community.sheet.kind]
       : app.phase === 'results'
         ? app.routes.length > 1
           ? `${app.routes.length} propositions`
@@ -140,7 +144,7 @@
   const meView = $derived(app.phase === 'community' && community.view === 'profile' && !!community.viewing && community.viewing.profile.id === community.me?.id);
   /** Onglet actif : en haut sur Mac, en bas sur iPhone. */
   const tab = $derived<'create' | 'community' | 'library' | 'profile'>(
-    meView
+    meView || profileAuth
       ? 'profile'
       : app.phase === 'community' || (app.phase === 'detail' && app.detailFrom?.kind === 'communaute')
         ? 'community'
@@ -149,8 +153,9 @@
           : 'create',
   );
   /**
-   * Paysage en fond des écrans qui ne montrent pas de parcours : l'accueil, les réglages sur iPhone (la photo
-   * suit le sport), Mes parcours, un profil. La carte revient dès qu'il y a un tracé à voir.
+   * Paysage en fond des écrans qui ne montrent pas de parcours (fil rouge, DESIGN.md) : l'accueil, la connexion,
+   * les réglages sur iPhone (la photo suit le sport), la Communauté, Mes parcours, les profils. La carte revient
+   * dès qu'il y a un tracé à voir.
    */
   const scene = $derived(
     welcome ||
@@ -158,7 +163,8 @@
         !app.pickOnMap &&
         ((!app.wide && app.phase === 'compose' && !app.home) ||
           app.phase === 'library' ||
-          (app.phase === 'community' && community.view === 'profile' && !community.sheet))),
+          app.phase === 'community' ||
+          community.sheet?.kind === 'auth')),
   );
   /** Le paysage reste en place une fois venu : il ne fait que s'effacer, sans rien recharger. */
   let backdropOn = $state(false);
@@ -167,9 +173,10 @@
   });
   /** Sur la photo, plus de feuille : des blocs de verre (réglages sur iPhone, Mes parcours, profils). */
   const photo = $derived(!scene || welcome ? null : ('cards' as const));
-  // iPhone : Mes parcours et les profils occupent l'écran, leurs blocs flottent sur la photo.
+  // iPhone : les écrans sur la photo (Communauté, Mes parcours, profils, connexion) occupent tout l'écran, leurs
+  // blocs flottent sur la photo ; même quand un onglet remet le panneau à mi-hauteur (passage Profil → Communauté).
   $effect(() => {
-    if (photo && !app.wide && app.phase !== 'compose') app.detent = 'full';
+    if (photo && !app.wide && app.phase !== 'compose' && app.detent !== 'full') app.detent = 'full';
   });
   const TABS = ['create', 'community', 'library', 'profile'] as const;
   const TAB_LABEL = { create: 'Créer', community: 'Communauté', library: 'Mes parcours', profile: 'Profil' } as const;
@@ -233,7 +240,7 @@
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
   {:else if !welcome}
   <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
-  <Panel solid={fullsheet && !photo} {photo} centered={app.phase === 'community' || app.phase === 'library'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
+  <Panel solid={fullsheet && !photo} {photo} centered={app.phase === 'community' || app.phase === 'library' || community.sheet?.kind === 'auth'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <!-- Le logo, puis les quatre sections en icônes : une seule ligne, sans le nom de l'app. -->
@@ -264,9 +271,14 @@
       {#if community.sheet}
         <!-- Une action de la Communauté (connexion, publication, profil, signalement) prend le panneau, sans fenêtre par-dessus. -->
         <div class="nav">
-          <button use:tactile type="button" class="round navbtn" aria-label="Annuler" onclick={() => (community.sheet = null)}>
-            <Icon name="close" size={20} />
-          </button>
+          {#if profileAuth}
+            <!-- L'onglet Profil sans compte : la connexion est sa page, rien à fermer (les onglets mènent ailleurs). -->
+            <span class="navbtn-space" aria-hidden="true"></span>
+          {:else}
+            <button use:tactile type="button" class="round navbtn" aria-label="Annuler" onclick={() => (community.sheet = null)}>
+              <Icon name="close" size={20} />
+            </button>
+          {/if}
           <h2>{headTitle}</h2>
           <span class="navbtn-space" aria-hidden="true"></span>
         </div>
@@ -350,7 +362,8 @@
     {#if community.sheet}
       {@const sh = community.sheet}
       {#key sh}
-        <div class="sheet">
+        <!-- Sur la photo, l'action devient un bloc de verre, comme l'accueil. -->
+        <div class="sheet" class:sheet-card={!!photo} class:glass={!!photo} class:photo-card={!!photo}>
           {#if sh.kind === 'auth'}
             <AuthFlow reason={sh.reason} />
           {:else if sh.kind === 'publish'}
@@ -514,6 +527,10 @@
   }
   .sheet {
     animation: cascade-in 320ms var(--ease-out) both;
+  }
+  .sheet-card {
+    padding: 22px 18px 14px;
+    border-radius: 30px;
   }
   .nav h2 {
     flex: 1;
