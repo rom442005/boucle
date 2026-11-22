@@ -76,16 +76,21 @@
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+    /* Fil rouge : la photo se dissout dans la carte en perdant sa netteté, et revient en faisant le point. */
+    filter: blur(18px);
     transition:
       opacity 460ms var(--ease-out),
-      visibility 0s linear 460ms,
+      filter 520ms var(--ease-out),
+      visibility 0s linear 520ms,
       background-color 900ms var(--ease-out);
   }
   .backdrop.visible {
     opacity: 1;
     visibility: visible;
+    filter: none;
     transition:
       opacity 460ms var(--ease-out),
+      filter 620ms var(--ease-out),
       visibility 0s,
       background-color 900ms var(--ease-out);
   }

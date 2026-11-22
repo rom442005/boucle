@@ -41,6 +41,15 @@
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
 
+  // Fil rouge (DESIGN.md) : sur la carte Paysage comme en Satellite, l'interface prend le verre fumé et le texte
+  // blanc des écrans à photo ; seul le plan clair garde l'interface claire.
+  $effect(() => {
+    const world = app.mapType !== 'plan';
+    document.documentElement.classList.toggle('on-photo', world);
+    const light = !world && !matchMedia('(prefers-color-scheme: dark)').matches;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', world ? '#28312C' : light ? '#F2F1ED' : '#1E1F21');
+  });
+
   /** Premier lancement : te connecter ou créer un compte (une fois, ensuite plus jamais imposé). */
   const WELCOME_KEY = 'boucle.bienvenue';
   let welcome = $state(false);
@@ -235,7 +244,7 @@
     <BuildingsLegend />
   {/if}
 
-  {#if showTabs}<TabBar active={tab} onphoto={scene} />{/if}
+  {#if showTabs}<TabBar active={tab} onphoto={scene || app.mapType !== 'plan'} />{/if}
   {#if athome}
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
   {:else if !welcome}

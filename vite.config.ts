@@ -24,8 +24,8 @@ export default defineConfig(({ command, isPreview, mode }) => ({
         display: 'standalone',
         start_url: '.',
         scope: '.',
-        theme_color: '#F2F1ED',
-        background_color: '#F2F1ED',
+        theme_color: '#28312C',
+        background_color: '#28312C',
         categories: ['sports', 'health', 'navigation'],
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },

@@ -108,8 +108,8 @@ class AppState {
   userPos = $state<LngLat | null>(null);
   locating = $state(false);
   terrain3d = $state(false);
-  /** fond de carte : plan ou photos aériennes (mémorisé) */
-  mapType = $state<MapType>(loadFlags().satellite ? 'satellite' : 'plan');
+  /** fond de carte : Paysage (par défaut), plan clair ou photos aériennes (mémorisé) */
+  mapType = $state<MapType>(loadFlags().satellite ? 'satellite' : loadFlags().planClair ? 'plan' : 'paysage');
   bearing = $state(0);
   follow = $state.raw<FollowState | null>(null);
   /** la carte suit la position pendant le suivi (désactivé dès que l'on déplace la carte) */
@@ -132,6 +132,7 @@ class AppState {
     if (t === this.mapType) return;
     this.mapType = t;
     this.setFlag('satellite', t === 'satellite');
+    this.setFlag('planClair', t === 'plan');
   }
 
   private weatherAt: { coord: LngLat; at: number } | null = null;

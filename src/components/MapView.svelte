@@ -6,7 +6,8 @@
   import type { GeoJSONSource, Map as MLMap, Marker } from 'maplibre-gl';
   import type { FeatureCollection, GeoJSON, LineString, Polygon } from 'geojson';
   import { app, type Padding, type PlaceKind } from '../lib/state.svelte';
-  import { buildStyle, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
+  import { buildStyle, PAYSAGE_BG, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
+  import { mix, sceneTone } from '../lib/scene.svelte';
   import { cityDot, globeLabels, prefetchEarth, registerEarth } from '../lib/earth';
   import { easeInOutSine, easeOutCubic, traceEase, traceMs, traceTimeAt } from '../lib/motion';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
@@ -50,9 +51,20 @@
   let orbit = $state(false);
   /** Assez loin pour que les pastilles des côtes se chevauchent : elles s'effacent. */
   let far = $state(false);
-  let theme: Theme = dark.matches ? 'dark' : 'light';
+  /** Carte Paysage (par défaut, et sous les photos du mode Satellite) : une carte sombre aux tons des photos. */
+  let paysage = app.mapType !== 'plan';
+  let theme: Theme = paysage ? 'dark' : dark.matches ? 'dark' : 'light';
   /** Style d'origine du thème : on y relit les valeurs du plan en quittant le mode Satellite. */
-  let planStyle = buildStyle(theme);
+  let planStyle = buildStyle(theme, paysage);
+
+  /** Nouvelle palette (Paysage ou plan clair, apparence du système) : le style est reconstruit. */
+  function rebuildStyle() {
+    paysage = app.mapType !== 'plan';
+    theme = paysage ? 'dark' : dark.matches ? 'dark' : 'light';
+    ready = false;
+    planStyle = buildStyle(theme, paysage);
+    map?.setStyle(buildStyle(theme, paysage), { diff: false });
+  }
   let anim = 0;
   let lastTick = -1;
   let lastStartKey = '';
@@ -439,7 +451,7 @@
     if (!m?.getLayer('focus-veil')) return;
     const on = app.phase === 'results' || app.phase === 'detail';
     const sat = app.mapType === 'satellite';
-    m.setPaintProperty('focus-veil', 'background-color', sat ? '#0b0d10' : theme === 'dark' ? '#1e1f21' : '#f7f6f2');
+    m.setPaintProperty('focus-veil', 'background-color', sat ? '#0b0d10' : paysage ? PAYSAGE_BG : theme === 'dark' ? '#1e1f21' : '#f7f6f2');
     m.setPaintProperty('focus-veil', 'background-opacity', on ? (sat ? 0.3 : theme === 'dark' ? 0.34 : 0.42) : 0);
   }
 
@@ -506,7 +518,7 @@
     try {
       // Ombrage du relief plus marqué en 3D : les collines se lisent.
       map.setPaintProperty('hillshade', 'hillshade-exaggeration-transition', { duration: motion ? 1100 : 0, delay: 0 });
-      map.setPaintProperty('hillshade', 'hillshade-exaggeration', on ? (theme === 'dark' ? 0.55 : 0.5) : theme === 'dark' ? 0.35 : 0.28);
+      map.setPaintProperty('hillshade', 'hillshade-exaggeration', on ? (paysage ? 0.62 : theme === 'dark' ? 0.55 : 0.5) : paysage ? 0.46 : theme === 'dark' ? 0.35 : 0.28);
       if (on) {
         cancelAnimationFrame(riseAnim);
         map.setTerrain({ source: 'dem-3d', exaggeration: exaggeration() });
@@ -972,7 +984,7 @@
     registerEarth((name, load) => maplibregl.addProtocol(name, load));
     map = new maplibregl.Map({
       container: el,
-      style: buildStyle(theme),
+      style: buildStyle(theme, paysage),
       center: app.start?.coord ?? view?.center ?? NANTES,
       zoom: app.start ? 13 : (view?.zoom ?? 12.5),
       attributionControl: false,
@@ -1169,11 +1181,9 @@
     map.on('touchend', () => clearTimeout(lp));
     map.on('touchcancel', () => clearTimeout(lp));
 
+    // L'apparence du système ne change que le plan clair (le Paysage est toujours le même).
     const onTheme = () => {
-      theme = dark.matches ? 'dark' : 'light';
-      ready = false;
-      planStyle = buildStyle(theme);
-      map?.setStyle(buildStyle(theme), { diff: false });
+      if (app.mapType === 'plan') rebuildStyle();
     };
     dark.addEventListener('change', onTheme);
     if (import.meta.env.DEV) (window as unknown as { __map: MLMap }).__map = map;
@@ -1334,10 +1344,37 @@
     if (ready) untrack(applyVeil);
   });
 
-  // Plan ou Satellite : en fondu enchaîné.
+  // Paysage ou Satellite : en fondu enchaîné (même palette dessous) ; vers ou depuis le plan clair, nouveau style.
   $effect(() => {
-    void app.mapType;
-    if (ready) untrack(() => applyMapType(true));
+    const t = app.mapType;
+    untrack(() => {
+      if (!map) return;
+      const wantPaysage = t !== 'plan';
+      const wantTheme: Theme = wantPaysage ? 'dark' : dark.matches ? 'dark' : 'light';
+      if (wantPaysage !== paysage || wantTheme !== theme) rebuildStyle();
+      else if (ready) applyMapType(true);
+    });
+  });
+
+  // Paysage : le ciel et la brume de la vue inclinée prennent la teinte de la photo du moment (fil rouge).
+  $effect(() => {
+    const tone = sceneTone();
+    if (!ready || app.mapType === 'plan') return;
+    untrack(() => {
+      try {
+        map?.setSky({
+          'sky-color': mix(tone, '#9FB9C6', 0.4),
+          'horizon-color': mix(tone, '#EDE6D6', 0.55),
+          'fog-color': mix(PAYSAGE_BG, tone, 0.4),
+          'sky-horizon-blend': 0.55,
+          'horizon-fog-blend': 0.7,
+          'fog-ground-blend': 0.72,
+          'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, SPACE_ZOOM, 0],
+        });
+      } catch {
+        /* ciel refusé : la carte reste juste */
+      }
+    });
   });
 
   // Le départ ou le parcours est-il encore à l'écran ?
@@ -1685,6 +1722,12 @@
   role="region"
 ></div>
 
+<!--
+  Paysage : le haut et le bas de la carte se voilent de la teinte de la photo du moment, comme le voile des
+  écrans à photo ; le changement de photo (toutes les cinq minutes) passe en fondu. Rien ne s'y clique.
+-->
+<div class="atmo" class:on={app.mapType !== 'plan' && !space} style:--tone={sceneTone()} aria-hidden="true"></div>
+
 {#if scale}
   <!-- Échelle : 0, une barre de deux tons, une longueur ronde. -->
   <div
@@ -1692,7 +1735,7 @@
     class:on={scaleOn}
     class:wide={app.wide}
     class:low={app.wide && app.terrain3d && app.zoom >= 13.2}
-    class:night={space || app.mapType === 'satellite'}
+    class:night={space || app.mapType !== 'plan'}
     style:--w="{scale.w}px"
     aria-hidden="true"
   >
@@ -1737,6 +1780,23 @@
     position: fixed;
     inset: 0;
     z-index: 0;
+  }
+  .atmo {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    background:
+      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 58%, transparent), transparent 20%),
+      linear-gradient(to top, color-mix(in srgb, var(--tone) 42%, transparent), transparent 28%),
+      radial-gradient(130% 95% at 50% 46%, transparent 62%, color-mix(in srgb, var(--tone) 30%, transparent));
+    transition:
+      opacity 700ms var(--ease-out),
+      --tone 1200ms var(--ease-out);
+  }
+  .atmo.on {
+    opacity: 1;
   }
   /*
    * L'espace autour du globe : noir et étoiles discrètes, dans les deux apparences, comme Plans. Une lueur

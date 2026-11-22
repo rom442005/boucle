@@ -342,13 +342,20 @@ test('côtes et descentes : liste, carte et profil', async ({ page }) => {
   }
 });
 
-test('fond de carte Plan ou Satellite, gardé au prochain lancement', async ({ page, browserName }) => {
+test('fond de carte : Paysage par défaut, Plan clair ou Satellite, gardé au prochain lancement', async ({ page, browserName }) => {
   await open(page);
   if (browserName !== 'chromium') await createLoop(page);
   const type = page.getByRole('button', { name: /^Type de carte/ });
-  await expect(type).toHaveAccessibleName('Type de carte : Plan');
+  // Fil rouge : la carte Paysage, et l'interface en verre fumé comme sur les photos.
+  await expect(type).toHaveAccessibleName('Type de carte : Paysage');
+  expect(await page.evaluate(() => document.documentElement.classList.contains('on-photo'))).toBe(true);
   await type.click();
   await expect(page.getByRole('group', { name: 'Type de carte' })).toBeVisible();
+  // Le plan clair rend l'interface claire.
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await expect(type).toHaveAccessibleName('Type de carte : Plan');
+  expect(await page.evaluate(() => document.documentElement.classList.contains('on-photo'))).toBe(false);
+  await type.click();
   // Les photos aériennes de l'IGN se chargent dès que l'on passe en Satellite.
   const ortho = page.waitForRequest(/data\.geopf\.fr\/wmts/, { timeout: 20_000 });
   await page.getByRole('button', { name: 'Satellite' }).click();

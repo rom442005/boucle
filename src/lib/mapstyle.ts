@@ -8,8 +8,11 @@ import { EARTH_FLAT, earthTiles, globeLabels, graticule } from './earth';
  */
 
 export type Theme = 'light' | 'dark';
-/** Fond de carte : le plan maison, ou les photos aériennes (avec les noms de lieux par-dessus). */
-export type MapType = 'plan' | 'satellite';
+/**
+ * Fond de carte : le Paysage (par défaut, aux tons des photos de l'app, fil rouge de DESIGN.md), le plan clair
+ * maison, ou les photos aériennes (avec les noms de lieux par-dessus).
+ */
+export type MapType = 'paysage' | 'plan' | 'satellite';
 
 /*
  * Vu de loin, la carte est un globe (comme dans Plans) : la Terre vue de l'espace, avec son atmosphère.
@@ -130,6 +133,48 @@ const DARK: Palette = {
   horizon: '#25272C',
 };
 
+/*
+ * Paysage : la carte vue comme les photos de l'app, un paysage au crépuscule vu d'en haut. Terres mousse,
+ * forêts profondes, eau sarcelle, champs olive, sable chaud ; routes claires et sentiers crème qui ressortent ;
+ * relief éclairé d'une lumière chaude ; noms en blanc cerné d'ombre, comme le texte posé sur les photos. Le
+ * verre fumé de l'interface s'y pose comme sur un paysage, et le ciel en 3D prend la teinte de la photo du moment.
+ */
+const PAYSAGE: Palette = {
+  bg: '#28312C',
+  residential: '#2F3733',
+  industrial: '#31353A',
+  wood: '#1C3324',
+  park: '#284530',
+  fields: '#3A3B2B',
+  meadow: '#2D3B2C',
+  wetland: '#223937',
+  sand: '#4B4535',
+  water: '#18404F',
+  building: '#39413C',
+  buildingLine: '#454E48',
+  casing: '#1A201C',
+  road: '#515B55',
+  roadMajor: '#77827B',
+  motorway: '#B89F6C',
+  motorwayCasing: '#3A3122',
+  path: '#D9CEB0',
+  track: '#B5A985',
+  rail: '#4B544E',
+  label: '#F3F2EC',
+  labelSoft: '#BFC4BA',
+  halo: 'rgba(14,20,17,0.8)',
+  waterLabel: '#9CCBDD',
+  hillShadow: 'rgba(0,0,0,0.5)',
+  hillHighlight: 'rgba(255,232,190,0.14)',
+  hillAccent: 'rgba(0,0,0,0.22)',
+  routeCasing: '#0E1210',
+  b3d: ['#4B473D', '#4F5852', '#5E6C7F'],
+  sky: '#3E5A61',
+  horizon: '#8FA3A0',
+};
+/** Couleurs du Paysage reprises hors du style (voile de mise au point, fond de page pendant le chargement). */
+export const PAYSAGE_BG = PAYSAGE.bg;
+
 /** Écritures du globe, comme dans Plans : continents espacés en capitales, océans en italique bleu, villes en blanc. */
 interface GlobeInk {
   continent: string;
@@ -190,8 +235,9 @@ const zw = (stops: [number, number][], base = 1.45): ExpressionSpecification =>
 export { DEM_TILES } from './terrain';
 import { DEM_TILES } from './terrain';
 
-export function buildStyle(theme: Theme): StyleSpecification {
-  const c = theme === 'dark' ? DARK : LIGHT;
+export function buildStyle(theme: Theme, paysage = false): StyleSpecification {
+  // Le Paysage est une carte sombre : il suit le thème sombre pour tout le reste (globe, tracé, marqueurs).
+  const c = paysage ? PAYSAGE : theme === 'dark' ? DARK : LIGHT;
   const g = GLOBE[theme];
   const globeCity: Pick<SymbolLayerSpecification, 'type' | 'layout' | 'paint'> = {
     type: 'symbol',
@@ -295,7 +341,7 @@ export function buildStyle(theme: Theme): StyleSpecification {
       type: 'hillshade',
       source: 'dem-hs',
       paint: {
-        'hillshade-exaggeration': theme === 'dark' ? 0.35 : 0.28,
+        'hillshade-exaggeration': paysage ? 0.46 : theme === 'dark' ? 0.35 : 0.28,
         'hillshade-shadow-color': c.hillShadow,
         'hillshade-highlight-color': c.hillHighlight,
         'hillshade-accent-color': c.hillAccent,

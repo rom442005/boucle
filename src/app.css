@@ -103,6 +103,13 @@
   }
 }
 
+/* Teinte de la photo du moment (carte Paysage) : déclarée pour passer en fondu d'une photo à l'autre. */
+@property --tone {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2e4a52;
+}
+
 *,
 *::before,
 *::after {
@@ -129,6 +136,11 @@ body {
   body {
     background: #1e1f21;
   }
+}
+/* Carte Paysage : le fond de page a sa couleur, pas d'éclair clair pendant le chargement des tuiles. */
+html.on-photo,
+html.on-photo body {
+  background: #28312c;
 }
 
 body {

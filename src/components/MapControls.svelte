@@ -35,6 +35,7 @@
     return ORTHO_TILES.replace('{z}', String(z)).replace('{y}', String(y)).replace('{x}', String(x));
   }
   const thumb = $derived(orthoThumb(app.start?.coord ?? [-1.5536, 47.2184]));
+  const TYPE_LABEL: Record<MapType, string> = { paysage: 'Paysage', plan: 'Plan', satellite: 'Satellite' };
 
   function choose(t: MapType) {
     haptic('tap');
@@ -57,7 +58,7 @@
   <button use:tactile
     type="button"
     class="round type-btn"
-    aria-label="Type de carte : {app.mapType === 'satellite' ? 'Satellite' : 'Plan'}"
+    aria-label="Type de carte : {TYPE_LABEL[app.mapType]}"
     aria-haspopup="true"
     aria-expanded={open}
     onclick={() => {
@@ -65,7 +66,7 @@
       open = !open;
     }}
   >
-    <Icon name={app.mapType === 'satellite' ? 'globe' : 'map'} size={21} />
+    <Icon name={app.mapType === 'satellite' ? 'globe' : app.mapType === 'paysage' ? 'mountains' : 'map'} size={21} />
   </button>
   <span class="sep" aria-hidden="true"></span>
   {/if}
@@ -109,6 +110,20 @@
 {#if open}
   <div class="types glass glass-panel" class:wide={app.wide} role="group" aria-label="Type de carte">
     <div class="opts">
+      <!-- Paysage : la carte aux tons des photos de l'app (fil rouge), par défaut. -->
+      <button use:tactile type="button" class="opt" aria-pressed={app.mapType === 'paysage'} onclick={() => choose('paysage')}>
+        <span class="thumb paysage" aria-hidden="true">
+          <svg viewBox="0 0 96 64" preserveAspectRatio="xMidYMid slice">
+            <rect width="96" height="64" class="t-land" />
+            <path d="M58 0h38v30c-10 4-20 2-28-4S56 10 58 0Z" class="t-park" />
+            <path d="M0 46c18-6 30 4 46 0s26-12 50-6v24H0Z" class="t-water" />
+            <path d="M-4 22 L100 34 M30 -4 L40 70 M66 -4 L60 40" class="t-road-c" />
+            <path d="M-4 22 L100 34 M30 -4 L40 70 M66 -4 L60 40" class="t-road" />
+            <path d="M24 30c-4-12 10-20 22-14s18 2 22 10-4 16-16 14-24 2-28-10Z" class="t-route" />
+          </svg>
+        </span>
+        <span class="opt-label">Paysage</span>
+      </button>
       <button use:tactile type="button" class="opt" aria-pressed={app.mapType === 'plan'} onclick={() => choose('plan')}>
         <span class="thumb plan" aria-hidden="true">
           <svg viewBox="0 0 96 64" preserveAspectRatio="xMidYMid slice">
@@ -204,7 +219,7 @@
     }
   }
 
-  /* Choix du fond de carte : deux vignettes, à gauche de la pilule. */
+  /* Choix du fond de carte : trois vignettes, à gauche de la pilule. */
   .types {
     position: fixed;
     z-index: 16;
@@ -313,6 +328,22 @@
     .t-road {
       stroke: #47484d;
     }
+  }
+  /* Vignette Paysage : les couleurs de la carte Paysage (mapstyle.ts), dans les deux apparences. */
+  .paysage .t-land {
+    fill: #28312c;
+  }
+  .paysage .t-park {
+    fill: #284530;
+  }
+  .paysage .t-water {
+    fill: #18404f;
+  }
+  .paysage .t-road-c {
+    stroke: #1a201c;
+  }
+  .paysage .t-road {
+    stroke: #929c95;
   }
   @keyframes types-in {
     from {
