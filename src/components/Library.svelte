@@ -72,7 +72,7 @@
 <div class="cards">
   <!-- Le mois en un coup d'œil, puis les 28 derniers jours en barres, comme les blocs d'une app santé. -->
   <section class="card wide glass photo-card" aria-label="Ce mois-ci">
-    <div class="row"><span class="k">🗓️ {monthTitle}</span><span class="k">⏱️ {month.time ? duration(month.time) : '0 min'}</span></div>
+    <div class="card-top"><span class="k">🗓️ {monthTitle}</span><span class="k">⏱️ {month.time ? duration(month.time) : '0 min'}</span></div>
     <div class="m">
       <span class="emo" aria-hidden="true">{mainSport}</span>
       <b class="big rounded tabular">{month.km.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}<small>km</small></b>
@@ -200,7 +200,7 @@
     font-weight: 500;
     color: var(--label-2);
   }
-  .row {
+  .card-top {
     display: flex;
     justify-content: space-between;
   }

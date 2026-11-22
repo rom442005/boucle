@@ -2,6 +2,8 @@
   import Icon from './Icon.svelte';
   import Segmented from './Segmented.svelte';
   import Avatar from './Avatar.svelte';
+  import PasswordField from './PasswordField.svelte';
+  import { app } from '../lib/state.svelte';
   import { links } from '../lib/links.svelte';
   import { untrack } from 'svelte';
   import { community } from '../lib/community.svelte';
@@ -28,6 +30,13 @@
   let bio = $state(me?.bio ?? '');
   let avatar = $state<string | null>(me?.avatar ?? null);
   let confirmDelete = $state(false);
+  /** à la création : le mot de passe qui servira à se reconnecter sans code */
+  let password = $state('');
+  /** dans Compte : changer de mot de passe */
+  let pwOpen = $state(false);
+  let newPassword = $state('');
+  let pwBusy = $state(false);
+  let pwError = $state<string | null>(null);
   let deleting = $state(false);
   let avatarBusy = $state(false);
   let picker = $state<HTMLInputElement>();
@@ -69,9 +78,11 @@
     if (!birthYear || birthYear < 1900 || birthYear > year) return void (error = 'Indique ton année de naissance.');
     if (age != null && age < 15) return void (error = 'Boucle est réservé aux personnes de 15 ans et plus.');
     if (!sports.length) return void (error = 'Choisis au moins un sport.');
+    if (creating && password.length < 8) return void (error = 'Mot de passe trop court : 8 caractères au moins.');
     if (!accept) return void (error = 'Pour créer ton compte, accepte les conditions d’utilisation.');
     busy = true;
     try {
+      if (creating) await community.setPassword(password);
       await community.saveProfile(
         {
           firstName: firstName.trim(),
@@ -90,6 +101,25 @@
       haptic('warn');
     } finally {
       busy = false;
+    }
+  }
+
+  async function changePassword(e: SubmitEvent) {
+    e.preventDefault();
+    pwError = null;
+    if (newPassword.length < 8) return void (pwError = 'Mot de passe trop court : 8 caractères au moins.');
+    pwBusy = true;
+    try {
+      await community.setPassword(newPassword);
+      haptic('success');
+      app.showToast('Mot de passe enregistré');
+      pwOpen = false;
+      newPassword = '';
+    } catch (err) {
+      pwError = err instanceof CommunityError ? err.message : 'Mot de passe refusé : choisis-en un autre.';
+      haptic('warn');
+    } finally {
+      pwBusy = false;
     }
   }
 </script>
@@ -153,6 +183,9 @@
   </label>
 
   {#if creating}
+    <!-- Pour que le gestionnaire de mots de passe range celui-ci avec la bonne adresse. -->
+    <input class="visually-hidden" type="email" autocomplete="username" value={community.session?.email ?? ''} readonly tabindex="-1" aria-hidden="true" />
+    <PasswordField bind:value={password} autocomplete="new-password" placeholder="8 caractères au moins" />
     <label class="accept">
       <input type="checkbox" class="check" bind:checked={accept} />
       <span>J’accepte les <a href={pageUrl('conditions.html')} target="_blank" rel="noopener">conditions d’utilisation</a> et la <a href={pageUrl('confidentialite.html')} target="_blank" rel="noopener">politique de confidentialité</a>.</span>
@@ -168,6 +201,20 @@
   <!-- Le compte, rangé ici pour alléger le profil. -->
   <h3 class="field-label acct-h">Compte</h3>
   <div class="group">
+    <button use:tactile type="button" class="row link" aria-expanded={pwOpen} onclick={() => {
+        pwOpen = !pwOpen;
+        pwError = null;
+      }}>
+      <span class="row-icon"><Icon name="key" size={20} /></span><span class="row-label">Mot de passe</span>
+    </button>
+    {#if pwOpen}
+      <form class="pw-form" onsubmit={changePassword} novalidate>
+        <input class="visually-hidden" type="email" autocomplete="username" value={community.session?.email ?? ''} readonly tabindex="-1" aria-hidden="true" />
+        <PasswordField bind:value={newPassword} label="Nouveau mot de passe" autocomplete="new-password" placeholder="8 caractères au moins" />
+        {#if pwError}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{pwError}</span></div>{/if}
+        <button use:tactile type="submit" class="cta" disabled={pwBusy}>{pwBusy ? 'Enregistrement…' : 'Enregistrer'}</button>
+      </form>
+    {/if}
     <button use:tactile type="button" class="row link" onclick={() => community.signOut()}>
       <span class="row-icon"><Icon name="signout" size={20} /></span><span class="row-label">Se déconnecter</span>
     </button>
@@ -209,6 +256,11 @@
 <style>
   .acct-h {
     margin: 22px 0 8px;
+  }
+  .pw-form {
+    display: grid;
+    gap: 10px;
+    padding: 4px 14px 14px;
   }
   .link {
     width: 100%;

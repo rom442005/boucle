@@ -197,7 +197,8 @@ class CommunityState {
     await (await this.api()).sendCode(email.trim());
   }
 
-  private verifying = false;
+  /** connexion en cours (code ou mot de passe) : le profil n'est pas encore chargé, rien ne doit s'ouvrir */
+  verifying = $state(false);
 
   /**
    * Connecté par le lien de l'e-mail (dans cet onglet ou un autre) : l'action en attente reprend,
@@ -222,12 +223,33 @@ class CommunityState {
     history.replaceState(null, '', location.pathname + location.search);
   }
 
-  /** Code reçu : connecté ; reste le profil à remplir s'il n'existe pas encore. */
-  async verifyCode(email: string, code: string): Promise<'done' | 'profile'> {
+  /**
+   * Code reçu : connecté ; reste le profil à remplir s'il n'existe pas encore. Mot de passe oublié : le
+   * nouveau est enregistré dans la foulée, avant de reprendre.
+   */
+  async verifyCode(email: string, code: string, newPassword?: string): Promise<'done' | 'profile'> {
     const b = await this.api();
+    return this.enter(async () => {
+      const s = await b.verifyCode(email.trim(), code.trim());
+      if (newPassword) await b.setPassword(newPassword);
+      return s;
+    });
+  }
+
+  /** Connexion par mot de passe, sans e-mail à attendre. */
+  async signInWithPassword(email: string, password: string): Promise<'done' | 'profile'> {
+    const b = await this.api();
+    return this.enter(() => b.signInWithPassword(email.trim(), password));
+  }
+
+  async setPassword(password: string) {
+    await (await this.api()).setPassword(password);
+  }
+
+  private async enter(signIn: () => Promise<Session>): Promise<'done' | 'profile'> {
     this.verifying = true;
     try {
-      this.session = await b.verifyCode(email.trim(), code.trim());
+      this.session = await signIn();
     } finally {
       this.verifying = false;
     }

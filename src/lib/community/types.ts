@@ -184,6 +184,10 @@ export interface CommunityBackend {
   /** envoie un code à 6 chiffres par e-mail (création de compte ou connexion) */
   sendCode(email: string): Promise<void>;
   verifyCode(email: string, code: string): Promise<Session>;
+  /** connexion par mot de passe (choisi avec le profil, à la création du compte) */
+  signInWithPassword(email: string, password: string): Promise<Session>;
+  /** choisit ou change le mot de passe du compte connecté */
+  setPassword(password: string): Promise<void>;
   signOut(): Promise<void>;
   /** supprime le compte et tout ce qui en dépend (parcours, j'aime, commentaires, abonnements) */
   deleteAccount(): Promise<void>;

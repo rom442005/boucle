@@ -426,7 +426,14 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 **Summary blocks**: short, factual widgets with native emoji and small bar charts, never explanations. The "Aujourd'hui" widget floats on the map (iPhone home, Mac composer): weather emoji and temperature, sunrise or sunset, wind, then this week's distance with seven day bars (today in pink). Mes parcours opens on a month summary (main sport emoji, km, outings, time, favourites) with eight weekly bars. Profile stats carry emoji (🗺️ 👥 ❤️). Route fit checks start with an emoji (📏 ⛰️ 🌲 💧 📍).
 
 ### Update 22/11/2026: rotation, icon tabs, fluidity
-- Seven HD photos (`public/scenes/s1..s7`, `-m` portrait 1290 px for phones, `-l` 2560 px for large screens) rotate every five minutes, the same everywhere at the same moment (`sceneAt`), cross-faded over 1.2 s; the next one is fetched and decoded 40 s ahead. The backdrop stays mounted once shown and only fades (460 ms), so going from a map screen to a photo screen never reloads anything.
+- Twenty HD photos (`public/scenes/s1..s20`, `-m` portrait 1290 x 2600 for phones, `-l` 2560 px landscape for large screens) rotate every five minutes, the same everywhere at the same moment (`sceneAt`), cross-faded over 1.2 s; the next one is fetched and decoded 40 s ahead. The backdrop stays mounted once shown and only fades (460 ms), so going from a map screen to a photo screen never reloads anything.
 - Sections are icons only (path, users, bookmark, avatar). iPhone: a floating Liquid Glass capsule tab bar with a pink pill sliding under the active icon on a bouncy spring. Mac: the logo (its loop draws itself) and the same icon segmented control on one row; the app name is gone.
 - Tab changes cross-fade through View Transitions (240 ms). The Community feed and the current photo are prepared at idle, so the first open is instant.
 - The "Aujourd'hui" widget keeps only weather, light and wind.
+
+## Update 22/11/2026 (accounts)
+
+- **First launch on Mac:** only the welcome card floats on the photo; the composer panel is not rendered until the welcome closes, then slides in as usual.
+- **Password:** creating an account is still e-mail, then a 6-digit code (it proves the address), then the profile, which now ends with a password field (eye toggle, `PasswordField.svelte`, 8 characters minimum). Signing in is e-mail and password on one card; "Mot de passe oublié" sends a code and asks for the new password on the same card. The password can be changed in Modifier, Compte, Mot de passe. A visually hidden username field carries the e-mail so password managers file the credential correctly.
+- **Rotation:** 20 landscapes (lakes, forest bridge, golden valley, sea at dusk, desert road, misty hills, Dolomites, Milky Way…), each with its dominant tone, so the five-minute cycle repeats every 100 minutes.
+

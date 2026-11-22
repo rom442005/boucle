@@ -96,6 +96,8 @@ import send from '@phosphor-icons/core/assets/fill/paper-plane-right-fill.svg?ra
 import prohibit from '@phosphor-icons/core/assets/regular/prohibit.svg?raw';
 import lock from '@phosphor-icons/core/assets/regular/lock-simple.svg?raw';
 import eyeSlash from '@phosphor-icons/core/assets/regular/eye-slash.svg?raw';
+import eye from '@phosphor-icons/core/assets/regular/eye.svg?raw';
+import key from '@phosphor-icons/core/assets/regular/key.svg?raw';
 import userPlus from '@phosphor-icons/core/assets/regular/user-plus.svg?raw';
 import userCheck from '@phosphor-icons/core/assets/regular/user-check.svg?raw';
 import more from '@phosphor-icons/core/assets/regular/dots-three.svg?raw';
@@ -114,7 +116,7 @@ export const ICONS = {
   down, close, again, swap, share, download, link, play, stop, trash, pencil, check, approx, warning, wind, drop, bulb, road,
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
-  heart, chat, users, user, signout, report, send, prohibit, lock, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
+  heart, chat, users, user, signout, report, send, prohibit, lock, key, eye, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
   camera, images, caretLeft, caretRight, grid,
 } as const;
 

@@ -4,7 +4,8 @@
   import { haptic, tactile } from '../lib/haptics';
 
   /*
-   * Premier lancement : la carte en fond, voilée, et une seule question : te connecter ou créer un compte.
+   * Premier lancement : le paysage en fond et une seule question : te connecter ou créer un compte.
+   * Sur Mac, le panneau de création attend derrière (App.svelte) : seul cet accueil est à l'écran.
    * Créer des parcours reste possible sans compte (l'App Store l'exige) : « Plus tard », en petit.
    */
   let { onclose }: { onclose: () => void } = $props();
@@ -47,7 +48,7 @@
       </div>
     {:else}
       <div class="auth glass photo-card">
-        <AuthFlow reason={mode === 'create' ? 'Un code par e-mail suffit, sans mot de passe.' : 'Un code par e-mail te reconnecte, sans mot de passe.'} />
+        <AuthFlow start={mode} />
         <button use:tactile type="button" class="later" onclick={() => (step = 'hello')}>Retour</button>
       </div>
     {/if}

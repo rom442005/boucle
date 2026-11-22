@@ -418,6 +418,7 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await page.getByRole('textbox', { name: 'Prénom' }).fill('Camille');
   await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('1998');
   await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Course' }).click();
+  await page.getByLabel('Mot de passe', { exact: true }).fill('Camille-2026');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Créer mon profil' }).click();
   await expect(feed.getByRole('button', { name: /^J’aime/ }).first()).toHaveAttribute('aria-pressed', 'true');
@@ -461,6 +462,8 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
 test('premier lancement : créer un compte, puis les quatre onglets', async ({ page, browserName }) => {
   await page.goto('./');
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toBeVisible();
+  // Seul l'accueil est à l'écran : le panneau de création attend derrière (Mac compris).
+  await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Créer un compte' }).click();
   await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('nouveau@exemple.fr');
   await page.getByRole('button', { name: 'Recevoir un code' }).click();
@@ -469,6 +472,7 @@ test('premier lancement : créer un compte, puis les quatre onglets', async ({ p
   await page.getByRole('textbox', { name: 'Prénom' }).fill('Sam');
   await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('2000');
   await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Vélo' }).click();
+  await page.getByLabel('Mot de passe', { exact: true }).fill('Sam-velo-2026');
   await page.locator('.welcome').getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Créer mon profil' }).click();
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
@@ -493,6 +497,62 @@ test('premier lancement : créer un compte, puis les quatre onglets', async ({ p
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
   await page.waitForTimeout(1500);
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
+});
+
+test('mot de passe : reconnexion sans code, puis mot de passe oublié', async ({ page }) => {
+  await page.goto('./?demo=communaute');
+  const welcome = page.getByRole('dialog', { name: 'Boucle' });
+  await welcome.getByRole('button', { name: 'Créer un compte' }).click();
+  await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('lea@exemple.fr');
+  await page.getByRole('button', { name: 'Recevoir un code' }).click();
+  await page.getByRole('textbox', { name: /Code à 6 chiffres/ }).fill('123456');
+  await page.getByRole('button', { name: 'Valider' }).click();
+  await page.getByRole('textbox', { name: 'Prénom' }).fill('Léa');
+  await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('1999');
+  await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Trail' }).click();
+  // Trop court : refusé, avec la raison.
+  await page.getByLabel('Mot de passe', { exact: true }).fill('court');
+  await page.locator('.welcome').getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Créer mon profil' }).click();
+  await expect(page.getByText('Mot de passe trop court : 8 caractères au moins.')).toBeVisible();
+  // L'œil montre le mot de passe en clair.
+  await page.getByLabel('Mot de passe', { exact: true }).fill('Lea-trail-2026');
+  await page.getByRole('button', { name: 'Afficher le mot de passe' }).click();
+  await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveAttribute('type', 'text');
+  await page.getByRole('button', { name: 'Créer mon profil' }).click();
+  await expect(welcome).toHaveCount(0);
+  // Déconnexion, puis retour par l'onglet Profil : e-mail et mot de passe, sans e-mail à attendre.
+  const tabs = page.getByRole('navigation', { name: 'Sections' });
+  const signOut = async () => {
+    await tabs.getByRole('button', { name: 'Profil', exact: true }).click();
+    await page.getByRole('button', { name: 'Modifier le profil' }).click();
+    await page.getByRole('button', { name: 'Se déconnecter' }).click();
+    await tabs.getByRole('button', { name: 'Profil', exact: true }).click();
+    await page.getByRole('button', { name: 'J’ai déjà un compte' }).click();
+  };
+  await signOut();
+  await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('lea@exemple.fr');
+  await page.getByLabel('Mot de passe', { exact: true }).fill('pas-le-bon-1');
+  await page.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByText('E-mail ou mot de passe incorrect.')).toBeVisible();
+  await page.getByLabel('Mot de passe', { exact: true }).fill('Lea-trail-2026');
+  await page.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByRole('region', { name: /^Profil de Léa/ })).toBeVisible();
+  // Mot de passe oublié : un code, et le nouveau dans la foulée.
+  await signOut();
+  await page.getByRole('button', { name: 'Mot de passe oublié' }).click();
+  await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('lea@exemple.fr');
+  await page.getByRole('button', { name: 'Recevoir un code' }).click();
+  await page.getByRole('textbox', { name: /Code à 6 chiffres/ }).fill('123456');
+  await page.getByLabel('Nouveau mot de passe').fill('Lea-trail-2027');
+  await page.getByRole('button', { name: 'Valider' }).click();
+  await expect(page.getByRole('region', { name: /^Profil de Léa/ })).toBeVisible();
+  // Le nouveau mot de passe sert à la connexion suivante.
+  await signOut();
+  await page.getByRole('textbox', { name: 'Adresse e-mail' }).fill('lea@exemple.fr');
+  await page.getByLabel('Mot de passe', { exact: true }).fill('Lea-trail-2027');
+  await page.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByRole('region', { name: /^Profil de Léa/ })).toBeVisible();
 });
 
 // Garde-fou des mises à jour (MapLibre 6 a d'abord laissé la carte vide et décalé le cadrage) : la carte

@@ -373,3 +373,44 @@ drop policy if exists "ma santé" on public.health_days;
 create policy "ma santé" on public.health_days for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 revoke all on public.health_days from anon;
 grant select, insert, update, delete on public.health_days to authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Espace d'administration : une ligne par membre, avec tout ce qui le concerne, lisible dans le tableau
+-- de bord Supabase (Table Editor, schéma « admin », vue « membres »). Ce schéma n'est pas publié par l'API :
+-- ni l'app ni les visiteurs n'y ont accès. Les mots de passe n'y figurent pas : Supabase n'en garde qu'une
+-- empreinte (bcrypt) que personne ne peut relire ; la colonne dit seulement si le membre en a choisi un.
+create schema if not exists admin;
+revoke all on schema admin from public, anon, authenticated;
+
+create or replace view admin.membres as
+select
+  u.id,
+  u.email,
+  u.created_at as inscrit_le,
+  u.last_sign_in_at as derniere_connexion,
+  u.email_confirmed_at is not null as email_confirme,
+  coalesce(u.encrypted_password, '') <> '' as mot_de_passe,
+  p.first_name as prenom,
+  p.city as ville,
+  p.level as niveau,
+  p.sports,
+  p.practice_years as annees_de_pratique,
+  pp.birth_year as annee_de_naissance,
+  p.bio as presentation,
+  p.avatar_path is not null as photo_de_profil,
+  (select count(*) from public.routes r where r.author_id = u.id) as parcours_publies,
+  (select count(*) from public.route_photos ph where ph.author_id = u.id) as photos,
+  (select count(*) from public.likes l where l.user_id = u.id) as jaime_donnes,
+  (select count(*) from public.comments c where c.author_id = u.id) as commentaires,
+  (select count(*) from public.follows f where f.followee_id = u.id) as abonnes,
+  (select count(*) from public.follows f where f.follower_id = u.id) as abonnements,
+  (select max(h.updated_at) from public.health_days h where h.user_id = u.id) as sante_dernier_envoi,
+  (select h.source from public.health_days h where h.user_id = u.id order by h.updated_at desc limit 1) as sante_telephone,
+  exists (select 1 from public.strava_links s where s.user_id = u.id) as strava_relie,
+  (select count(*) from public.reports rp where rp.profile_id = u.id and rp.status = 'open') as signalements_ouverts
+from auth.users u
+left join public.profiles p on p.id = u.id
+left join public.profiles_private pp on pp.id = u.id
+order by u.created_at desc;
+
+revoke all on admin.membres from public, anon, authenticated;

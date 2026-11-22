@@ -109,7 +109,7 @@
 
   {#if st}
     <section class="card wide glass photo-card" aria-label="Strava">
-      <div class="row"><span class="k"><i class="strava-dot" aria-hidden="true"></i>Strava · cette année</span><span class="k">{st.athlete ?? ''}</span></div>
+      <div class="card-top"><span class="k"><i class="strava-dot" aria-hidden="true"></i>Strava · cette année</span><span class="k">{st.athlete ?? ''}</span></div>
       <div class="pair">
         <span><b class="big2 rounded tabular">{kmText(st.ytd?.run.distance ?? 0)}<small>km</small></b><span class="k">🏃 {st.ytd?.run.count ?? 0} courses</span></span>
         <span><b class="big2 rounded tabular">{kmText(st.ytd?.ride.distance ?? 0)}<small>km</small></b><span class="k">🚴 {st.ytd?.ride.count ?? 0} sorties vélo</span></span>
@@ -139,7 +139,7 @@
     </section>
     {#if hd.last}
       <section class="card wide glass photo-card" aria-label="Dernière sortie">
-        <div class="row"><span class="k">Dernière sortie · {dateShortFr(hd.last.start)}</span>{#if hd.last.source}<span class="k">via {hd.last.source}</span>{/if}</div>
+        <div class="card-top"><span class="k">Dernière sortie · {dateShortFr(hd.last.start)}</span>{#if hd.last.source}<span class="k">via {hd.last.source}</span>{/if}</div>
         <b class="big2 rounded tabular">{hd.last.sport === 'ride' ? '🚴' : hd.last.sport === 'walk' ? '🥾' : '🏃'} {kmText(hd.last.distance)}<small>km</small></b>
         <span class="k tabular">{duration(hd.last.time)}{hd.last.kcal ? ` · 🔥 ${hd.last.kcal}${NNBSP}kcal` : ''}</span>
       </section>
@@ -148,7 +148,7 @@
 
   {#if month}
     <section class="card wide glass photo-card" aria-label="28 derniers jours">
-      <div class="row">
+      <div class="card-top">
         <span class="k">28 derniers jours</span>
         <span class="k">{month.active} sortie{month.active > 1 ? 's' : ''}</span>
       </div>
@@ -329,7 +329,7 @@
     font-size: 1.625rem;
     letter-spacing: 0.06em;
   }
-  .row {
+  .card-top {
     display: flex;
     justify-content: space-between;
   }

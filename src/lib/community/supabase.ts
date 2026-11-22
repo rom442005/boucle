@@ -152,6 +152,10 @@ const toComment = (c: CommentRow): Comment => ({
 function fail(e: { message?: string; code?: string; status?: number } | null, fallback: string): never {
   const msg = e?.message ?? '';
   if (/15 ans/.test(msg)) throw new CommunityError('Boucle est réservé aux personnes de 15 ans et plus.');
+  if (e?.code === 'invalid_credentials' || /invalid login credentials/i.test(msg)) throw new CommunityError('E-mail ou mot de passe incorrect.');
+  if (e?.code === 'weak_password' || /password should|weak/i.test(msg)) throw new CommunityError('Mot de passe trop court : 8 caractères au moins.');
+  if (e?.code === 'reauthentication_needed' || /reauthenticat/i.test(msg)) throw new CommunityError('Par sécurité, reconnecte-toi avec un code, puis change ton mot de passe.');
+  if (e?.code === 'email_not_confirmed') throw new CommunityError('Adresse pas encore confirmée : utilise le code reçu par e-mail.');
   if (/token.*(expired|invalid)|otp/i.test(msg)) throw new CommunityError('Code incorrect ou expiré. Demande un nouveau code.');
   if (/rate limit|too many/i.test(msg)) throw new CommunityError('Trop de demandes : réessaie dans quelques minutes.');
   if (/fetch|network/i.test(msg)) throw new CommunityError('Pas de connexion : réessaie quand le réseau revient.');
@@ -193,6 +197,16 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       const { data, error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
       if (error || !data.session) fail(error, 'Code incorrect ou expiré. Demande un nouveau code.');
       return toSession(data.session)!;
+    },
+    async signInWithPassword(email, password) {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error || !data.session) fail(error, 'E-mail ou mot de passe incorrect.');
+      return toSession(data.session)!;
+    },
+    async setPassword(password) {
+      const { error } = await sb.auth.updateUser({ password });
+      // Le même mot de passe qu'avant : rien à changer.
+      if (error && error.code !== 'same_password') fail(error, 'Mot de passe refusé : choisis-en un autre.');
     },
     async signOut() {
       await sb.auth.signOut();

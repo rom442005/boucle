@@ -231,7 +231,8 @@
   {#if showTabs}<TabBar active={tab} onphoto={scene} />{/if}
   {#if athome}
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
-  {:else}
+  {:else if !welcome}
+  <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
   <Panel solid={fullsheet && !photo} {photo} centered={app.phase === 'community' || app.phase === 'library'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}

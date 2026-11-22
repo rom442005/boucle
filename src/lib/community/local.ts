@@ -38,7 +38,8 @@ interface StoredComment {
   createdAt: number;
 }
 interface Db {
-  users: { id: string; email: string }[];
+  /** pass : empreinte SHA-256 du mot de passe (jamais le mot de passe lui-même) */
+  users: { id: string; email: string; pass?: string }[];
   profiles: Record<string, Profile>;
   priv: Record<string, PrivateProfile>;
   routes: StoredRoute[];
@@ -55,6 +56,8 @@ interface Db {
 
 const id = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const wait = (ms = 140) => new Promise((r) => setTimeout(r, ms));
+const digest = async (text: string) =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('');
 const DAY = 86400000;
 
 function member(uid: string, firstName: string, city: string, sports: Sport[], level: Level, years: number, bio: string, age: number): Profile {
@@ -201,6 +204,22 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       const s = { userId: u.id, email: u.email };
       setSession(s);
       return s;
+    },
+    async signInWithPassword(email, password) {
+      await wait();
+      const u = db.users.find((x) => x.email === email.toLowerCase());
+      if (!u?.pass || u.pass !== (await digest(password))) throw new CommunityError('E-mail ou mot de passe incorrect.');
+      const s = { userId: u.id, email: u.email };
+      setSession(s);
+      return s;
+    },
+    async setPassword(password) {
+      await wait();
+      const u = db.users.find((x) => x.id === db.session?.userId);
+      if (!u) throw new CommunityError('Connecte-toi pour continuer.');
+      if (password.length < 8) throw new CommunityError('Mot de passe trop court : 8 caractères au moins.');
+      u.pass = await digest(password);
+      save();
     },
     async signOut() {
       setSession(null);

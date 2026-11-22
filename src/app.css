@@ -407,6 +407,16 @@ textarea {
   min-height: 44px;
   padding: 0 4px;
 }
+/* Sur une photo, le rose se perd dans les ciels chauds : liens blancs, soulignés au survol. */
+.on-photo .text-btn {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.3);
+}
+.on-photo .text-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* Contrôle segmenté */
 .seg {

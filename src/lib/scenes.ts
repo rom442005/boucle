@@ -3,7 +3,7 @@ import type { HistoryEntry } from './persist';
 
 /*
  * Paysages en fond des écrans sans parcours (accueil, réglages sur iPhone, profil, Mes parcours), sous des
- * blocs de verre. Sept photos Unsplash (licence Unsplash, usage libre) servies avec l'app, en deux tailles :
+ * blocs de verre. Vingt photos Unsplash (licence Unsplash, usage libre) servies avec l'app, en deux tailles :
  * portrait pour l'iPhone, très grande pour les écrans larges. Elles tournent toutes les cinq minutes, les
  * mêmes partout au même moment ; la teinte dominante de chacune attend qu'elle soit là.
  */
@@ -15,6 +15,19 @@ export const SCENES = [
   { file: 's5', tone: '#8d9c96' },
   { file: 's6', tone: '#b77a68' },
   { file: 's7', tone: '#2e5656' },
+  { file: 's8', tone: '#7f9296' },
+  { file: 's9', tone: '#2c2c23' },
+  { file: 's10', tone: '#615b44' },
+  { file: 's11', tone: '#646c6b' },
+  { file: 's12', tone: '#6d7d9e' },
+  { file: 's13', tone: '#936132' },
+  { file: 's14', tone: '#6d5d95' },
+  { file: 's15', tone: '#5b5454' },
+  { file: 's16', tone: '#4f655f' },
+  { file: 's17', tone: '#858885' },
+  { file: 's18', tone: '#4c5c5d' },
+  { file: 's19', tone: '#505c53' },
+  { file: 's20', tone: '#2f3a52' },
 ] as const;
 
 /** Durée de chaque photo. */

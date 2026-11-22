@@ -52,6 +52,22 @@ describe('date relative', () => {
 });
 
 describe('Communauté de démonstration', () => {
+  it('mot de passe : choisi après le code, puis connexion sans e-mail ; jamais gardé en clair', async () => {
+    const b = await createLocalBackend();
+    await b.sendCode('mdp@exemple.fr');
+    await b.verifyCode('mdp@exemple.fr', DEMO_CODE);
+    await expect(b.setPassword('court')).rejects.toThrow(/8 caractères/);
+    await b.setPassword('Boucle-solide-2026');
+    await b.signOut();
+    expect(await b.session()).toBeNull();
+    await expect(b.signInWithPassword('mdp@exemple.fr', 'pas-le-bon-1')).rejects.toThrow(/incorrect/);
+    await expect(b.signInWithPassword('inconnu@exemple.fr', 'Boucle-solide-2026')).rejects.toThrow(/incorrect/);
+    const s = await b.signInWithPassword('MDP@exemple.fr', 'Boucle-solide-2026');
+    expect(s.email).toBe('mdp@exemple.fr');
+    const stored = globalThis.localStorage?.getItem('boucle.demo.communaute.v1') ?? '';
+    expect(stored).not.toContain('Boucle-solide-2026');
+    await b.deleteAccount();
+  });
   it('compte, profil, fil, j’aime, commentaire, abonnement, publication, suppression', async () => {
     const b = await createLocalBackend();
     expect(b.demo).toBe(true);

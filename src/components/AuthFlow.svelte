@@ -1,37 +1,70 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
+  import PasswordField from './PasswordField.svelte';
   import ProfileForm from './ProfileForm.svelte';
   import { community } from '../lib/community.svelte';
   import { CommunityError } from '../lib/community/types';
   import { haptic, tactile } from '../lib/haptics';
+  import { untrack } from 'svelte';
 
   /*
-   * Compte sans mot de passe, dans le panneau : une adresse e-mail, un code à 6 chiffres reçu par e-mail
-   * (il crée le compte la première fois), puis le profil. L'action qui l'a demandé reprend ensuite.
+   * Compte, dans le panneau.
+   * Créer : une adresse e-mail, un code à 6 chiffres reçu par e-mail (il prouve l'adresse), puis le profil,
+   * avec le mot de passe. Se connecter : l'e-mail et le mot de passe, sans e-mail à attendre.
+   * Mot de passe oublié : un code par e-mail, et le nouveau mot de passe dans la foulée.
+   * L'action qui l'a demandé reprend ensuite.
    */
-  let { reason }: { reason: string } = $props();
+  let { start = 'create' }: { reason?: string; start?: 'create' | 'login' } = $props();
 
-  let step = $state<'email' | 'code' | 'profile'>(community.session && !community.me ? 'profile' : 'email');
+  type Step = 'login' | 'email' | 'code' | 'profile';
+  // L'écran de départ (le choix fait sur l'accueil), ensuite le parcours avance tout seul.
+  let step = $state<Step>(community.session && !community.me ? 'profile' : untrack(() => start) === 'login' ? 'login' : 'email');
+  /** mot de passe oublié : le code sert à en choisir un nouveau */
+  let forgot = $state(false);
   let email = $state(community.session?.email ?? '');
   let code = $state('');
+  let password = $state('');
   let busy = $state(false);
   let error = $state<string | null>(null);
   let resent = $state(false);
 
   // Connecté par le lien de l'e-mail (ici ou dans un autre onglet) : reste le profil.
   $effect(() => {
-    if (step !== 'profile' && community.session && !community.me) step = 'profile';
+    if (step !== 'profile' && community.session && !community.me && !community.verifying) step = 'profile';
   });
 
   const fail = (e: unknown, fallback: string) => {
     error = e instanceof CommunityError ? e.message : fallback;
     haptic('warn');
   };
+  const emailOk = () => /^\S+@\S+\.\S+$/.test(email.trim());
+
+  function go(next: Step, isForgot = false) {
+    error = null;
+    forgot = isForgot;
+    password = '';
+    step = next;
+  }
+
+  async function login(e?: SubmitEvent) {
+    e?.preventDefault();
+    error = null;
+    if (!emailOk()) return void (error = 'Adresse e-mail invalide.');
+    if (!password) return void (error = 'Saisis ton mot de passe.');
+    busy = true;
+    try {
+      if ((await community.signInWithPassword(email, password)) === 'profile') step = 'profile';
+    } catch (err) {
+      fail(err, 'E-mail ou mot de passe incorrect.');
+    } finally {
+      busy = false;
+    }
+  }
 
   async function send(e?: SubmitEvent) {
     e?.preventDefault();
     error = null;
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return void (error = 'Adresse e-mail invalide.');
+    if (!emailOk()) return void (error = 'Adresse e-mail invalide.');
     busy = true;
     try {
       await community.sendCode(email);
@@ -48,10 +81,10 @@
     e?.preventDefault();
     error = null;
     if (!/^\d{6}$/.test(code.trim())) return void (error = 'Le code fait 6 chiffres.');
+    if (forgot && password.length < 8) return void (error = 'Mot de passe trop court : 8 caractères au moins.');
     busy = true;
     try {
-      const next = await community.verifyCode(email, code);
-      if (next === 'profile') step = 'profile';
+      if ((await community.verifyCode(email, code, forgot ? password : undefined)) === 'profile') step = 'profile';
     } catch (err) {
       fail(err, 'Code incorrect ou expiré. Demande un nouveau code.');
     } finally {
@@ -68,12 +101,26 @@
 <div class="auth">
   {#if step !== 'profile'}
     <div class="lead">
-      <span class="lead-ic" aria-hidden="true"><Icon name="users" size={30} fill /></span>
-      <h2>Rejoins la Communauté</h2>
+      <span class="lead-ic" aria-hidden="true"><Icon name={step === 'login' || forgot ? 'key' : 'users'} size={30} fill={!(step === 'login' || forgot)} /></span>
+      <h2>{step === 'login' ? 'Connexion' : forgot ? 'Mot de passe oublié' : 'Rejoins la Communauté'}</h2>
     </div>
   {/if}
 
-  {#if step === 'email'}
+  {#if step === 'login'}
+    <form class="step" onsubmit={login} novalidate>
+      <label class="field">
+        <span class="field-label">Adresse e-mail</span>
+        <input class="input" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="prenom@exemple.fr" bind:value={email} use:autofocus required />
+      </label>
+      <PasswordField bind:value={password} autocomplete="current-password" />
+      {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
+      <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Connexion…' : 'Se connecter'}</button>
+      <div class="again">
+        <button use:tactile type="button" class="text-btn" onclick={() => go('email', true)}>Mot de passe oublié</button>
+        <button use:tactile type="button" class="text-btn" onclick={() => go('email')}>Créer un compte</button>
+      </div>
+    </form>
+  {:else if step === 'email'}
     <form class="step" onsubmit={send} novalidate>
       <label class="field">
         <span class="field-label">Adresse e-mail</span>
@@ -84,6 +131,9 @@
       {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Envoi…' : 'Recevoir un code'}</button>
+      <div class="again center">
+        <button use:tactile type="button" class="text-btn" onclick={() => go('login')}>{forgot ? 'Retour' : 'J’ai déjà un compte'}</button>
+      </div>
     </form>
   {:else if step === 'code'}
     <form class="step" onsubmit={verify} novalidate>
@@ -96,6 +146,11 @@
         <span class="field-label">Code à 6 chiffres</span>
         <input class="input code tabular" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="000000" bind:value={code} use:autofocus required />
       </label>
+      {#if forgot}
+        <!-- Pour que le gestionnaire de mots de passe range le nouveau avec la bonne adresse. -->
+        <input class="visually-hidden" type="email" autocomplete="username" value={email} readonly tabindex="-1" aria-hidden="true" />
+        <PasswordField bind:value={password} label="Nouveau mot de passe" autocomplete="new-password" placeholder="8 caractères au moins" />
+      {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Vérification…' : 'Valider'}</button>
       <div class="again">
@@ -164,5 +219,8 @@
   .again {
     display: flex;
     justify-content: space-between;
+  }
+  .again.center {
+    justify-content: center;
   }
 </style>

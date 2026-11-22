@@ -4,7 +4,7 @@
 
   /*
    * Un paysage en plein écran sous le verre. Toujours là, il apparaît et s'efface en fondu quand on passe
-   * d'un écran à carte à un écran à photo (rien à recharger). Sept photos tournent toutes les cinq minutes
+   * d'un écran à carte à un écran à photo (rien à recharger). Vingt photos tournent toutes les cinq minutes
    * en fondu enchaîné ; la suivante est téléchargée et décodée bien avant son tour. Elle dérive très
    * lentement, comme une prise de vue en drone (à l'arrêt quand elle est cachée ou si l'on réduit les
    * animations).
