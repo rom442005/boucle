@@ -8,8 +8,9 @@
   /*
    * Sous la météo, une petite barre de verre à icônes seules (Romain : « très minimaliste », sans défiler) :
    * pistes d'athlétisme, parcs, eau, forêts, fontaines, toilettes. Un toucher allume ces lieux sur la carte et
-   * la carte va montrer le plus proche (mise au point) ; la bulle dessous dit lequel, à quelle distance, et
-   * passe au suivant. Les petits chiffres disent combien de pistes, fontaines ou toilettes sont à l'écran.
+   * la carte montre les plus proches (le plus proche bat) ; la bulle dessous dit lequel, à quelle distance ;
+   * la toucher, ou ‹ ›, ouvre sa fiche (zoom et photos). Les petits chiffres disent combien de pistes,
+   * fontaines ou toilettes sont à l'écran.
    */
   $effect(() => {
     app.zonesShown = true;
@@ -55,10 +56,10 @@
       <div class="focus glass photo-card on-photo" style:--c={fz.color} role="status" aria-live="polite">
         <span class="f-ic" aria-hidden="true"><Icon name={fz.icon} size={16} fill /></span>
         {#if f.n}
-          <span class="f-txt">
+          <button use:tactile type="button" class="f-txt" aria-label="Voir {f.name}, à {km(f.dist)}" onclick={() => app.stepZone(0)}>
             <b>{f.name}</b>
             <small class="tabular">à {km(f.dist)}{f.n > 1 ? ` · ${f.i + 1}/${f.n}` : ''}</small>
-          </span>
+          </button>
           {#if f.n > 1}
             <button use:tactile type="button" class="step" aria-label="Lieu précédent" onclick={() => app.stepZone(-1)}><Icon name="caretLeft" size={16} /></button>
             <button use:tactile type="button" class="step" aria-label="Lieu suivant" onclick={() => app.stepZone(1)}><Icon name="caretRight" size={16} /></button>
@@ -194,6 +195,8 @@
     display: grid;
     line-height: 1.15;
     padding-right: 4px;
+    text-align: left;
+    color: inherit;
   }
   .f-txt b {
     font-size: 0.8125rem;

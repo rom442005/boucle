@@ -44,6 +44,12 @@ export default defineConfig(({ command, isPreview, mode }) => ({
         navigateFallback: 'index.html',
         runtimeCaching: [
           {
+            // Index des pistes d'athlétisme (public/data/pistes.json) : gardé, revérifié en arrière-plan.
+            urlPattern: ({ url }) => url.pathname.endsWith('/data/pistes.json'),
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'pistes', cacheableResponse: { statuses: [0, 200] } },
+          },
+          {
             // Photos de fond (paysages) : fixes pour une version, gardées après la première vue. Nouvelle série de
             // photos : nouveau nom de cache (et ?v= dans scenes.ts), main.ts efface l'ancien.
             urlPattern: ({ url }) => url.pathname.includes('/scenes/'),

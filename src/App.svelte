@@ -34,6 +34,9 @@
   import Backdrop from './components/Backdrop.svelte';
   import TodayCard from './components/TodayCard.svelte';
   import ZonesCard from './components/ZonesCard.svelte';
+  import PlaceCard from './components/PlaceCard.svelte';
+  import SaveSheet from './components/SaveSheet.svelte';
+  import { saved } from './lib/saved.svelte';
   import HealthLink from './components/HealthLink.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
   import { liquidTabs } from './lib/lens';
@@ -297,6 +300,10 @@
       <TodayCard />
       <ZonesCard />
     </div>
+    {#if app.place}
+      <!-- Fiche du lieu touché : au-dessus des onglets sur iPhone, en bas de la carte sur Mac. -->
+      <div class="place-zone" style:--place-bottom="{app.tabbarH + 10}px"><PlaceCard /></div>
+    {/if}
   {/if}
   <!-- Légende seulement quand les volumes sont visibles (à partir du zoom 13). -->
   {#if app.terrain3d && app.zoom >= 13.2 && !app.pickOnMap && !scene}
@@ -458,7 +465,7 @@
 {#if app.pickOnMap}
   <div class="picker glass" role="status">
     <Icon name="crosshair" size={18} />
-    <span>{isDesktop ? 'Clique sur' : 'Touche'} la carte pour placer {app.pickOnMap === 'start' ? 'le départ' : app.pickOnMap === 'via' ? 'le point de passage' : 'l’arrivée'}</span>
+    <span>{isDesktop ? 'Clique sur' : 'Touche'} la carte {app.pickOnMap === 'save' ? 'sur le lieu à enregistrer' : `pour placer ${app.pickOnMap === 'start' ? 'le départ' : app.pickOnMap === 'via' ? 'le point de passage' : 'l’arrivée'}`}</span>
     <button use:tactile type="button" class="text-btn" onclick={() => app.cancelPick()}>Annuler</button>
   </div>
 {/if}
@@ -466,6 +473,7 @@
 {#if app.search}
   <SearchOverlay />
 {/if}
+{#if saved.draft}<SaveSheet />{/if}
 
 {#if welcome}<Welcome onclose={closeWelcome} />{/if}
 {#if community.lightbox}<Lightbox />{/if}
@@ -644,6 +652,9 @@
   }
   .widgets > :global(*) {
     pointer-events: auto;
+  }
+  .place-zone {
+    display: contents;
   }
   @media (min-width: 860px) {
     .widgets {

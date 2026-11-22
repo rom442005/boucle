@@ -33,6 +33,7 @@ import { Follower, type FollowState } from './follow';
 import { slug } from './format';
 import { ELEV_STEP, heights } from './valhalla';
 import { haptic } from './haptics';
+import { saved } from './saved.svelte';
 import { isNativeApp } from './platform';
 
 const DRAW_KEY = 'boucle.dessin.v1';
@@ -64,7 +65,25 @@ export const MAX_VIAS = 5;
 export type Phase = 'compose' | 'results' | 'library' | 'detail' | 'follow' | 'community';
 export type Detent = 'peek' | 'half' | 'full';
 /** Rôle d'un lieu choisi : départ, arrivée (« Aller simple ») ou point de passage imposé. */
-export type PlaceKind = 'start' | 'destination' | 'via';
+/** rôle d'un lieu choisi : départ, arrivée, point de passage, ou lieu à enregistrer dans Mes lieux */
+export type PlaceKind = 'start' | 'destination' | 'via' | 'save';
+
+/** Fiche d'un lieu touché sur la carte : piste, parc, fontaine, lieu enregistré… */
+export interface PlaceInfo {
+  /** change à chaque ouverture (rejoue l'arrivée de la fiche) */
+  id: number;
+  name: string;
+  /** genre du lieu, adresse… */
+  sub: string;
+  coord: LngLat;
+  zone?: ZoneKind;
+  /** piste : taille et orientation (vue du ciel tournée), couloirs, revêtement */
+  track?: { L: number; W: number; a: number; lanes: number; surf: string };
+  /** largeur montrée par la vue du ciel (m) */
+  across: number;
+  /** lieu enregistré montré */
+  savedId?: string;
+}
 
 export interface Padding {
   top: number;
@@ -106,7 +125,7 @@ class AppState {
 
   library = $state.raw<SerialRoute[]>(loadLibrary());
   history = $state.raw<HistoryEntry[]>(loadHistory());
-  libTab = $state<'favoris' | 'historique'>('favoris');
+  libTab = $state<'favoris' | 'historique' | 'lieux'>('favoris');
   /** origine du parcours affiché en détail (pour l'en-tête et le retour) */
   detailFrom = $state<null | { kind: 'favori' | 'historique' | 'lien' | 'gpx' | 'communaute'; id?: string }>(null);
   /** un parcours de la Communauté vient d'être repris (favori, suivi, GPX) : branché par community.svelte.ts */
@@ -124,10 +143,48 @@ class AppState {
   }
   /** lieu mis au point par la carte : son genre, son rang parmi les plus proches, son nom et sa distance (m) */
   zoneFocus = $state.raw<{ kind: ZoneKind; i: number; n: number; name: string; dist: number } | null>(null);
-  /** demande de passer au lieu suivant (+1) ou précédent (-1), lue par la carte */
+  /** fiche du lieu touché sur la carte (photos, Partir d'ici, Enregistrer) */
+  place = $state.raw<PlaceInfo | null>(null);
+  /** hauteur de la fiche à l'écran (la carte cadre le lieu au-dessus) */
+  placeH = 0;
+  /** demande de passer au lieu suivant (+1), précédent (-1) ou d'ouvrir celui montré (0), lue par la carte */
   zoneStep = $state.raw<{ d: number; id: number } | null>(null);
   stepZone(d: number) {
     this.zoneStep = { d, id: (this.zoneStep?.id ?? 0) + 1 };
+  }
+
+  /** Ajouter un lieu à Mes lieux : recherche d'adresse (nom, émoji et liste proposés : « Domicile »…). */
+  saveHint: { name?: string; emoji?: string; list?: string } = {};
+  addSavedPlace(hint: { name?: string; emoji?: string; list?: string } = {}) {
+    this.saveHint = hint;
+    this.search = 'save';
+  }
+
+  /** demande de montrer un lieu enregistré sur la carte (lue par MapView) */
+  showSavedReq = $state.raw<{ id: string; t: number } | null>(null);
+  showSavedPlace(id: string) {
+    haptic('tap');
+    if (this.phase !== 'compose') this.closeLibrary();
+    else this.home = true;
+    if (!this.wide) this.detent = 'half';
+    this.showSavedReq = { id, t: Date.now() };
+  }
+
+  /** Ouvre la fiche d'un lieu. */
+  openPlace(p: Omit<PlaceInfo, 'id'>) {
+    this.place = { ...p, id: Date.now() };
+  }
+  closePlace() {
+    this.place = null;
+  }
+  /** « Partir d'ici » : le lieu devient le départ, et les réglages s'ouvrent pour créer la boucle. */
+  startFrom(p: { name: string; sub?: string; coord: LngLat }) {
+    haptic('tap');
+    this.place = null;
+    this.setPlace('start', { name: p.name, detail: p.sub, coord: p.coord, kind: 'search' });
+    if (this.phase !== 'compose') this.closeLibrary();
+    this.flyTo(p.coord);
+    this.openComposer();
   }
 
   /** mode Dessin : le dessin du carnet (gardé d'une visite à l'autre) et le carnet déplié (= mode actif) */
@@ -340,6 +397,7 @@ class AppState {
 
   /** Le lieu d'un rôle donné (départ, destination, point de passage). */
   placeOf(kind: PlaceKind): Place | null {
+    if (kind === 'save') return null;
     return kind === 'start' ? this.start : kind === 'destination' ? this.destination : this.editVia != null ? (this.vias[this.editVia] ?? null) : null;
   }
 
@@ -347,6 +405,11 @@ class AppState {
     const c = await this.locate();
     if (!c) return null;
     const place: Place = { name: 'Ma position', coord: c, kind: 'gps' };
+    if (kind === 'save') {
+      const r = await reverse(c).catch(() => null);
+      this.setPlace('save', { ...place, detail: r ? (r.detail ? `${r.name}, ${r.detail}` : r.name) : undefined });
+      return c;
+    }
     this.setPlace(kind, place);
     void reverse(c).then((r) => {
       const cur = this.placeOf(kind);
@@ -356,6 +419,20 @@ class AppState {
   }
 
   setPlace(kind: PlaceKind, p: Place) {
+    if (kind === 'save') {
+      // Un résultat de recherche donne son nom ; une position ou un point de la carte, seulement son adresse.
+      const h = this.saveHint;
+      const typed = p.kind === 'search';
+      saved.edit({
+        name: h.name ?? (typed ? p.name : ''),
+        detail: typed && h.name ? [p.name, p.detail].filter(Boolean).join(', ') : p.detail,
+        coord: p.coord,
+        emoji: h.emoji,
+        list: h.list,
+      });
+      this.saveHint = {};
+      return;
+    }
     if (kind === 'start') this.start = p;
     else if (kind === 'destination') this.destination = p;
     else if (this.editVia != null && this.editVia < this.vias.length) this.vias[this.editVia] = p;
@@ -410,6 +487,13 @@ class AppState {
   }
 
   async placeFromMap(kind: PlaceKind, c: LngLat) {
+    if (kind === 'save') {
+      this.pickOnMap = null;
+      this.restoreDetent();
+      const r = await reverse(c).catch(() => null);
+      this.setPlace('save', { name: 'Point choisi', coord: c, kind: 'map', detail: r ? (r.detail ? `${r.name}, ${r.detail}` : r.name) : undefined });
+      return;
+    }
     const place: Place = { name: 'Point choisi', coord: c, kind: 'map' };
     this.setPlace(kind, place);
     this.pickOnMap = null;

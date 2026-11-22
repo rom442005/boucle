@@ -190,6 +190,52 @@ test('lieux sur la carte : six icônes sans défiler, mise au point sur le plus 
   await expect(focus).toHaveCount(0);
 });
 
+test('pistes : toutes sur la carte, fiche avec photos, enregistrer dans Mes lieux', async ({ page }) => {
+  await open(page);
+  const bar = page.getByRole('group', { name: 'Lieux à voir sur la carte' });
+  await bar.getByRole('button', { name: /^Pistes d’athlétisme/ }).click();
+  // Les plus proches d'un coup d'œil, la bulle dit laquelle ; la toucher ouvre sa fiche.
+  const near = page.getByRole('button', { name: /^Voir .+, à \d/ });
+  await expect(near).toBeVisible({ timeout: 20_000 });
+  await near.click();
+  const card = page.getByRole('region', { name: /^Fiche du lieu/ });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(/\d+ m · \d couloirs/);
+  await expect(card.getByRole('button', { name: 'Agrandir la vue du ciel' })).toBeVisible();
+  await card.getByRole('button', { name: 'Enregistrer' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Enregistrer le lieu' });
+  await expect(sheet.getByRole('radio', { name: '🏟️' })).toHaveAttribute('aria-checked', 'true');
+  await sheet.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Enregistré' })).toHaveAttribute('aria-pressed', 'true');
+  await card.getByRole('button', { name: 'Fermer la fiche' }).click();
+  await expect(card).toHaveCount(0);
+});
+
+test('mes lieux : une liste, Domicile par adresse, puis choisi comme départ', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: /Mes parcours/ }).first().click();
+  await page.getByRole('button', { name: /Lieux/ }).click();
+  await page.getByRole('button', { name: 'Ajouter Domicile' }).click();
+  await page.getByRole('searchbox').fill('Place Royale Nantes');
+  await page.getByRole('button', { name: /Place Royale/ }).first().click();
+  const sheet = page.getByRole('dialog', { name: 'Enregistrer le lieu' });
+  await expect(sheet.getByRole('textbox', { name: 'Nom du lieu' })).toHaveValue('Domicile');
+  await expect(sheet.getByRole('radio', { name: /Mes adresses/ })).toHaveAttribute('aria-checked', 'true');
+  await sheet.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Lieux de la liste Mes adresses' })).toContainText('Domicile');
+  // Une nouvelle liste.
+  await page.getByRole('button', { name: 'Nouvelle liste' }).click();
+  await page.getByRole('textbox', { name: 'Nom de la nouvelle liste' }).fill('Proches');
+  await page.getByRole('button', { name: 'Créer la liste' }).click();
+  await expect(page.getByRole('tab', { name: /Proches/ })).toHaveAttribute('aria-selected', 'true');
+  // Domicile, en tête de la recherche du départ.
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: 'Créer', exact: true }).click();
+  await compose(page);
+  await page.getByRole('button', { name: /^Départ/ }).first().click();
+  await page.getByRole('button', { name: /^Domicile/ }).click();
+  await expect(page.getByRole('button', { name: /Départ : Domicile/ }).first()).toBeVisible();
+});
+
 test('chercher un point de départ par adresse', async ({ page }) => {
   await open(page);
   await compose(page);

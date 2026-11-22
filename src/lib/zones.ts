@@ -3,6 +3,7 @@ import type { VectorTile } from '@mapbox/vector-tile';
 import type { IconName } from './icons';
 import type { LngLat } from './types';
 import { latToY, loadTile, lonToX } from './environment';
+import type { TrackRec } from './tracks';
 
 /*
  * Lieux à mettre en valeur sur la carte, depuis la petite barre sous la météo : pistes d'athlétisme, parcs,
@@ -135,11 +136,14 @@ function ringArea(r: [number, number][]): number {
   return Math.abs(a) / 2;
 }
 
-/** Longueur, largeur (rectangle orienté le plus serré) et remplissage d'un contour, en mètres. */
-export function shapeOf(ring: Ring): { L: number; W: number; area: number; fill: number } {
+/**
+ * Longueur, largeur (rectangle orienté le plus serré) et remplissage d'un contour, en mètres, avec
+ * l'orientation du grand axe (degrés, sens trigonométrique depuis l'est) et le centre du rectangle.
+ */
+export function shapeOf(ring: Ring): { L: number; W: number; area: number; fill: number; angle: number; center: LngLat } {
   const P = ring.map(metersAround(ring[0]));
   const area = ringArea(P);
-  let best = { ar: Infinity, L: 0, W: 0 };
+  let best = { ar: Infinity, L: 0, W: 0, angle: 0, cx: 0, cy: 0 };
   for (let a = 0; a < 180; a += 3) {
     const c = Math.cos((a * Math.PI) / 180);
     const s = Math.sin((a * Math.PI) / 180);
@@ -156,9 +160,17 @@ export function shapeOf(ring: Ring): { L: number; W: number; area: number; fill:
       if (v > mxy) mxy = v;
     }
     const ar = (mxx - mnx) * (mxy - mny);
-    if (ar < best.ar) best = { ar, L: Math.max(mxx - mnx, mxy - mny), W: Math.min(mxx - mnx, mxy - mny) };
+    if (ar < best.ar) {
+      const du = mxx - mnx;
+      const dv = mxy - mny;
+      const cu = (mxx + mnx) / 2;
+      const cv = (mxy + mny) / 2;
+      best = { ar, L: Math.max(du, dv), W: Math.min(du, dv), angle: du >= dv ? a : (a + 90) % 180, cx: cu * c - cv * s, cy: cu * s + cv * c };
+    }
   }
-  return { L: best.L, W: best.W, area, fill: best.ar > 0 ? area / best.ar : 0 };
+  const kx = 111320 * Math.cos((ring[0][1] * Math.PI) / 180);
+  const center: LngLat = [ring[0][0] + best.cx / kx, ring[0][1] + best.cy / 110540];
+  return { L: best.L, W: best.W, area, fill: best.ar > 0 ? area / best.ar : 0, angle: best.angle, center };
 }
 
 /**
@@ -224,6 +236,8 @@ export interface ZonePlace {
   shape?: GeoJSON.Polygon;
   /** dépasse du carré de sa tuile (peut-être coupé par le bord) */
   edge?: boolean;
+  /** piste d'athlétisme : sa taille et son orientation (pour la redessiner) */
+  track?: TrackRec;
 }
 
 /** Noms posés près des lieux (stades, parcs, lacs) : pour nommer une piste ou un parc dans la bulle. */

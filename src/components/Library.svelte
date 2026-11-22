@@ -10,6 +10,8 @@
   import { elevationStats } from '../lib/elevation';
   import { SPORT_EMOJI } from '../lib/scenes';
   import ActivityBars from './ActivityBars.svelte';
+  import { LIST_EMOJIS, saved, SUGGESTED } from '../lib/saved.svelte';
+  import { haversine } from '../lib/geo';
 
   let editing = $state(false);
 
@@ -66,6 +68,25 @@
     void app.libTab;
     editing = false;
   });
+
+  /* Mes lieux : la liste ouverte, ses lieux (avec leur distance), les adresses encore à ajouter. */
+  const openList = $derived(saved.listOf(saved.openList));
+  const listPlaces = $derived(
+    saved.placesIn(openList.id).map((p) => ({ p, dist: app.userPos ? haversine(app.userPos, p.coord) : null })),
+  );
+  const missing = $derived(openList.id === 'adresses' ? SUGGESTED.filter((s) => !saved.places.some((p) => p.name.toLowerCase() === s.name.toLowerCase())) : []);
+  let newList = $state<null | { name: string; emoji: string }>(null);
+  function createList() {
+    if (!newList?.name.trim()) return;
+    const l = saved.addList(newList.name, newList.emoji);
+    saved.openList = l.id;
+    newList = null;
+  }
+  const nextEmoji = (e: string) => LIST_EMOJIS[(LIST_EMOJIS.indexOf(e) + 1) % LIST_EMOJIS.length];
+  let listName = $state('');
+  $effect(() => {
+    listName = openList.name;
+  });
 </script>
 
 <input bind:this={file} type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" class="visually-hidden" tabindex="-1" onchange={onFile} />
@@ -90,9 +111,82 @@
   <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'historique'} aria-pressed={app.libTab === 'historique'} onclick={() => (app.libTab = 'historique')}>
     <span class="k">🕒 Sorties</span><b class="n rounded"><CountUp value={app.history.length} /></b>
   </button>
+  <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'lieux'} aria-pressed={app.libTab === 'lieux'} onclick={() => (app.libTab = 'lieux')}>
+    <span class="k">📍 Lieux</span><b class="n rounded"><CountUp value={saved.places.length} /></b>
+  </button>
 
-  <section class="card wide glass photo-card list-card" aria-label={app.libTab === 'favoris' ? 'Parcours favoris' : 'Historique des sorties'}>
-{#if app.libTab === 'favoris'}
+  <section class="card wide glass photo-card list-card" aria-label={app.libTab === 'favoris' ? 'Parcours favoris' : app.libTab === 'lieux' ? 'Mes lieux' : 'Historique des sorties'}>
+{#if app.libTab === 'lieux'}
+  <div class="list-head">
+    <h3 class="k">Mes lieux</h3>
+    <button use:tactile type="button" class="text-btn" onclick={() => (editing = !editing)}>{editing ? 'OK' : 'Modifier'}</button>
+  </div>
+  <!-- Les listes, comme des onglets : émoji, nom, nombre de lieux. -->
+  <div class="lists" role="tablist" aria-label="Listes de lieux">
+    {#each saved.lists as l (l.id)}
+      <button use:tactile type="button" class="lchip" class:on={l.id === openList.id} role="tab" aria-selected={l.id === openList.id} onclick={() => (saved.openList = l.id)}>
+        <span aria-hidden="true">{l.emoji}</span>{l.name}<small class="tabular">{saved.placesIn(l.id).length}</small>
+      </button>
+    {/each}
+    {#if !newList}
+      <button use:tactile type="button" class="lchip add" aria-label="Nouvelle liste" onclick={() => (newList = { name: '', emoji: LIST_EMOJIS[0] })}><Icon name="plus" size={14} />Liste</button>
+    {/if}
+  </div>
+  {#if newList}
+    <div class="lform">
+      <button use:tactile type="button" class="lemo" aria-label="Changer l’émoji ({newList.emoji})" onclick={() => newList && (newList.emoji = nextEmoji(newList.emoji))}>{newList.emoji}</button>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input bind:value={newList.name} maxlength="30" placeholder="Nom de la nouvelle liste" aria-label="Nom de la nouvelle liste" autofocus enterkeyhint="done" onkeydown={(e) => e.key === 'Enter' && createList()} />
+      <button use:tactile type="button" class="lok" aria-label="Créer la liste" disabled={!newList.name.trim()} onclick={createList}>Créer</button>
+      <button use:tactile type="button" class="lx" aria-label="Annuler" onclick={() => (newList = null)}><Icon name="close" size={14} /></button>
+    </div>
+  {:else if editing}
+    <div class="lform">
+      <button use:tactile type="button" class="lemo" aria-label="Changer l’émoji de la liste ({openList.emoji})" onclick={() => saved.renameList(openList.id, listName, nextEmoji(openList.emoji))}>{openList.emoji}</button>
+      <input bind:value={listName} maxlength="30" aria-label="Nom de la liste" onchange={() => saved.renameList(openList.id, listName, openList.emoji)} />
+      {#if saved.lists.length > 1}
+        <button use:tactile type="button" class="lx danger" aria-label="Supprimer la liste {openList.name} et ses lieux" onclick={() => saved.removeList(openList.id)}><Icon name="trash" size={15} /></button>
+      {/if}
+    </div>
+  {/if}
+  {#if listPlaces.length || missing.length}
+    <ul class="list" aria-label="Lieux de la liste {openList.name}">
+      {#each listPlaces as it, i (it.p.id)}
+        <li class="li" style:--i={Math.min(i, 8)}>
+          {#if editing}
+            <button use:tactile type="button" class="del" aria-label="Retirer {it.p.name}" onclick={() => saved.remove(it.p.id)}><Icon name="remove" size={24} /></button>
+          {/if}
+          <button use:tactile type="button" class="item" disabled={editing} onclick={() => app.showSavedPlace(it.p.id)}>
+            <span class="pemo" aria-hidden="true">{it.p.emoji}</span>
+            <span class="txt">
+              <span class="name">{it.p.name}</span>
+              <span class="meta tabular">{[it.p.detail, it.dist != null ? `à ${km(it.dist)}` : ''].filter(Boolean).join(' · ') || 'Lieu enregistré'}</span>
+            </span>
+            {#if !editing}<Icon name="chevron" size={16} />{/if}
+          </button>
+          {#if editing}
+            <button use:tactile type="button" class="del edit" aria-label="Modifier {it.p.name}" onclick={() => saved.edit({ id: it.p.id, name: it.p.name, detail: it.p.detail, coord: it.p.coord })}><Icon name="pencil" size={18} /></button>
+          {/if}
+        </li>
+      {/each}
+      {#each missing as m (m.name)}
+        <li class="li">
+          <button use:tactile type="button" class="item ghost" onclick={() => app.addSavedPlace({ name: m.name, emoji: m.emoji, list: 'adresses' })}>
+            <span class="pemo dim" aria-hidden="true">{m.emoji}</span>
+            <span class="txt"><span class="name">Ajouter {m.name}</span></span>
+            <Icon name="plus" size={14} />
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {:else}
+    <div class="empty small">
+      <span class="empty-ic" aria-hidden="true">{openList.emoji}</span>
+      <h3>Aucun lieu dans {openList.name}</h3>
+    </div>
+  {/if}
+  <button use:tactile type="button" class="pill import" onclick={() => app.addSavedPlace({ list: openList.id })}><Icon name="plus" size={16} />Ajouter un lieu</button>
+{:else if app.libTab === 'favoris'}
   {#if favorites.length}
     <div class="list-head">
       <h3 class="k">Parcours favoris</h3>
@@ -168,7 +262,7 @@
 <style>
   .cards {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     padding-bottom: 8px;
   }
@@ -380,6 +474,119 @@
     place-items: center;
     color: var(--tint);
     background: var(--tint-soft);
+  }
+  /* Mes lieux : les listes en pastilles de verre (choisie : blanche pleine), les lieux à leur émoji. */
+  .lists {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .lchip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 12px 0 10px;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--label);
+    background: var(--fill-2);
+    transition: transform 240ms var(--spring-bouncy);
+  }
+  .lchip small {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--label-2);
+  }
+  .lchip.on {
+    color: #1c1c1e;
+    background: #fff;
+  }
+  .lchip.on small {
+    color: rgba(28, 28, 30, 0.55);
+  }
+  .lchip:active {
+    transform: scale(0.95);
+  }
+  .lchip.add {
+    color: var(--label-2);
+  }
+  .lform {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .lform input {
+    flex: 1;
+    min-width: 0;
+    height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
+    outline: none;
+    font-size: 0.9375rem;
+    color: var(--label);
+    background: var(--fill-2);
+  }
+  .lemo,
+  .lx {
+    width: 38px;
+    height: 38px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--fill-2);
+    font-size: 1.1rem;
+    color: var(--label-2);
+  }
+  .lx.danger {
+    color: #ff453a;
+  }
+  .lok {
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    color: #1c1c1e;
+    background: #fff;
+  }
+  .lok:disabled {
+    opacity: 0.4;
+  }
+  .pemo {
+    width: 44px;
+    height: 44px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 1.35rem;
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .pemo.dim {
+    opacity: 0.55;
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .ghost .name {
+    color: var(--label-2);
+    font-weight: 560;
+  }
+  .del.edit {
+    margin: 0 6px 0 0;
+    color: var(--label-2);
+  }
+  .empty.small {
+    padding: 8px 12px 14px;
+  }
+  .empty.small .empty-ic {
+    width: 56px;
+    height: 56px;
+    font-size: 1.6rem;
+    background: rgba(255, 255, 255, 0.12);
   }
   .empty-actions {
     display: flex;

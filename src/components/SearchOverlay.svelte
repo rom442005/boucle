@@ -4,11 +4,23 @@
   import { app } from '../lib/state.svelte';
   import { searchPlaces } from '../lib/services';
   import type { Place } from '../lib/types';
+  import { saved } from '../lib/saved.svelte';
 
   const kind = $derived(app.search!);
-  const TITLE = { start: 'Choisir le départ', destination: 'Choisir l’arrivée', via: 'Choisir un point de passage' } as const;
-  const FIELD = { start: 'Adresse de départ', destination: 'Adresse d’arrivée', via: 'Adresse du point de passage' } as const;
-  const HINT = { start: 'Adresse, lieu, parc…', destination: 'Où veux-tu aller ?', via: 'Par où veux-tu passer ?' } as const;
+  const TITLE = { start: 'Choisir le départ', destination: 'Choisir l’arrivée', via: 'Choisir un point de passage', save: 'Enregistrer un lieu' } as const;
+  const FIELD = { start: 'Adresse de départ', destination: 'Adresse d’arrivée', via: 'Adresse du point de passage', save: 'Adresse du lieu à enregistrer' } as const;
+  const HINT = { start: 'Adresse, lieu, parc…', destination: 'Où veux-tu aller ?', via: 'Par où veux-tu passer ?', save: 'Adresse, école, salle…' } as const;
+
+  /** Mes lieux en tête (Mes adresses d'abord), filtrés par ce qui est tapé : un toucher, et c'est choisi. */
+  const mine = $derived.by(() => {
+    if (kind === 'save') return [];
+    const t = q.trim().toLowerCase();
+    const order = new Map(saved.lists.map((l, i) => [l.id, i]));
+    return saved.places
+      .filter((p) => !t || p.name.toLowerCase().includes(t) || (p.detail ?? '').toLowerCase().includes(t))
+      .sort((a, b) => (order.get(a.list) ?? 99) - (order.get(b.list) ?? 99) || b.t - a.t)
+      .slice(0, t ? 4 : 8);
+  });
   let q = $state('');
   let results = $state<Place[]>([]);
   let loading = $state(false);
@@ -46,16 +58,22 @@
   }
 
   function close() {
+    const k = kind;
     ctrl?.abort();
     app.search = null;
+    if (k === 'save') app.saveHint = {};
   }
   function choose(p: Place) {
-    app.setPlace(kind, p);
-    close();
+    const k = kind;
+    ctrl?.abort();
+    app.search = null;
+    app.setPlace(k, p);
   }
-  async function mine() {
-    close();
-    await app.useMyPosition(kind);
+  async function myPosition() {
+    const k = kind;
+    ctrl?.abort();
+    app.search = null;
+    await app.useMyPosition(k);
   }
   function onMap() {
     ctrl?.abort();
@@ -96,7 +114,7 @@
     </button>
   {/snippet}
   {#snippet mineRow()}
-    <button use:tactile type="button" class="row" onclick={mine}>
+    <button use:tactile type="button" class="row" onclick={myPosition}>
       <span class="ic loc"><Icon name="locate" size={18} fill /></span>
       <span class="row-label">Ma position</span>
     </button>
@@ -108,6 +126,9 @@
       {@render mineRow()}
     {:else if kind === 'via'}
       {@render mapRow()}
+    {:else if kind === 'save'}
+      {@render mineRow()}
+      {@render mapRow()}
     {:else}
       {@render mineRow()}
       {@render mapRow()}
@@ -115,6 +136,17 @@
   </div>
 
   <div class="results" aria-live="polite">
+    {#if mine.length}
+      <p class="k mine-k">Mes lieux</p>
+      <div class="group">
+        {#each mine as p, i (p.id)}
+          <button use:tactile type="button" class="row cascade" style:--i={Math.min(i, 8)} onclick={() => choose({ name: p.name, detail: p.detail, coord: p.coord, kind: 'search' })}>
+            <span class="ic emo" aria-hidden="true">{p.emoji}</span>
+            <span class="row-label">{p.name}<span class="row-sub">{saved.listOf(p.list).emoji} {saved.listOf(p.list).name}{p.detail ? ` · ${p.detail}` : ''}</span></span>
+          </button>
+        {/each}
+      </div>
+    {/if}
     {#if loading}
       <p class="hint state">Recherche…</p>
     {:else if failed}
@@ -237,6 +269,19 @@
   .results {
     overflow-y: auto;
     min-height: 0;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+  }
+  .ic.emo {
+    font-size: 1rem;
+    background: var(--fill-2);
+  }
+  .mine-k {
+    margin: 0 0 -6px 4px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--label-2);
   }
   .state {
     padding: 8px 4px;

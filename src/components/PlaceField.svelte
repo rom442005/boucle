@@ -13,7 +13,7 @@
   }: { kind: PlaceKind; place: Place | null; busy?: boolean; onclick: () => void; floating?: boolean } = $props();
 
   const title = $derived(kind === 'start' ? 'Départ' : kind === 'via' ? 'Passer par' : 'Arrivée');
-  const EMPTY: Record<PlaceKind, string> = { start: 'Choisir un départ', destination: 'Libre', via: 'Choisir un lieu' };
+  const EMPTY: Record<PlaceKind, string> = { start: 'Choisir un départ', destination: 'Libre', via: 'Choisir un lieu', save: 'Choisir un lieu' };
   const value = $derived(busy ? 'Localisation…' : place ? (place.kind === 'gps' ? 'Ma position' : place.name) : EMPTY[kind]);
   const detail = $derived(place?.kind === 'gps' ? place.detail : place?.detail);
 </script>
