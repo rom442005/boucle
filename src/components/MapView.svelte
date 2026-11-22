@@ -24,6 +24,8 @@
   const VIEW_KEY = 'boucle.vue.v1';
   const NANTES: LngLat = [-1.5536, 47.2184];
   const dark = matchMedia('(prefers-color-scheme: dark)');
+  /** Zoom du lancement : la ville et ses environs, jamais un gros plan sur la position. */
+  const LAUNCH_ZOOM = 12;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /** Ciel étoilé autour du globe : deux motifs de tailles différentes, pour que la répétition ne se voie pas. */
@@ -986,7 +988,7 @@
       container: el,
       style: buildStyle(theme, paysage),
       center: app.start?.coord ?? view?.center ?? NANTES,
-      zoom: app.start ? 13 : (view?.zoom ?? 12.5),
+      zoom: Math.min(view?.zoom ?? LAUNCH_ZOOM, LAUNCH_ZOOM),
       attributionControl: false,
       maxPitch: 72,
       fadeDuration: 120,
@@ -1304,10 +1306,20 @@
     if (key !== lastStartKey && compose) {
       const first = lastStartKey === '';
       lastStartKey = key;
+      if (first) {
+        // Au lancement (départ gardé ou position trouvée) : une vue d'ensemble centrée sur le départ, sans
+        // zoom rapproché (Romain : « plus jamais de zoom sur moi au lancement »).
+        const m = map;
+        const z = Math.min(m.getZoom(), LAUNCH_ZOOM);
+        const opts = { center: s.coord, zoom: z, padding: untrack(() => app.padding) };
+        if (reduce || m.getZoom() < 8) m.jumpTo(opts);
+        else m.easeTo({ ...opts, duration: 900 });
+        return;
+      }
       const D = untrack(() => app.params.distanceKm) * 1000;
       const ring = circlePolygon(s.coord, untrack(() => app.params.shape) === 'outback' ? D / 2.56 : D / 3.7);
       const coords = (ring.features[0].geometry as Polygon).coordinates[0] as LngLat[];
-      fitCoords(coords, !first);
+      fitCoords(coords, true);
     } else lastStartKey = key;
   });
 
@@ -1788,9 +1800,9 @@
     pointer-events: none;
     opacity: 0;
     background:
-      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 58%, transparent), transparent 20%),
-      linear-gradient(to top, color-mix(in srgb, var(--tone) 42%, transparent), transparent 28%),
-      radial-gradient(130% 95% at 50% 46%, transparent 62%, color-mix(in srgb, var(--tone) 30%, transparent));
+      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 50%, transparent), transparent 18%),
+      linear-gradient(to top, color-mix(in srgb, var(--tone) 35%, transparent), transparent 26%),
+      radial-gradient(130% 95% at 50% 46%, transparent 64%, color-mix(in srgb, var(--tone) 25%, transparent));
     transition:
       opacity 700ms var(--ease-out),
       --tone 1200ms var(--ease-out);

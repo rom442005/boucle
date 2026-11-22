@@ -12,6 +12,7 @@
     solid = false,
     photo = null,
     centered = false,
+    headless = false,
   }: {
     header?: Snippet;
     children: Snippet;
@@ -25,6 +26,8 @@
     photo?: 'sheet' | 'cards' | null;
     /** Mac : Communauté, Mes parcours et profils au centre de l'écran (la colonne y glisse) */
     centered?: boolean;
+    /** iPhone : pas d'en-tête du tout (onglets principaux sur la photo, le premier bloc tout en haut) */
+    headless?: boolean;
   } = $props();
 
   let vh = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -39,9 +42,21 @@
 
   /** barre d'onglets en bas (iPhone) : le panneau se pose au-dessus */
   const tabs = $derived(app.wide ? 0 : app.tabbarH);
+  /**
+   * iPhone, sur la photo (Communauté, Mes parcours, profils, connexion, réglages) : plein écran, sans poignée.
+   * Le premier bloc est tout en haut et le contenu défile sous la barre d'onglets, qui flotte en verre
+   * (comme les barres d'iOS 26) : plus de bande inutilisée en bas.
+   */
+  const fullscreen = $derived(!app.wide && photo === 'cards');
+  /**
+   * Hauteur du pied réellement affiché : la mesure d'un pied disparu (le bouton « Créer la boucle » des réglages)
+   * resterait sinon en mémoire et laisserait une bande vide grise en bas du panneau replié.
+   */
+  const foot = $derived(footer ? footH : 0);
   const heights = $derived({
-    peek: Math.max(110, Math.round(headH + footH)),
-    half: foldH ? Math.round(Math.min(headH + foldH + footH, vh * 0.66)) : Math.round(Math.min(vh * 0.62, 600)),
+    // Replié : juste la ligne du résumé (et le pied s'il y en a un), sans bande vide dessous.
+    peek: foot ? Math.max(110, Math.round(headH + foot)) : Math.max(64, Math.round(headH + 10)),
+    half: foldH ? Math.round(Math.min(headH + foldH + foot, vh * 0.66)) : Math.round(Math.min(vh * 0.62, 600)),
     // Les réglages prennent tout l'écran ; un parcours ou une liste laisse voir le haut de la carte.
     full: Math.round(vh - safeTop - (app.phase === 'compose' ? 10 : 70) - tabs),
   } satisfies Record<Detent, number>);
@@ -108,7 +123,7 @@
   let downTarget: HTMLElement | null = null;
 
   function down(e: PointerEvent) {
-    if (app.wide || (e.target as HTMLElement).closest('button:not(.handle), input, a, [role="slider"]')) return;
+    if (app.wide || fullscreen || (e.target as HTMLElement).closest('button:not(.handle), input, a, [role="slider"]')) return;
     downTarget = e.target as HTMLElement;
     startY = e.clientY;
     startX = e.clientX;
@@ -204,10 +219,13 @@
   class:on-photo={!!photo}
   class:bare={photo === 'cards'}
   class:centered={app.wide && centered}
-  style:height={app.wide ? undefined : `${height}px`}
-  style:bottom={tabs ? `${tabs + 6}px` : undefined}
+  class:fullscreen
+  style:height={app.wide || fullscreen ? undefined : `${height}px`}
+  style:bottom={tabs && !fullscreen ? `${tabs + 6}px` : undefined}
+  style:--tabs-h="{tabs}px"
   aria-label={label}
 >
+  {#if (header && !headless) || (!app.wide && !fullscreen)}
   <div
     class="top"
     role="group"
@@ -218,7 +236,7 @@
     onpointerup={up}
     onpointercancel={up}
   >
-    {#if !app.wide}
+    {#if !app.wide && !fullscreen}
       <button use:tactile
         type="button"
         class="handle"
@@ -228,8 +246,9 @@
         <span></span>
       </button>
     {/if}
-    {#if header}{@render header()}{/if}
+    {#if header && !headless}{@render header()}{/if}
   </div>
+  {/if}
   <div class="body" bind:this={body}>
     <div class="body-in">
       {@render children()}
@@ -383,5 +402,32 @@
     transition:
       height 620ms var(--sheet-ease),
       bottom 320ms var(--ease-out);
+  }
+  /* iPhone sur la photo : tout l'écran, du haut (sous l'heure) au bas (sous la barre d'onglets en verre). */
+  .panel.fullscreen {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
+    animation: panel-fade 420ms var(--ease-out) both;
+  }
+  @keyframes panel-fade {
+    from {
+      opacity: 0;
+      translate: 0 18px;
+    }
+  }
+  .fullscreen .top {
+    padding-top: calc(var(--safe-top) + 6px);
+  }
+  .fullscreen > .body:first-child .body-in {
+    padding-top: calc(var(--safe-top) + 10px);
+  }
+  .fullscreen .body-in {
+    padding-bottom: calc(var(--tabs-h, 0px) + 24px);
+  }
+  .fullscreen .foot {
+    padding-bottom: max(14px, calc(var(--safe-bottom) + 4px));
   }
 </style>

@@ -488,14 +488,17 @@ test('premier lancement : créer un compte, puis les quatre onglets', async ({ p
   for (const t of ['Créer', 'Communauté', 'Mes parcours', 'Profil']) await expect(tabs.getByRole('button', { name: t, exact: true })).toBeVisible();
   await tabs.getByRole('button', { name: 'Profil', exact: true }).click();
   await expect(page.getByRole('region', { name: /^Profil de Sam/ })).toBeVisible();
+  // iPhone : les onglets sur la photo prennent tout l'écran, sans poignée à faire glisser.
+  if (browserName !== 'chromium') await expect(page.getByRole('button', { name: /^Taille du panneau/ })).toHaveCount(0);
   await tabs.getByRole('button', { name: 'Créer', exact: true }).click();
   if (browserName !== 'chromium') {
-    // iPhone : la carte, « Faire une boucle » au-dessus des onglets ; les réglages montent puis redescendent.
-    await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+    // iPhone : la carte, la bulle « Faire une boucle » à côté des onglets ; les réglages montent puis redescendent.
+    const go = page.getByRole('button', { name: 'Faire une boucle' });
+    await expect(go).toBeVisible();
     await compose(page);
     await expect(tabs).toHaveCount(0);
     await page.getByRole('button', { name: 'Fermer les réglages' }).click();
-    await expect(page.getByRole('navigation', { name: 'Accueil' })).toBeVisible();
+    await expect(go).toBeVisible();
   } else {
     await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
   }

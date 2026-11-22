@@ -8,7 +8,15 @@
     label = 'Mot de passe',
     autocomplete = 'current-password',
     placeholder = '',
-  }: { value?: string; label?: string; autocomplete?: 'current-password' | 'new-password'; placeholder?: string } = $props();
+    bare = false,
+  }: {
+    value?: string;
+    label?: string;
+    autocomplete?: 'current-password' | 'new-password';
+    placeholder?: string;
+    /** sans libellé au-dessus : le nom du champ est écrit dedans (formulaires compacts) */
+    bare?: boolean;
+  } = $props();
 
   let shown = $state(false);
   const id = $props.id();
@@ -16,9 +24,9 @@
 
 <!-- Le libellé ne nomme que le champ : le bouton œil garde son propre nom. -->
 <div class="field">
-  <label class="field-label" for={id}>{label}</label>
+  {#if !bare}<label class="field-label" for={id}>{label}</label>{/if}
   <span class="pw">
-    <input {id} class="input" type={shown ? 'text' : 'password'} {autocomplete} {placeholder} autocapitalize="off" spellcheck="false" maxlength="72" bind:value required />
+    <input {id} class="input" type={shown ? 'text' : 'password'} {autocomplete} placeholder={bare ? label : placeholder} aria-label={bare ? label : undefined} autocapitalize="off" spellcheck="false" maxlength="72" bind:value required />
     <button use:tactile type="button" class="eye" aria-label={shown ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={shown} onclick={() => (shown = !shown)}>
       <Icon name={shown ? 'eyeSlash' : 'eye'} size={18} />
     </button>

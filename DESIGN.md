@@ -203,8 +203,9 @@ components:
 6. **Des graphiques fins.** Barres par jour sur 28 jours (aujourd'hui cerclé), courbe douce avec un point lumineux, piste en pointillés, légende en pastilles de couleur.
 7. **Icônes et émojis.** Icônes au trait fin (Phosphor regular) pour les actions ; un émoji par étiquette pour situer (🗓️ ⏱️ 📍 ❤️ 👣 🔥) ; boutons ronds en verre (flèche, réglage, +).
 8. **Les contrôles.** Action principale : pastille rose pleine (blanche pleine sur une photo très sombre, comme « Continue ») ; liens texte en blanc sur la photo ; choix en lignes de verre avec émoji et coche ; onglets en capsule de verre où une pastille glisse.
-9. **Le mouvement.** La photo dérive lentement et se fond toutes les 5 minutes ; les blocs montent en cascade avec un léger ressort ; le panneau glisse au centre sur Mac. Rien ne clignote.
-10. **Une seule grammaire.** Un nouvel écran reprend d'abord les blocs existants (`.cards`, `.card.wide`, `.tabcard`, `.photo-card`, `ActivityBars`) ; s'il en faut un nouveau, il rejoint ce fichier.
+9. **Le mouvement.** La photo dérive lentement et se fond toutes les 5 minutes ; les blocs montent en cascade avec un léger ressort ; le panneau glisse au centre sur Mac ; la bulle de l'onglet choisi s'étire vers son nouvel onglet puis se resserre (comme Deezer), et tout bouton de verre gonfle sous le doigt. Rien ne clignote.
+10. **Le centre de l'écran d'abord (iPhone).** Une seule ligne en bas : la capsule des onglets et la bulle rose « Faire une boucle » ; le contenu défile dessous. Pas de poignée ni de titre sur les onglets principaux : le premier bloc est tout en haut. Résumé replié d'un parcours sur une ligne, ▶ pour suivre. Météo en une pastille. Au lancement, une vue d'ensemble, jamais un gros plan sur la position.
+11. **Une seule grammaire.** Un nouvel écran reprend d'abord les blocs existants (`.cards`, `.card.wide`, `.tabcard`, `.photo-card`, `ActivityBars`) ; s'il en faut un nouveau, il rejoint ce fichier.
 
 **Avant de livrer :** photo derrière ? Seulement des blocs de verre ? Un chiffre héros par bloc ? Des étiquettes d'un ou deux mots ? Le rose réservé à l'action ? Lisible sur la photo la plus claire (s8, s17) comme sur la plus sombre (s9, s20) ?
 
@@ -466,4 +467,12 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **One glass everywhere:** with Paysage or Satellite, `html` carries `.on-photo`, so every control over the map (composer panel, proposals, elevation dock, controls, tab bar, Today card) uses the smoked glass and white text of the photo screens; the light Plan brings the light interface back. Browser theme colour follows (#28312C).
 - **The photo of the moment reaches the map** (`scene.svelte.ts`, `sceneNow`): an `.atmo` veil tints the top (58 %), bottom (42 %) and corners of the map with the current photo's tone, cross-fading through the registered `--tone` property when the photo changes; in 3D, sky, horizon and fog are mixed from that tone.
 - **Dissolve:** the backdrop photo blurs (18 px) as it fades into the map and comes back into focus when a photo screen opens.
+
+## Update 22/11/2026 (iPhone, centre de l'écran)
+
+- **Tab roots on photo** (Communauté, Mes parcours, my profile, Profil sign-in) are full-screen `Panel.fullscreen` (no grabber, `headless`): first block right under the status bar, content scrolling under the floating tab bar (`--tabs-h` bottom padding). Sheets and the composer keep their header (close, title) but are full-screen too.
+- **Tab bar**: one floating row, `.dock` = glass capsule with the four tabs + the pink liquid-glass bubble "Faire une boucle" (62 px, folds to zero width in results/detail). The selected-tab lens is lighter glass (gradient, inner highlights, backdrop brightness 1.12); on tab change it stretches (scale 1.36 × 1.12) then settles with a spring; it swells under the finger.
+- **Results on iPhone**: the folded sheet is one row (‹, distance · D+ · time with dots, ↻, pink ▶ "Suivre ce parcours"); no footer button. Folded height = header only (a vanished footer's stale height no longer leaves an empty grey band).
+- **Today** on iPhone is a one-line pill (sky, temperature, place). **Launch** opens at zoom 12 around the start, never zooming in on the position. **Auth** fields carry their name inside ("Adresse mail", "Mot de passe", "Code à 6 chiffres"), compact header.
+- **Liquid glass**: on photo and Paysage, glass gets thickness (inner top glow, inner bottom shade, hairline), photo cards brighten what they cover (brightness 1.05) with a faint text shadow, icons get a soft drop shadow, round glass buttons swell (1.12) under the finger instead of shrinking. The map veil is a little lighter (top 50 %, bottom 35 %, corners 25 %).
 

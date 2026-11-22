@@ -101,18 +101,15 @@
 <div class="auth">
   {#if step !== 'profile'}
     <div class="lead">
-      <span class="lead-ic" aria-hidden="true"><Icon name={step === 'login' || forgot ? 'key' : 'users'} size={30} fill={!(step === 'login' || forgot)} /></span>
+      <span class="lead-ic" aria-hidden="true"><Icon name={step === 'login' || forgot ? 'key' : 'users'} size={22} fill={!(step === 'login' || forgot)} /></span>
       <h2>{step === 'login' ? 'Connexion' : forgot ? 'Mot de passe oublié' : 'Rejoins la Communauté'}</h2>
     </div>
   {/if}
 
   {#if step === 'login'}
     <form class="step" onsubmit={login} novalidate>
-      <label class="field">
-        <span class="field-label">Adresse e-mail</span>
-        <input class="input" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="prenom@exemple.fr" bind:value={email} use:autofocus required />
-      </label>
-      <PasswordField bind:value={password} autocomplete="current-password" />
+      <input class="input" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Adresse mail" aria-label="Adresse e-mail" bind:value={email} use:autofocus required />
+      <PasswordField bind:value={password} autocomplete="current-password" bare />
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Connexion…' : 'Se connecter'}</button>
       <div class="again">
@@ -122,12 +119,9 @@
     </form>
   {:else if step === 'email'}
     <form class="step" onsubmit={send} novalidate>
-      <label class="field">
-        <span class="field-label">Adresse e-mail</span>
-        <input class="input" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="prenom@exemple.fr" bind:value={email} use:autofocus required />
-      </label>
+      <input class="input" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="Adresse mail" aria-label="Adresse e-mail" bind:value={email} use:autofocus required />
       {#if community.demo}
-        <div class="banner" role="note"><span class="icon"><Icon name="mail" size={18} /></span><span>Pas encore d’e-mail : les comptes vivent sur cet appareil le temps que le serveur soit mis en ligne. Le code est <b>123456</b>.</span></div>
+        <p class="demo" role="note" aria-label="Démonstration : comptes sur cet appareil, code 123456.">🧪 Démo · code <b class="tabular">123456</b></p>
       {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Envoi…' : 'Recevoir un code'}</button>
@@ -142,14 +136,11 @@
       {:else}
         <p class="sent"><Icon name="mail" size={18} /><span>Code envoyé à <b>{email}</b></span></p>
       {/if}
-      <label class="field">
-        <span class="field-label">Code à 6 chiffres</span>
-        <input class="input code tabular" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="000000" bind:value={code} use:autofocus required />
-      </label>
+      <input class="input code tabular" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="Code à 6 chiffres" aria-label="Code à 6 chiffres" bind:value={code} use:autofocus required />
       {#if forgot}
         <!-- Pour que le gestionnaire de mots de passe range le nouveau avec la bonne adresse. -->
         <input class="visually-hidden" type="email" autocomplete="username" value={email} readonly tabindex="-1" aria-hidden="true" />
-        <PasswordField bind:value={password} label="Nouveau mot de passe" autocomplete="new-password" placeholder="8 caractères au moins" />
+        <PasswordField bind:value={password} label="Nouveau mot de passe" autocomplete="new-password" bare />
       {/if}
       {#if error}<div class="banner is-error" role="alert"><span class="icon"><Icon name="warning" size={18} /></span><span>{error}</span></div>{/if}
       <button use:tactile type="submit" class="cta" disabled={busy}>{busy ? 'Vérification…' : 'Valider'}</button>
@@ -172,7 +163,7 @@
 <style>
   .auth {
     display: grid;
-    gap: 16px;
+    gap: 14px;
   }
   .lead {
     display: grid;
@@ -182,13 +173,13 @@
   }
   .lead h2 {
     margin: 0;
-    font-size: 1.375rem;
+    font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
   .lead-ic {
-    width: 60px;
-    height: 60px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -215,6 +206,25 @@
     font-size: 1.5rem;
     letter-spacing: 0.3em;
     text-align: center;
+  }
+  .code::placeholder {
+    font-size: 1rem;
+    letter-spacing: 0;
+  }
+  .step {
+    gap: 10px;
+  }
+  .demo {
+    justify-self: center;
+    margin: 0;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--fill-2);
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .demo b {
+    color: var(--label);
   }
   .again {
     display: flex;

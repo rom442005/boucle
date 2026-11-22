@@ -28,7 +28,6 @@
   import ReportForm from './components/ReportForm.svelte';
   import Avatar from './components/Avatar.svelte';
   import { community } from './lib/community.svelte';
-  import HomeBar from './components/HomeBar.svelte';
   import Welcome from './components/Welcome.svelte';
   import Lightbox from './components/Lightbox.svelte';
   import TabBar from './components/TabBar.svelte';
@@ -146,6 +145,10 @@
   }
   /** Accueil (iPhone) : la carte seule, « Faire une boucle » et les onglets. Sur Mac, le panneau reste ouvert. */
   const athome = $derived(!app.wide && app.phase === 'compose' && app.home);
+  // Accueil iPhone : la carte se cadre au-dessus de la barre d'onglets (la bulle « Faire une boucle » y est).
+  $effect(() => {
+    if (athome) app.padding = { top: 64, bottom: app.tabbarH + 28, left: 28, right: 64 };
+  });
   /** iPhone : les réglages couvrent l'écran (pas de boutons de carte par-dessus). */
   const fullsheet = $derived(!app.wide && app.phase === 'compose' && !app.home && app.detent === 'full');
   const canSwipe = $derived(!app.wide && app.phase === 'results' && app.routes.length > 1);
@@ -201,6 +204,19 @@
     else if (t === 'library') app.openLibrary();
     else community.openMe();
   }
+  /**
+   * iPhone, onglets principaux sur la photo (Communauté, Mes parcours, mon profil, la connexion du Profil) :
+   * ni poignée ni titre, le premier bloc est tout en haut ; l'onglet allumé dit où l'on est.
+   */
+  const headless = $derived(
+    !app.wide &&
+      !!photo &&
+      (community.sheet
+        ? profileAuth
+        : app.phase === 'library' || (app.phase === 'community' && (community.view === 'feed' || meView))),
+  );
+  /** La bulle « Faire une boucle », à côté des onglets : sur la carte d'accueil et les onglets principaux. */
+  const showAction = $derived(app.phase === 'compose' || app.phase === 'library' || app.phase === 'community');
   /** iPhone : les onglets du bas, sauf pendant les réglages (plein écran), le suivi ou un choix sur la carte. */
   const showTabs = $derived(!app.wide && app.phase !== 'follow' && !welcome && !app.pickOnMap && !(app.phase === 'compose' && !app.home));
   const backLabel = $derived(
@@ -228,7 +244,7 @@
             <button use:tactile type="button" class="round cancel" aria-label="Annuler la création" onclick={() => app.cancel()}><Icon name="close" size={18} /></button>
           {/if}
         </div>
-      {:else if (app.phase === 'results' || app.phase === 'detail') && app.route}
+      {:else if (app.phase === 'results' || app.phase === 'detail') && app.route && app.wide}
         <button use:tactile type="button" class="cta" onclick={() => app.startFollow()}><Icon name="play" size={18} />Suivre ce parcours</button>
       {/if}
 {/snippet}
@@ -244,12 +260,12 @@
     <BuildingsLegend />
   {/if}
 
-  {#if showTabs}<TabBar active={tab} onphoto={scene || app.mapType !== 'plan'} />{/if}
+  {#if showTabs}<TabBar active={tab} onphoto={scene || app.mapType !== 'plan'} action={showAction && !welcome} />{/if}
   {#if athome}
-    {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
+    <!-- « Faire une boucle » est la bulle rose à côté des onglets (TabBar). -->
   {:else if !welcome}
   <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
-  <Panel solid={fullsheet && !photo} {photo} centered={app.phase === 'community' || app.phase === 'library' || community.sheet?.kind === 'auth'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
+  <Panel solid={fullsheet && !photo} {photo} {headless} centered={app.phase === 'community' || app.phase === 'library' || community.sheet?.kind === 'auth'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet || (!app.wide && (app.phase === 'results' || app.phase === 'detail')) ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <!-- Le logo, puis les quatre sections en icônes : une seule ligne, sans le nom de l'app. -->
@@ -343,9 +359,11 @@
             <button use:tactile type="button" class="round navbtn" aria-label="Autres propositions" disabled={busy} onclick={() => app.create(true)}>
               <span class:spin={busy}><Icon name="again" size={20} /></span>
             </button>
-          {:else}
-            <span class="navbtn-space" aria-hidden="true"></span>
           {/if}
+          <!-- Comme le bouton lecture d'une app de musique : suivre le parcours, d'un geste, sans quitter la carte. -->
+          <button use:tactile type="button" class="round play" aria-label="Suivre ce parcours" onclick={() => app.startFollow()}>
+            <Icon name="play" size={20} fill />
+          </button>
         </div>
       {:else}
         <div class="nav">
@@ -557,6 +575,27 @@
   }
   .navbtn-space {
     width: 40px;
+  }
+  /* ▶ Suivre : bulle rose de verre liquide, comme la bulle « Faire une boucle ». */
+  .play {
+    width: 46px;
+    height: 46px;
+    margin-left: 2px;
+    color: #fff;
+    background:
+      radial-gradient(90% 70% at 32% 12%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 58%),
+      var(--tint);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.6),
+      inset 0 -2px 5px rgba(0, 0, 0, 0.18),
+      0 10px 22px -10px color-mix(in srgb, var(--tint) 90%, transparent);
+  }
+  .play:active:not(:disabled) {
+    transform: scale(1.1);
+  }
+  .play :global(.icon) {
+    translate: 1px 0;
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
   }
   .sum {
     padding-bottom: 4px;

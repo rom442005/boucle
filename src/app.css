@@ -1011,6 +1011,42 @@ textarea {
   --g-bg: rgba(18, 18, 20, 0.44);
 }
 
+/*
+ * Verre liquide (fil rouge) : sur la photo et la carte Paysage, le verre a de l'épaisseur. Une lueur
+ * intérieure en haut, une ombre intérieure en bas, un liseré fin, et ce qu'il y a derrière légèrement
+ * éclairci, comme à travers une lentille. Les icônes se détachent d'une ombre douce.
+ */
+.on-photo .glass::after,
+.on-photo.glass::after {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.36),
+    inset 0 12px 20px -16px rgba(255, 255, 255, 0.4),
+    inset 0 -14px 22px -18px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+}
+.on-photo .photo-card,
+.photo-card.on-photo {
+  -webkit-backdrop-filter: blur(var(--blur, 30px)) saturate(var(--sat, 1.45)) brightness(1.05);
+  backdrop-filter: blur(var(--blur, 30px)) saturate(var(--sat, 1.45)) brightness(1.05);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.16);
+}
+.on-photo .glass .icon,
+.on-photo .round .icon {
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
+}
+/* Les boutons ronds de verre gonflent sous le doigt, comme une bulle, puis reviennent avec un rebond. */
+.on-photo .round {
+  transition:
+    transform 420ms var(--spring-bouncy),
+    background-color 200ms var(--ease-out),
+    color 200ms var(--ease-out);
+}
+.on-photo .round:active:not(:disabled) {
+  transform: scale(1.12);
+  background-color: rgba(255, 255, 255, 0.16);
+  transition-duration: 160ms;
+}
+
 /* Passage d'un onglet à l'autre : un fondu court, sans bascule de la carte. */
 ::view-transition-old(root),
 ::view-transition-new(root) {

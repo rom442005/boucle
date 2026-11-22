@@ -104,6 +104,33 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* iPhone : une seule ligne (le temps, la température, le lieu), pour laisser la carte au centre. */
+  @media (max-width: 859px) {
+    .today {
+      width: auto;
+      max-width: calc(100vw - 96px);
+      top: calc(env(safe-area-inset-top, 0px) + 10px);
+      padding: 7px 16px 7px 12px;
+      border-radius: 999px;
+    }
+    .sky {
+      gap: 8px;
+    }
+    .emo {
+      font-size: 1.25rem;
+    }
+    .temp {
+      font-size: 1.3125rem;
+      letter-spacing: -0.03em;
+    }
+    .where {
+      margin-left: 2px;
+      text-align: left;
+    }
+    .where span {
+      display: none;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .today {
       animation: none;
