@@ -36,6 +36,15 @@ import { haptic } from './haptics';
 import { isNativeApp } from './platform';
 
 const DRAW_KEY = 'boucle.dessin.v1';
+const DRAW_PREFS = 'boucle.dessin.lieu';
+function loadDrawPrefs(): { reach: number; approach: boolean } {
+  try {
+    const p = JSON.parse(localStorage.getItem(DRAW_PREFS) ?? 'null') as { reach?: number; approach?: boolean } | null;
+    return { reach: typeof p?.reach === 'number' ? Math.max(0, p.reach) : 0, approach: p?.approach ?? true };
+  } catch {
+    return { reach: 0, approach: true };
+  }
+}
 function loadDrawing(): Drawing | null {
   try {
     const d = JSON.parse(localStorage.getItem(DRAW_KEY) ?? 'null') as Drawing | null;
@@ -113,10 +122,30 @@ class AppState {
   toggleZone(z: ZoneKind) {
     this.zones = this.zones.includes(z) ? this.zones.filter((x) => x !== z) : [...this.zones, z];
   }
+  /** lieu mis au point par la carte : son genre, son rang parmi les plus proches, son nom et sa distance (m) */
+  zoneFocus = $state.raw<{ kind: ZoneKind; i: number; n: number; name: string; dist: number } | null>(null);
+  /** demande de passer au lieu suivant (+1) ou précédent (-1), lue par la carte */
+  zoneStep = $state.raw<{ d: number; id: number } | null>(null);
+  stepZone(d: number) {
+    this.zoneStep = { d, id: (this.zoneStep?.id ?? 0) + 1 };
+  }
 
   /** mode Dessin : le dessin du carnet (gardé d'une visite à l'autre) et le carnet déplié (= mode actif) */
   drawing = $state.raw<Drawing | null>(loadDrawing());
   drawOpen = $state(false);
+  /** le dessin peut être posé jusqu'à cette distance du départ (km) ; 0 : il passe par le départ */
+  drawReach = $state(loadDrawPrefs().reach);
+  /** le parcours commence au départ et va jusqu'au dessin (sinon, il commence sur le dessin) */
+  drawApproach = $state(loadDrawPrefs().approach);
+  setDrawPrefs(p: { reach?: number; approach?: boolean }) {
+    if (p.reach != null) this.drawReach = p.reach;
+    if (p.approach != null) this.drawApproach = p.approach;
+    try {
+      localStorage.setItem(DRAW_PREFS, JSON.stringify({ reach: this.drawReach, approach: this.drawApproach }));
+    } catch {
+      /* stockage indisponible */
+    }
+  }
   /** la prochaine boucle suivra le dessin */
   get drawActive(): boolean {
     return this.drawOpen && this.params.shape === 'loop' && hasDrawing(this.drawing);
@@ -441,6 +470,8 @@ class AppState {
         destination: this.destination ? ($state.snapshot(this.destination) as Place) : null,
         vias: $state.snapshot(this.vias) as Place[],
         drawing: this.drawActive ? this.drawing : null,
+        drawReach: this.drawReach,
+        drawApproach: this.drawApproach,
         params: $state.snapshot(this.params) as Params,
         settings: $state.snapshot(this.settings) as Settings,
         seed: this.seed,

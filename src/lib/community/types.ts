@@ -229,6 +229,11 @@ export interface CommunityBackend {
   healthKey(): Promise<string>;
   /** lien avec Strava (serveur en ligne seulement) */
   strava?(action: 'connect' | 'stats' | 'disconnect', code?: string): Promise<StravaData>;
+  /**
+   * Idées de dessins proposées par l'IA (fonction « dessin » du serveur) : null quand l'IA n'est pas branchée
+   * (pas de clé), pas connecté, ou Communauté de démonstration.
+   */
+  drawIdeas?(prompt: string): Promise<{ name: string; strokes: [number, number][][] }[] | null>;
   /** un parcours de la communauté vient d'être repris (favori, suivi, GPX) */
   used(routeId: string): Promise<void>;
 }

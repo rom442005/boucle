@@ -2,9 +2,15 @@
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Icon from './Icon.svelte';
+  import Ruler from './Ruler.svelte';
   import { app } from '../lib/state.svelte';
-  import { haptic, tactile } from '../lib/haptics';
+  import { asSwitch, haptic, nativeSwitch, tactile } from '../lib/haptics';
+  import { SPORTS } from '../lib/sports';
+  import { kmSetting } from '../lib/format';
   import { hasDrawing, isStroke, presetDrawing, simplifyPts, smoothStroke, type DrawPreset, type Pt } from '../lib/drawing';
+  import { EXAMPLES, localIdeas, type Idea } from '../lib/shapes';
+  import { community } from '../lib/community.svelte';
+  import { CommunityError } from '../lib/community/types';
   import type { IconName } from '../lib/icons';
 
   /*
@@ -12,6 +18,8 @@
    * On y dessine au doigt (iPhone) ou à la souris (Mac) ; les traits s'enchaînent dans l'ordre (liaisons en
    * pointillés) et le dernier revient au point de départ (rond blanc). Quatre formes toutes prêtes, annuler
    * le dernier trait, tout effacer. Déplié avec un dessin, la boucle créée suit le dessin.
+   * En haut, une discussion : on écrit la forme voulue (« un diamant », « 2027 ») et des idées de dessins
+   * s'affichent (bibliothèque de l'app, et l'IA quand elle est branchée sur le serveur).
    */
   const PRESETS: { k: DrawPreset; icon: IconName; label: string }[] = [
     { k: 'circle', icon: 'circle', label: 'Rond' },
@@ -30,6 +38,8 @@
 
   const strokes = $derived(app.drawing?.strokes.filter(isStroke) ?? []);
   const preset = $derived(app.drawing?.preset);
+  /** forme toute prête ou idée choisie : elle garde ses angles et se dessine d'un trait */
+  const sharp = $derived(!!(app.drawing?.preset || app.drawing?.name));
   const all = $derived(live && live.length > 1 ? [...strokes, live] : strokes);
   const empty = $derived(!all.length);
 
@@ -103,6 +113,38 @@
     app.setDrawing(presetDrawing(k));
     drawKey++;
   }
+  // Discussion : la forme demandée devient des idées de dessins à toucher.
+  let prompt = $state('');
+  let ideas = $state.raw<Idea[]>([]);
+  let asked = $state('');
+  let asking = $state(false);
+  let askNote = $state<string | null>(null);
+  async function ask(text = prompt) {
+    const t = text.trim();
+    if (!t || asking) return;
+    prompt = t;
+    asked = t;
+    askNote = null;
+    ideas = localIdeas(t);
+    haptic('tap');
+    asking = true;
+    try {
+      const ai = await community.drawIdeas(t);
+      if (asked !== t) return;
+      if (ai?.length) ideas = [...ai.map((i) => ({ name: i.name, drawing: { strokes: i.strokes }, ai: true })), ...ideas].slice(0, 6);
+    } catch (e) {
+      if (asked === t) askNote = e instanceof CommunityError ? e.message : null;
+    } finally {
+      if (asked === t) asking = false;
+    }
+  }
+  function useIdea(i: Idea) {
+    haptic('tap');
+    app.setDrawing({ strokes: i.drawing.strokes, name: i.name });
+    drawKey++;
+  }
+  const thumb = (st: Pt[][]) => st.map((p) => p.map(([x, y]) => `${(x * 100).toFixed(1)},${(y * 100).toFixed(1)}`).join(' '));
+
   function undo() {
     haptic('tap');
     const rest = strokes.slice(0, -1);
@@ -112,6 +154,13 @@
     haptic('tap');
     app.setDrawing(null);
   }
+
+  // Où poser le dessin : au départ, ou au meilleur endroit dans un rayon (« c'est l'aventure »).
+  const bike = $derived(SPORTS[app.params.sport].bike);
+  const reachMax = $derived(bike ? 40 : 15);
+  const reachStep = $derived(bike ? 1 : 0.5);
+  const reach = $derived(Math.min(app.drawReach, reachMax));
+  const startName = $derived(app.start ? (app.start.kind === 'gps' ? 'Ma position' : app.start.name) : 'À choisir');
 </script>
 
 <div class="draw" class:open={app.drawOpen}>
@@ -134,6 +183,38 @@
 
   {#if app.drawOpen}
     <div id="draw-sheet" class="sheet" transition:slide={{ duration: 420, easing: cubicOut }}>
+      <form
+        class="ask"
+        onsubmit={(e) => {
+          e.preventDefault();
+          void ask();
+        }}
+      >
+        <span class="a-ic" class:busy={asking} aria-hidden="true"><Icon name="sparkle" size={16} fill /></span>
+        <input bind:value={prompt} maxlength="80" enterkeyhint="send" autocomplete="off" placeholder="Un diamant, 2027, un chat…" aria-label="Décris la forme que tu veux courir" />
+        <button use:tactile type="submit" class="send" disabled={!prompt.trim() || asking} aria-label="Proposer des dessins"><Icon name="arrowUp" size={15} /></button>
+      </form>
+      {#if ideas.length}
+        <div class="ideas" role="group" aria-label="Dessins proposés pour « {asked} »">
+          {#each ideas as idea, i (idea.name + i)}
+            <button use:tactile type="button" class="idea" style:--i={i} aria-label="Courir ce dessin : {idea.name}" onclick={() => useIdea(idea)}>
+              <svg viewBox="0 0 100 100" aria-hidden="true">
+                {#each thumb(idea.drawing.strokes) as pts, k (k)}<polyline points={pts} />{/each}
+              </svg>
+              <span class="i-name">{#if idea.ai}<Icon name="sparkle" size={10} fill />{/if}{idea.name}</span>
+            </button>
+          {/each}
+        </div>
+      {:else if asked && !asking}
+        <p class="ask-note">Aucune idée pour « {asked} » : dessine-la ci-dessous.</p>
+      {:else if !asked}
+        <div class="examples" aria-label="Exemples">
+          {#each EXAMPLES as ex (ex)}
+            <button use:tactile type="button" class="ex" onclick={() => ask(ex)}>{ex}</button>
+          {/each}
+        </div>
+      {/if}
+      {#if askNote}<p class="ask-note">{askNote}</p>{/if}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <div
         class="pad"
@@ -153,8 +234,8 @@
           {/each}
           {#key drawKey}
             {#each all as s, i (i)}
-              <path class="glow" d={pathOf(s, !!preset)} stroke-width={unit * 14} />
-              <path class="ink" class:fresh={!!preset && drawKey > 0} d={pathOf(s, !!preset)} pathLength="1" stroke-width={unit * 4.5} />
+              <path class="glow" d={pathOf(s, sharp)} stroke-width={unit * 14} />
+              <path class="ink" class:fresh={sharp && drawKey > 0} d={pathOf(s, sharp)} pathLength="1" stroke-width={unit * 4.5} />
             {/each}
           {/key}
           {#if startPt}
@@ -177,6 +258,44 @@
           <button use:tactile type="button" class="tool" aria-label="Annuler le dernier trait" title="Annuler" disabled={!strokes.length} onclick={undo}><Icon name="undo" size={18} /></button>
           <button use:tactile type="button" class="tool" aria-label="Tout effacer" title="Effacer" disabled={!strokes.length} onclick={clear}><Icon name="trash" size={18} /></button>
         </div>
+      </div>
+
+      <div class="where">
+        <!-- D'où l'on part (position, maison…) : le dessin se pose autour. -->
+        <div class="from">
+          <span class="f-ic" aria-hidden="true"><Icon name={app.start?.kind === 'gps' ? 'locate' : 'pin'} size={15} fill /></span>
+          <span class="f-txt"><small>Départ</small><b>{startName}</b></span>
+          <button use:tactile type="button" class="change" aria-label="Changer le lieu de départ" onclick={() => (app.search = 'start')}>Changer</button>
+        </div>
+        <Ruler
+          id="reach"
+          label="Lieu du dessin"
+          value={reach}
+          min={0}
+          max={reachMax}
+          step={reachStep}
+          every={bike ? 10 : 5}
+          display={reach === 0 ? 'Au\u00a0départ' : `≤ ${kmSetting(reach)}`}
+          unit={reach === 0 ? '' : 'km'}
+          valuetext={reach === 0 ? 'Le dessin passe par le départ' : `Le dessin se pose au meilleur endroit, à ${kmSetting(reach)} kilomètres du départ au plus`}
+          onchange={(v) => app.setDrawPrefs({ reach: v })}
+        />
+        {#if reach > 0}
+          <label class="row approach" transition:slide={{ duration: 300, easing: cubicOut }}>
+            <span class="row-icon"><Icon name="path" /></span>
+            <span class="row-label">Y aller depuis le départ</span>
+            <input
+              class="switch"
+              type="checkbox"
+              use:asSwitch
+              checked={app.drawApproach}
+              onchange={() => {
+                app.setDrawPrefs({ approach: !app.drawApproach });
+                if (!nativeSwitch) haptic('tap');
+              }}
+            />
+          </label>
+        {/if}
       </div>
     </div>
   {/if}
@@ -374,6 +493,212 @@
   .tool:disabled {
     opacity: 0.35;
   }
+  /* Discussion : une bulle de saisie, puis les idées en vignettes qui défilent si elles débordent. */
+  .ask {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 5px 5px 5px 12px;
+    border-radius: 999px;
+    background: var(--fill-2);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--label) 8%, transparent);
+    transition: box-shadow 220ms var(--ease-out);
+  }
+  .ask:focus-within {
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in srgb, var(--tint) 70%, transparent),
+      0 0 0 4px var(--tint-soft);
+  }
+  .a-ic {
+    display: grid;
+    color: var(--tint);
+  }
+  .a-ic.busy {
+    animation: twinkle 900ms ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    50% {
+      opacity: 0.35;
+      scale: 0.8;
+      rotate: 25deg;
+    }
+  }
+  .ask input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--label);
+    font: inherit;
+    font-size: 0.9375rem;
+  }
+  .ask input::placeholder {
+    color: var(--label-3);
+  }
+  .send {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--tint);
+    transition:
+      opacity 200ms var(--ease-out),
+      transform 260ms var(--spring-bouncy);
+  }
+  .send:disabled {
+    opacity: 0.35;
+  }
+  .send:active {
+    transform: scale(0.88);
+  }
+  .ideas {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -2px;
+    padding: 2px;
+  }
+  .ideas::-webkit-scrollbar {
+    display: none;
+  }
+  .idea {
+    flex: none;
+    width: 84px;
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    padding: 8px 4px 6px;
+    border-radius: 16px;
+    background: var(--fill-2);
+    color: var(--label);
+    animation: idea-in 460ms var(--spring) backwards;
+    animation-delay: calc(var(--i) * 55ms);
+    transition: transform 260ms var(--spring-bouncy);
+  }
+  @keyframes idea-in {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+      scale: 0.9;
+    }
+  }
+  .idea:active {
+    transform: scale(0.93);
+  }
+  .idea svg {
+    width: 52px;
+    height: 52px;
+  }
+  .idea polyline {
+    fill: none;
+    stroke: var(--tint);
+    stroke-width: 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .i-name {
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .i-name :global(.icon) {
+    color: var(--tint);
+  }
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ex {
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--label-2);
+    background: var(--fill-2);
+    transition: transform 240ms var(--spring);
+  }
+  .ex:active {
+    transform: scale(0.94);
+  }
+  .ask-note {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .where {
+    display: grid;
+    gap: 10px;
+    padding-top: 4px;
+  }
+  .from {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 6px 8px 6px 6px;
+    border-radius: 16px;
+    background: var(--fill-2);
+  }
+  .f-ic {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--tint);
+  }
+  .f-txt {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    line-height: 1.2;
+  }
+  .f-txt small {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--label-2);
+  }
+  .f-txt b {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .change {
+    flex: none;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 650;
+    color: var(--tint);
+    background: var(--tint-soft);
+    transition: transform 240ms var(--spring);
+  }
+  .change:active {
+    transform: scale(0.94);
+  }
+  .approach {
+    padding: 4px 4px 4px 8px;
+    min-height: 44px;
+  }
   @media (hover: hover) {
     .toggle:hover {
       background: var(--fill-2);
@@ -383,7 +708,9 @@
     .ink.fresh,
     .start,
     .invite,
-    .t-on {
+    .t-on,
+    .idea,
+    .a-ic.busy {
       animation: none;
     }
   }

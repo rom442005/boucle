@@ -716,6 +716,18 @@ class CommunityState {
     return (await this.api()).healthKey();
   }
 
+  /** L'IA n'est pas branchée sur ce serveur (pas de clé) : on ne la redemande pas pendant la visite. */
+  private noAI = false;
+  /** Idées de dessins de l'IA pour une phrase ; null si elle n'est pas disponible (démo, pas connecté, pas de clé). */
+  async drawIdeas(prompt: string): Promise<{ name: string; strokes: [number, number][][] }[] | null> {
+    if (this.noAI || this.demo || !this.configured) return null;
+    const b = await this.api().catch(() => null);
+    if (!b?.drawIdeas) return null;
+    const ideas = await b.drawIdeas(prompt);
+    if (ideas == null) this.noAI = true;
+    return ideas;
+  }
+
   /** Lien avec Strava, par la fonction du serveur (le compte Boucle doit être connecté). */
   async strava(action: 'connect' | 'stats' | 'disconnect', code?: string): Promise<StravaData> {
     const b = await this.api();

@@ -10,7 +10,7 @@
   import { haptic, tactile } from '../lib/haptics';
   import { duration, km, kmValue, meters, pace, percent, speed, NNBSP } from '../lib/format';
   import { ENVS, ENV_ORDER, SHAPES, SPORTS } from '../lib/sports';
-  import { cumulative, nearestOnRoute } from '../lib/geo';
+  import { cumulative, haversine, nearestOnRoute } from '../lib/geo';
   import { daylightLine, weatherLine, type Line } from '../lib/conditions';
   import type { EnvClass, Route } from '../lib/types';
   import Avatar from './Avatar.svelte';
@@ -60,8 +60,14 @@
     if (x.art) {
       const k = percent(x.art.fit);
       out.push({ ok: x.art.fit >= 0.8, text: `✏️ Ressemblance au dessin : ${k}`, short: `Ressemblance ${k}` });
+      // Dessin posé ailleurs : le trajet d'accès compris au début, ou la distance jusqu'à son départ.
+      const away = x.art.start && app.start ? haversine(app.start.coord, x.art.start) : 0;
+      if (x.art.approach) out.push({ ok: true, text: `🧭 Accès depuis le départ compris : ${km(x.art.approach)}`, short: `Accès ${km(x.art.approach)}` });
+      else if (away > 80) out.push({ ok: true, text: `📍 Le dessin commence à ${km(away)} du départ`, short: `À ${km(away)}` });
     }
-    const dErr = Math.abs(x.lengthM / 1000 - p.distanceKm) / p.distanceKm;
+    // Dessin : la distance demandée est celle du dessin, sans le trajet d'accès.
+    const drawn = x.lengthM - (x.art?.approach ?? 0);
+    const dErr = Math.abs(drawn / 1000 - p.distanceKm) / p.distanceKm;
     const exact = dErr < 0.005;
     out.push({
       ok: dErr <= 0.06,

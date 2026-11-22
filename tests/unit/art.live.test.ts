@@ -25,29 +25,31 @@ function face(): Drawing {
   return { strokes: [ring(0.5, 0.5, 0.4, 48), ring(0.36, 0.38, 0.06, 12), ring(0.64, 0.38, 0.06, 12), smile] };
 }
 
-async function run(preset: DrawPreset | 'face', sport: Sport, km: number, start = NANTES) {
+async function run(preset: DrawPreset | 'face', sport: Sport, km: number, reach = 0, approach = false, start = NANTES) {
   const p = { ...defaultParams(sport), distanceKm: km };
   const t = Date.now();
   let first = 0;
   const res = await drawingLoops({
     drawing: preset === 'face' ? face() : presetDrawing(preset),
-    start,
+    origin: start,
+    reach: reach * 1000,
+    approach,
     D: km * 1000,
     sport,
     costing: costingFor(p, DEFAULT_SETTINGS),
-    ratio: sport === 'road' || sport === 'gravel' ? 1.25 : 1.35,
-    deadline: Date.now() + 14000,
+    ratio: sport === 'road' || sport === 'gravel' ? 1.7 : 1.42,
+    deadline: Date.now() + 18000,
     report: () => {},
     onGood: () => (first ||= Date.now() - t),
   });
   const ms = Date.now() - t;
   console.log(
-    `${preset} ${sport} ${km} km → ${res.cands.map((c) => `${(c.L / 1000).toFixed(2)} km ressemblance ${Math.round(c.fit * 100)} % (écart ${Math.round(c.dev)} m)`).join(' | ')} — 1re ${first} ms, fin ${ms} ms, rapport ${res.ratio.toFixed(2)}`,
+    `${preset} ${sport} ${km} km${reach ? ` (jusqu’à ${reach} km${approach ? ', accès compris' : ''})` : ''} → ${res.cands.map((c) => `${(c.L / 1000).toFixed(2)} km ressemblance ${Math.round(c.fit * 100)} % (écart ${Math.round(c.dev)} m${c.approach ? `, accès ${(c.approach / 1000).toFixed(1)} km` : ''})`).join(' | ')} — 1re ${first} ms, fin ${ms} ms, rapport ${res.ratio.toFixed(2)}`,
   );
   // Copie des tracés pour les regarder (ART_OUT=dossier) ; module de Node chargé à la demande.
   if (OUT) {
     const fs = (await import(/* @vite-ignore */ ['node', 'fs'].join(':'))) as { writeFileSync: (f: string, d: string) => void };
-    fs.writeFileSync(`${OUT}/${preset}-${sport}-${km}.json`, JSON.stringify(res.cands.map((c) => ({ route: c.res.coords, ghost: c.ghost, fit: c.fit, L: c.L }))));
+    fs.writeFileSync(`${OUT}/${preset}-${sport}-${km}${reach ? `-r${reach}` : ''}.json`, JSON.stringify(res.cands.map((c) => ({ route: c.res.coords, ghost: c.ghost, fit: c.fit, L: c.L, origin: start }))));
   }
   return res;
 }
@@ -65,6 +67,20 @@ describe.skipIf(!live)('mode Dessin, réseau réel', () => {
     const res = await run('face', 'run', 14);
     expect(res.cands.length).toBeGreaterThan(0);
   }, 60000);
+  it('cœur, course 10 km, meilleur endroit à moins de 6 km', async () => {
+    const res = await run('heart', 'run', 10, 6);
+    expect(res.cands.length).toBeGreaterThan(0);
+    expect(Math.max(...res.cands.map((c) => c.fit))).toBeGreaterThan(0.8);
+  }, 90000);
+  it('étoile, course 12 km, à moins de 8 km avec l’accès', async () => {
+    const res = await run('star', 'run', 12, 8, true);
+    expect(res.cands.length).toBeGreaterThan(0);
+  }, 90000);
+  it('cœur à vélo, 100 km, à moins de 25 km', async () => {
+    const res = await run('heart', 'road', 100, 25);
+    expect(res.cands.length).toBeGreaterThan(0);
+    expect(Math.max(...res.cands.map((c) => c.fit))).toBeGreaterThan(0.75);
+  }, 120000);
   it('cœur à vélo, 40 km', async () => {
     const res = await run('heart', 'road', 40);
     expect(res.cands.length).toBeGreaterThan(0);

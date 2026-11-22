@@ -509,6 +509,19 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       if (error || typeof data !== 'string') fail(error, 'Clé impossible à créer pour le moment.');
       return data as string;
     },
+    async drawIdeas(prompt) {
+      if (!(await uid().catch(() => null))) return null;
+      const { data, error } = await sb.functions.invoke('dessin', { body: { prompt } });
+      if (error) {
+        const status = (error as { context?: Response }).context?.status;
+        if (status === 429) throw new CommunityError('Tu as demandé beaucoup de dessins aujourd’hui : l’IA reprend demain.');
+        // Fonction absente, sans clé ou membre pas connecté : l'IA n'est pas disponible ici.
+        if (status === 404 || status === 401 || status === 503) return null;
+        throw new CommunityError('L’IA ne répond pas pour le moment.');
+      }
+      const ideas = (data as { ideas?: { name: string; strokes: [number, number][][] }[] } | null)?.ideas;
+      return Array.isArray(ideas) ? ideas : null;
+    },
     async strava(action, code) {
       const { data, error } = await sb.functions.invoke('strava', { body: { action, code } });
       if (error) throw new CommunityError('Strava ne répond pas pour le moment.');

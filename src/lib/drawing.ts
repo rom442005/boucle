@@ -13,6 +13,8 @@ export interface Drawing {
   strokes: Pt[][];
   /** forme toute prête choisie (sert au nom du parcours), absente pour un dessin à main levée */
   preset?: DrawPreset;
+  /** nom d'une idée choisie dans la discussion (« Diamant », « 2027 »), pour le nom du parcours */
+  name?: string;
 }
 
 export const PRESET_NAMES: Record<DrawPreset, string> = {
@@ -303,5 +305,6 @@ export function packDrawing(d: Drawing): Drawing {
   return {
     strokes: d.strokes.filter(isStroke).map((s) => simplifyPts(s, 0.0015).map(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000] as Pt)),
     ...(d.preset ? { preset: d.preset } : {}),
+    ...(d.name ? { name: d.name.slice(0, 40) } : {}),
   };
 }

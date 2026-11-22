@@ -36,6 +36,16 @@ Apple ne laisse pas un site lire Santé. Sur l'iPhone, tant que l'app n'est pas 
 - **Refaire le raccourci** (nouvelle mesure, autre adresse) : `python3 scripts/make-shortcut.py`. Il lit l'adresse et la clé publique de Supabase dans `.env.native.local`, écrit puis signe `public/sante/Boucle Sante.shortcut` (il faut être connecté à iCloud sur le Mac). Garder un nom **sans accent** : un « é » enregistré décomposé par macOS n'est plus trouvé par GitHub Pages, et l'app lance le raccourci par ce nom.
 - **Tester la réception sans rien écrire** : dans l'éditeur SQL de Supabase, un bloc `do $$ … $$` qui crée une clé d'essai, appelle `health_push`, lit `health_days`, puis lève une exception : tout est annulé.
 
+## IA des dessins (fonction « dessin »)
+
+La discussion du mode Dessin propose des formes de sa bibliothèque. Pour qu'une IA (Claude) en propose aussi :
+
+1. Crée une clé sur console.anthropic.com (payant à l'usage : quelques centimes par demande ; chaque membre est limité à 20 demandes par jour).
+2. Dans Supabase › Edge Functions › Secrets, ajoute `ANTHROPIC_API_KEY` avec cette clé.
+3. Dans Supabase › Edge Functions › dessin › Settings, désactive « Verify JWT with legacy secret » (la fonction vérifie elle-même que le membre est connecté ; c'est le réglage recommandé par Supabase), puis Save changes.
+
+Sans clé, la fonction répond « not_configured » et l'app garde sa bibliothèque. Code : `supabase/functions/dessin/index.ts`, compteur : table `dessin_usage`.
+
 ## Changer les photos de fond
 
 Les sources sont dans `public/scenes/SOURCES.md`. Télécharger depuis Unsplash en 4096 × 2731 (`sN-l.jpg`, `fit=crop&crop=entropy&q=86&fm=jpg&cs=srgb`) et 1440 × 3120 (`sN-m.jpg`, `q=84`), vérifier que l'original est assez grand (`?fm=json` donne `PixelWidth`), mettre à jour la teinte dans `src/lib/scenes.ts`, puis **changer `SCENES_V`** (scenes.ts) **et le nom du cache** `scenes-N` (vite.config.ts) : sinon les téléphones gardent les anciennes photos hors ligne.
@@ -91,6 +101,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **23/11/2026** : mode Dessin refait pour être fidèle (liaisons qui suivent le dessin, plus de dessin géant), recherche du meilleur endroit jusqu'à 15 km (40 km à vélo) autour du départ choisi, trajet d'accès en option, idées de dessins à partir d'une phrase (bibliothèque de formes ; IA Claude prête, voir « IA des dessins »). Lieux sur la carte : pistes d'athlétisme reconnues à leur forme, parcs publics seulement, toilettes ajoutées, mise au point sur le lieu le plus proche.
 - **22/11/2026** : mode Dessin (« Dessiner le parcours », replié par défaut) : la boucle reproduit un dessin fait au doigt ou à la souris, ou une forme toute prête. Calcul sur l'appareil (carte des rues lue dans les tuiles de la carte) puis « map matching » Valhalla ; 3 à 9 requêtes, première proposition en 2 à 4 s. Banc réel : `LIVE=1 npx vitest run tests/unit/art.live.test.ts`. Barre des lieux en icônes seules, Milieu sur une ligne, règles sans graduations moyennes blanches.
 - **22/11/2026** : santé sur l'iPhone sans l'app par le raccourci « Boucle Sante » (clé personnelle hachée, fonctions `health_key_new`, `health_push`, `health_unlink`, testées) et bloc Santé du profil (anneau, semaine, distance, énergie, exercice). Photos de fond en haute définition (7 remplacées), règles graduées pour la distance et le D+, rubrique « Sol » retirée, bloc des lieux sur la carte (pistes, parcs, eau, forêts, fontaines), lentille des onglets refaite sur un ressort continu, colonne Créer pleine hauteur sur Mac, animations d'apparition partout.
 - **22/11/2026** : mot de passe à la création du compte (reconnexion sans code), « Mot de passe oublié » par code, changement dans Modifier, Compte. Vue `admin.membres` dans Supabase. Premier lancement sur Mac : seul l'accueil est affiché. 20 photos de fond au lieu de 7.

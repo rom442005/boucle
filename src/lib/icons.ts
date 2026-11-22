@@ -115,6 +115,11 @@ import scribble from '@phosphor-icons/core/assets/regular/scribble-loop.svg?raw'
 import circle from '@phosphor-icons/core/assets/regular/circle.svg?raw';
 import square from '@phosphor-icons/core/assets/regular/square.svg?raw';
 import undo from '@phosphor-icons/core/assets/regular/arrow-counter-clockwise.svg?raw';
+import toilet from '@phosphor-icons/core/assets/regular/toilet.svg?raw';
+import toiletF from '@phosphor-icons/core/assets/fill/toilet-fill.svg?raw';
+import sparkle from '@phosphor-icons/core/assets/regular/sparkle.svg?raw';
+import sparkleF from '@phosphor-icons/core/assets/fill/sparkle-fill.svg?raw';
+import arrowUp from '@phosphor-icons/core/assets/bold/arrow-up-bold.svg?raw';
 
 /* Piste d'athlétisme (pas d'équivalent chez Phosphor) : un anneau en forme de stade, même trait. */
 const track =
@@ -127,13 +132,14 @@ export const ICONS = {
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
   heart, chat, users, user, signout, report, send, prohibit, lock, key, eye, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
-  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track,
+  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {
   run: runF, hike: hikeF, bicycle: bicycleF, bike: bikeF, tree: treeF, waves: wavesF, park: parkF, grains: grainsF,
   buildings: buildingsF, locate: locateF, cube: cubeF, bookmark: bookmarkF, drop: dropF, star: starF, done: doneF, diamond: diamondF,
   heart: heartF, chat: chatF, users: usersF, user: userF, camera: cameraF, images: imagesF, track: trackF,
+  toilet: toiletF, sparkle: sparkleF,
 };
 
 export type IconName = keyof typeof ICONS;

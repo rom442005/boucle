@@ -12,10 +12,10 @@
   import { easeInOutSine, easeOutCubic, traceEase, traceMs, traceTimeAt } from '../lib/motion';
   import { circlePolygon, EMPTY, kmMarks, lineFeature, pointsFC, segmentsToGeoJSON, sliceBetween, sliceRoute, slopeSegments } from '../lib/routegeo';
   import { climbsOf, slopeColor, SLOPE_WORDS } from '../lib/elevation';
-  import { ICONS } from '../lib/icons';
+  import { ICONS, ICONS_FILL } from '../lib/icons';
   import { bbox, cumulative, decodePolyline, haversine, pointAt } from '../lib/geo';
   import { community } from '../lib/community.svelte';
-  import { centerOf, zoneKey, ZONE_ORDER, ZONES, type ZoneKind } from '../lib/zones';
+  import { boxAround, findPlaces, zoneKey, ZONE_ORDER, ZONES, type ZoneKind, type ZonePlace } from '../lib/zones';
   import { km, kmValue, NNBSP } from '../lib/format';
   import { haptic, tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
@@ -186,7 +186,7 @@
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
     addCityDots();
-    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar', 'art']) {
+    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar', 'art', 'art-start']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -282,6 +282,19 @@
     });
     m.addLayer({ id: 'sel-casing', type: 'line', source: 'sel-line', layout: round, paint: { 'line-color': casing, 'line-width': zw(7.5, 12.5) } });
     m.addLayer({ id: 'sel-line', type: 'line', source: 'sel', layout: round, paint: { 'line-color': ['get', 'color'], 'line-width': zw(4.5, 8) } });
+    // Mode Dessin : là où le dessin commence (quand il est posé ailleurs qu'au départ), comme dans le carnet.
+    m.addLayer({
+      id: 'art-start',
+      type: 'circle',
+      source: 'art-start',
+      paint: {
+        'circle-radius': zw(5, 8),
+        'circle-color': '#FFFFFF',
+        'circle-stroke-color': tint,
+        'circle-stroke-width': zw(3, 4),
+        'circle-pitch-alignment': 'map',
+      },
+    });
     m.addLayer({
       id: 'done-line',
       type: 'line',
@@ -379,21 +392,27 @@
   }
 
   /*
-   * Lieux mis en valeur (bloc sous la météo) : la surface du lieu se colore sous les noms de la carte, son
-   * contour s'allume ; pistes et fontaines reçoivent un repère rond, visible même de loin. Tout est caché
-   * tant que le lieu n'est pas choisi.
+   * Lieux mis en valeur (barre sous la météo). Pendant qu'un lieu est montré, la carte s'assombrit un peu
+   * (voile) et les lieux s'allument au-dessus : surfaces colorées au contour lumineux (parcs, eau, forêts),
+   * pistes d'athlétisme dessinées comme de vraies pistes (anneau brique, ligne de couloir blanche), repères
+   * ronds à icône pour les petits lieux. Le lieu mis au point (le plus proche, puis suivant) a un halo qui bat.
    */
   function addZoneLayers() {
     const m = map!;
-    const below = m.getStyle().layers.find((l) => l.type === 'symbol')?.id;
+    // Au-dessus du voile (le reste de la carte s'efface derrière), sous les parcours.
+    const before = m.getLayer('reach-fill') ? 'reach-fill' : undefined;
     for (const k of ZONE_ORDER) {
       const z = ZONES[k];
+      if (z.look !== 'area') continue;
       const base = { source: 'omt', 'source-layer': z.layer, filter: z.filter, layout: { visibility: 'none' as const } };
-      if (k === 'fountain') continue;
-      m.addLayer({ id: `zone-${k}-fill`, type: 'fill', ...base, paint: { 'fill-color': z.color, 'fill-opacity': k === 'track' ? 0.62 : 0.4, 'fill-opacity-transition': { duration: 500, delay: 0 } } }, below);
+      m.addLayer({ id: `zone-${k}-fill`, type: 'fill', ...base, paint: { 'fill-color': z.color, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.62, 16, 0.42] as unknown as number } }, before);
       m.addLayer(
-        { id: `zone-${k}-line`, type: 'line', ...base, paint: { 'line-color': z.color, 'line-width': k === 'track' ? 2.4 : 1.6, 'line-blur': 0.6, 'line-opacity': 0.95 } },
-        below,
+        { id: `zone-${k}-glow`, type: 'line', ...base, paint: { 'line-color': z.color, 'line-width': zw(5, 12), 'line-blur': zw(4, 9), 'line-opacity': 0.55 } },
+        before,
+      );
+      m.addLayer(
+        { id: `zone-${k}-line`, type: 'line', ...base, paint: { 'line-color': mixWhite(z.color, 0.45), 'line-width': zw(1, 2), 'line-opacity': 0.95 } },
+        before,
       );
       if (k === 'water') {
         m.addLayer(
@@ -404,75 +423,248 @@
             'source-layer': 'waterway',
             filter: ['!=', ['get', 'brunnel'], 'tunnel'],
             layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': z.color, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 5], 'line-opacity': 0.9 },
+            paint: { 'line-color': z.color, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 5], 'line-opacity': 0.95 },
           },
-          below,
+          before,
         );
       }
     }
-    if (!m.getSource('zone-pins')) m.addSource('zone-pins', { type: 'geojson', data: EMPTY });
-    const before = m.getLayer('focus-veil') ? 'focus-veil' : undefined;
+    // Pistes d'athlétisme reconnues (tuiles relues sur l'appareil) : un anneau brique et sa ligne de couloir.
+    for (const id of ['zone-tracks', 'zone-pins', 'zone-focus']) if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
+    const track = ZONES.track.color;
+    // Une piste comme sur le terrain : pelouse au centre, anneau brique d'une dizaine de mètres, lignes blanches.
+    // Les tuiles donnent soit l'ovale plein (anneau tracé sur son contour), soit l'anneau et son trou (pelouse).
+    const meters = (m10: number) => ['interpolate', ['exponential', 2], ['zoom'], 13, m10 * 0.16, 18, m10 * 5.1] as unknown as number;
+    m.addLayer({ id: 'zone-track-glow', type: 'line', source: 'zone-tracks', paint: { 'line-color': track, 'line-width': zw(8, 22), 'line-blur': zw(5, 12), 'line-opacity': 0.55 } }, before);
+    m.addLayer({ id: 'zone-track-infield', type: 'fill', source: 'zone-tracks', filter: ['in', ['get', 'part'], ['literal', ['oval', 'infield']]], paint: { 'fill-color': '#3E9B55', 'fill-opacity': 0.92 } }, before);
+    m.addLayer({ id: 'zone-track-ringfill', type: 'fill', source: 'zone-tracks', filter: ['==', ['get', 'part'], 'ring'], paint: { 'fill-color': '#D9532F', 'fill-opacity': 0.96 } }, before);
+    m.addLayer(
+      { id: 'zone-track-ring', type: 'line', source: 'zone-tracks', filter: ['==', ['get', 'part'], 'oval'], layout: { 'line-join': 'round' }, paint: { 'line-color': '#D9532F', 'line-width': meters(10) } },
+      before,
+    );
+    m.addLayer(
+      { id: 'zone-track-lane', type: 'line', source: 'zone-tracks', minzoom: 14, filter: ['!=', ['get', 'part'], 'infield'], layout: { 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': zw(0.6, 1.4), 'line-opacity': 0.9 } },
+      before,
+    );
+    // Lieu mis au point : un halo qui bat sous son repère.
     m.addLayer(
       {
-        id: 'zone-pins-halo',
+        id: 'zone-focus-halo',
         type: 'circle',
-        source: 'zone-pins',
-        paint: { 'circle-radius': 15, 'circle-color': ['get', 'color'], 'circle-opacity': 0.24, 'circle-blur': 0.35, 'circle-radius-transition': { duration: 650, delay: 0 } },
+        source: 'zone-focus',
+        paint: { 'circle-radius': 18, 'circle-color': ['get', 'color'], 'circle-opacity': 0.35, 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 2, 'circle-stroke-opacity': 0.9, 'circle-pitch-alignment': 'map' },
       },
       before,
     );
+    // Repères : une pastille de la couleur du lieu, avec son icône, plus grande pour le lieu mis au point.
     m.addLayer(
       {
         id: 'zone-pins',
-        type: 'circle',
+        type: 'symbol',
         source: 'zone-pins',
-        paint: { 'circle-radius': 6.5, 'circle-color': ['get', 'color'], 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 2.2 },
+        layout: {
+          'icon-image': ['concat', 'zpin-', ['get', 'kind']],
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 11, ['case', ['get', 'focus'], 0.95, 0.7], 15, ['case', ['get', 'focus'], 1.25, 1]] as unknown as number,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'symbol-sort-key': ['case', ['get', 'focus'], 1, 0] as unknown as number,
+        },
+        // De près, la piste se voit elle-même : son repère s'efface.
+        paint: { 'icon-opacity': ['interpolate', ['linear'], ['zoom'], 14.6, 1, 15.4, ['case', ['==', ['get', 'kind'], 'track'], 0, 1]] as unknown as number },
       },
       before,
     );
+    void addPinImages();
     showZones(app.zones);
   }
 
-  /** Les calques des lieux choisis deviennent visibles, les autres se cachent. */
+  /** Une teinte éclaircie (contour lumineux d'une surface). */
+  function mixWhite(hex: string, k: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * k));
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+  }
+
+  /** Pastilles des repères : la couleur du lieu, un liseré blanc, l'icône de la barre des lieux en blanc. */
+  async function addPinImages() {
+    const m = map;
+    if (!m) return;
+    for (const k of ZONE_ORDER) {
+      const z = ZONES[k];
+      const id = `zpin-${k}`;
+      if (z.look === 'area' || m.hasImage(id)) continue;
+      try {
+        const svg = (ICONS_FILL[z.icon] ?? ICONS[z.icon]).replace(/currentColor/g, '#FFFFFF');
+        const img = new Image();
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        await img.decode();
+        const S = 76;
+        const c = document.createElement('canvas');
+        c.width = S;
+        c.height = S;
+        const g = c.getContext('2d')!;
+        g.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        g.shadowBlur = 10;
+        g.shadowOffsetY = 3;
+        g.beginPath();
+        g.arc(S / 2, S / 2 - 2, S / 2 - 10, 0, Math.PI * 2);
+        g.fillStyle = z.color;
+        g.fill();
+        g.shadowColor = 'transparent';
+        g.lineWidth = 5;
+        g.strokeStyle = '#FFFFFF';
+        g.stroke();
+        const is = 30;
+        g.drawImage(img, (S - is) / 2, (S - is) / 2 - 2, is, is);
+        if (map === m && !m.hasImage(id)) m.addImage(id, g.getImageData(0, 0, S, S), { pixelRatio: 2 });
+      } catch {
+        /* image indisponible : le repère n'apparaît pas, la surface reste colorée */
+      }
+    }
+  }
+
+  /** Les calques des lieux choisis deviennent visibles, les autres se cachent ; la carte s'assombrit derrière. */
   function showZones(on: ZoneKind[]) {
     const m = map;
     if (!m) return;
     for (const k of ZONE_ORDER) {
-      for (const id of [`zone-${k}-fill`, `zone-${k}-line`, ...(k === 'water' ? ['zone-water-river'] : [])]) {
+      if (ZONES[k].look !== 'area') continue;
+      for (const id of [`zone-${k}-fill`, `zone-${k}-glow`, `zone-${k}-line`, ...(k === 'water' ? ['zone-water-river'] : [])]) {
         if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', on.includes(k) ? 'visible' : 'none');
       }
     }
-    countZones();
+    applyVeil();
+    void refreshZones();
   }
 
   /**
-   * Repères des petits lieux choisis et compte de ceux qui sont à l'écran (pistes et fontaines), relus dans les
-   * tuiles chargées à chaque arrêt de la carte.
+   * Pistes et repères des lieux choisis, relus dans les tuiles autour de la vue à chaque arrêt de la carte,
+   * et compte de ceux qui sont à l'écran (pour les petits chiffres de la barre).
    */
-  function countZones() {
+  let zoneRun = 0;
+  async function refreshZones() {
     const m = map;
     if (!m || !m.getSource('zone-pins')) return;
-    const bounds = m.getBounds();
+    const run = ++zoneRun;
+    const kinds = ZONE_ORDER.filter((k) => app.zones.includes(k) && ZONES[k].look !== 'area');
+    const b = m.getBounds();
+    const view: [number, number, number, number] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    const c = m.getCenter();
     const counts: Partial<Record<ZoneKind, number>> = {};
     const pins: GeoJSON.Feature[] = [];
-    for (const k of ZONE_ORDER) {
+    const tracks: GeoJSON.Feature[] = [];
+    for (const k of kinds) {
       const z = ZONES[k];
-      if (!z.pin || m.getZoom() < z.minZoom - 0.01) continue;
-      const seen = new Set<string>();
+      // Trop loin pour les voir (ou trop de tuiles à lire) : rien, la barre invite à s'approcher.
+      if (m.getZoom() < (z.look === 'pin' ? 13 : 11)) continue;
+      let places: ZonePlace[] = [];
+      try {
+        places = await findPlaces(k, view, [c.lng, c.lat]);
+      } catch {
+        continue;
+      }
+      if (run !== zoneRun) return;
       let n = 0;
-      for (const f of m.querySourceFeatures('omt', { sourceLayer: z.layer, filter: z.filter })) {
-        const c = centerOf(f.geometry);
-        if (!c) continue;
-        const key = zoneKey(k, c);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (bounds.contains(c)) n++;
-        if (app.zones.includes(k)) pins.push({ type: 'Feature', properties: { color: z.color, kind: k }, geometry: { type: 'Point', coordinates: c } });
+      for (const p of places) {
+        const inView = p.coord[0] >= view[0] && p.coord[0] <= view[2] && p.coord[1] >= view[1] && p.coord[1] <= view[3];
+        if (inView) n++;
+        const focus = !!focused && focused.kind === k && zoneKey(k, focused.coord) === zoneKey(k, p.coord);
+        pins.push({ type: 'Feature', properties: { kind: k, focus }, geometry: { type: 'Point', coordinates: p.coord } });
+        if (p.shape) {
+          const [outer, ...holes] = p.shape.coordinates;
+          if (holes.length) {
+            tracks.push({ type: 'Feature', properties: { part: 'ring' }, geometry: p.shape });
+            for (const h of holes) tracks.push({ type: 'Feature', properties: { part: 'infield' }, geometry: { type: 'Polygon', coordinates: [h] } });
+          } else tracks.push({ type: 'Feature', properties: { part: 'oval' }, geometry: { type: 'Polygon', coordinates: [outer] } });
+        }
       }
       counts[k] = n;
     }
+    if (run !== zoneRun) return;
     app.zoneCounts = counts;
-    (m.getSource('zone-pins') as GeoJSONSource).setData({ type: 'FeatureCollection', features: pins });
+    (m.getSource('zone-pins') as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: pins });
+    (m.getSource('zone-tracks') as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features: tracks });
+  }
+
+  /* ------------------------------ Mise au point sur un lieu ------------------------------ */
+
+  /** Lieux du genre mis au point, du plus proche au plus lointain, et celui qui est montré. */
+  let focusList: ZonePlace[] = [];
+  let focused: ZonePlace | null = null;
+
+  /** Point de référence : le départ choisi, sinon la position, sinon le centre de la carte. */
+  function focusRef(): LngLat {
+    const c = map!.getCenter();
+    return app.start?.coord ?? app.userPos ?? [c.lng, c.lat];
+  }
+
+  /** Montre le lieu le plus proche d'un genre qu'on vient d'allumer (puis les suivants avec ‹ ›). */
+  let focusRun = 0;
+  async function focusKind(kind: ZoneKind) {
+    const m = map;
+    if (!m) return;
+    const run = ++focusRun;
+    const ref = focusRef();
+    const z = ZONES[kind];
+    let list: ZonePlace[] = [];
+    for (const half of z.look === 'pin' ? [2500, 5000] : kind === 'track' ? [5000, 10000] : [7000, 14000]) {
+      try {
+        list = await findPlaces(kind, boxAround(ref, half), ref);
+      } catch {
+        list = [];
+      }
+      if (run !== focusRun || !app.zones.includes(kind)) return;
+      if (list.length) break;
+    }
+    focusList = list.slice(0, 12);
+    if (!focusList.length) {
+      focused = null;
+      app.zoneFocus = { kind, i: 0, n: 0, name: z.one, dist: 0 };
+      setFocusPoint(null);
+      return;
+    }
+    showFocus(0);
+  }
+
+  function showFocus(i: number) {
+    const m = map;
+    const p = focusList[i];
+    if (!m || !p) return;
+    focused = p;
+    const ref = focusRef();
+    app.zoneFocus = { kind: p.kind, i, n: focusList.length, name: p.name ?? ZONES[p.kind].one, dist: haversine(ref, p.coord) };
+    setFocusPoint(p);
+    void refreshZones();
+    const pad = untrack(() => app.padding);
+    const [w, s, e, n] = p.bounds;
+    const big = ZONES[p.kind].look === 'area' && haversine([w, s], [e, n]) > 250;
+    if (big) {
+      m.fitBounds([[w, s], [e, n]], { padding: { top: pad.top + 40, bottom: pad.bottom + 40, left: pad.left + 40, right: pad.right + 40 }, maxZoom: 16, duration: reduce ? 0 : 1100 });
+    } else {
+      m.flyTo({ center: p.coord, zoom: Math.max(m.getZoom(), ZONES[p.kind].look === 'pin' ? 16 : 16.2), padding: pad, ...(reduce ? { duration: 0 } : { speed: 1.4, curve: 1.4 }) });
+    }
+    haptic('tick');
+  }
+
+  /** Halo qui bat sous le lieu mis au point (une onde toutes les 1,6 s). */
+  let pulse = 0;
+  function setFocusPoint(p: ZonePlace | null) {
+    const m = map;
+    cancelAnimationFrame(pulse);
+    if (!m?.getSource('zone-focus')) return;
+    (m.getSource('zone-focus') as GeoJSONSource).setData(p ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { color: ZONES[p.kind].color }, geometry: { type: 'Point', coordinates: p.coord } }] } : EMPTY);
+    if (!p || reduce) return;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      if (!map?.getLayer('zone-focus-halo')) return;
+      const k = ((t - t0) % 1600) / 1600;
+      const e = 1 - (1 - k) ** 3;
+      map.setPaintProperty('zone-focus-halo', 'circle-radius', 14 + 26 * e);
+      map.setPaintProperty('zone-focus-halo', 'circle-opacity', 0.38 * (1 - k));
+      map.setPaintProperty('zone-focus-halo', 'circle-stroke-opacity', 0.95 * (1 - k));
+      pulse = requestAnimationFrame(tick);
+    };
+    pulse = requestAnimationFrame(tick);
   }
 
   /** Anneaux des villes du globe : aux couleurs du thème, et blanc sur les photos. */
@@ -564,9 +756,11 @@
     const m = map;
     if (!m?.getLayer('focus-veil')) return;
     const on = app.phase === 'results' || app.phase === 'detail';
+    // Lieux allumés : la carte s'efface un peu derrière eux pour qu'ils ressortent (sans route proposée).
+    const places = !on && app.zones.length > 0;
     const sat = app.mapType === 'satellite';
     m.setPaintProperty('focus-veil', 'background-color', sat ? '#0b0d10' : paysage ? PAYSAGE_BG : theme === 'dark' ? '#1e1f21' : '#f7f6f2');
-    m.setPaintProperty('focus-veil', 'background-opacity', on ? (sat ? 0.3 : theme === 'dark' ? 0.34 : 0.42) : 0);
+    m.setPaintProperty('focus-veil', 'background-opacity', on ? (sat ? 0.3 : theme === 'dark' ? 0.34 : 0.42) : places ? (sat ? 0.38 : theme === 'dark' ? 0.4 : 0.46) : 0);
   }
 
   /** Relief accentué selon le terrain : une ville plate a besoin de plus d'exagération pour que ses côtes se voient. */
@@ -1201,7 +1395,7 @@
     });
     // Lieux sous la météo : repères et compte à jour à chaque arrêt de la carte (tuiles chargées).
     map.on('idle', () => {
-      if (app.zonesShown || app.zones.length) countZones();
+      if (app.zones.length) void refreshZones();
     });
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     map.on('moveend', () => {
@@ -1580,7 +1774,7 @@
       lastDrawn = null;
       lastAltCount = 0;
       app.revealK = 1;
-      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen', 'art']) setData(id, EMPTY);
+      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen', 'art', 'art-start']) setData(id, EMPTY);
       if (lastTick !== -1 && app.phase === 'compose' && app.start) {
         const D = untrack(() => app.params.distanceKm) * 1000;
         const ring = circlePolygon(app.start.coord, D / 3.7);
@@ -1598,6 +1792,8 @@
     setData('alt', alt);
     setData('water', pointsFC(r.waterPoints));
     setData('art', r.art ? lineFeature(r.art.ghost) : EMPTY);
+    const artStart = r.art?.start;
+    setData('art-start', artStart && app.start && haversine(artStart, untrack(() => app.start!.coord)) > 80 ? pointsFC([artStart]) : EMPTY);
     const fresh = tick !== lastTick;
     lastTick = tick;
     // Le parcours affiché n'a pas changé (les autres propositions arrivent, les sols sont connus) :
@@ -1814,7 +2010,8 @@
     });
   });
 
-  // Lieux choisis sous la météo : ils s'allument ; s'il faut s'approcher pour les voir, la carte s'approche.
+  // Lieux choisis sous la météo : ils s'allument, et la carte va montrer le plus proche du genre qu'on vient
+  // d'allumer (mise au point). Éteint, il disparaît, et la mise au point passe au genre encore allumé.
   let zonesBefore: ZoneKind[] = [];
   $effect(() => {
     const on = [...app.zones];
@@ -1823,25 +2020,30 @@
       showZones(on);
       const added = on.filter((k) => !zonesBefore.includes(k));
       zonesBefore = on;
-      const need = Math.max(0, ...added.map((k) => ZONES[k].minZoom));
-      if (added.length && map!.getZoom() < need) map!.easeTo({ zoom: need + 0.6, duration: reduce ? 0 : 900, padding: app.padding });
-      if (added.some((k) => ZONES[k].pin)) pingZones();
+      if (added.length) void focusKind(added[added.length - 1]);
+      else if (focused && !on.includes(focused.kind)) {
+        focused = null;
+        focusList = [];
+        setFocusPoint(null);
+        app.zoneFocus = null;
+        if (on.length) void focusKind(on[on.length - 1]);
+      } else if (!on.length) {
+        focusRun++;
+        app.zoneFocus = null;
+        setFocusPoint(null);
+      }
     });
   });
-  /** Les repères des lieux qu'on vient de choisir s'annoncent : leur halo s'ouvre. */
-  function pingZones() {
-    const m = map;
-    if (reduce || !m?.getLayer('zone-pins-halo')) return;
-    m.setPaintProperty('zone-pins-halo', 'circle-radius-transition', { duration: 0, delay: 0 });
-    m.setPaintProperty('zone-pins-halo', 'circle-radius', 3);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (!m.getLayer('zone-pins-halo')) return;
-        m.setPaintProperty('zone-pins-halo', 'circle-radius-transition', { duration: 700, delay: 0 });
-        m.setPaintProperty('zone-pins-halo', 'circle-radius', 15);
-      }),
-    );
-  }
+  // Lieu suivant ou précédent (‹ › dans la bulle sous la barre des lieux).
+  $effect(() => {
+    const step = app.zoneStep;
+    if (!step || !ready || !map) return;
+    untrack(() => {
+      if (!focusList.length || !focused) return;
+      const i = focusList.indexOf(focused);
+      showFocus((Math.max(0, i) + step.d + focusList.length) % focusList.length);
+    });
+  });
 
   // Suivi en direct : partie faite en gris, carte centrée sur la position.
   $effect(() => {

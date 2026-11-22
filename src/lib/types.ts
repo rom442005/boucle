@@ -84,8 +84,11 @@ export interface Route {
   waterPoints: LngLat[];
   durationS: number;
   match?: Match;
-  /** mode Dessin : le dessin tel qu'il a été posé sur la carte, et la ressemblance (0 à 1) */
-  art?: { ghost: LngLat[]; fit: number };
+  /**
+   * mode Dessin : le dessin tel qu'il a été posé sur la carte, la ressemblance (0 à 1), le départ du dessin
+   * et la longueur du trajet d'accès compris au début du parcours (m, 0 sans accès)
+   */
+  art?: { ghost: LngLat[]; fit: number; start?: LngLat; approach?: number };
   tags?: string[];
   params?: Params;
   createdAt: number;

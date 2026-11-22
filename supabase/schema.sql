@@ -542,3 +542,16 @@ left join public.profiles_private pp on pp.id = u.id
 order by u.created_at desc;
 
 revoke all on admin.membres from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------------
+-- Idées de dessins par l'IA (fonction « dessin ») : 20 demandes par membre et par jour. Seule la fonction
+-- (clé de service) lit et écrit ce compteur ; les membres n'y ont pas accès.
+create table if not exists dessin_usage (
+  user_id uuid not null references auth.users on delete cascade,
+  day date not null,
+  n int not null default 0,
+  primary key (user_id, day)
+);
+alter table dessin_usage enable row level security;
+revoke all on dessin_usage from anon, authenticated;
+

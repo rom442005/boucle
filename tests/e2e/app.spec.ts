@@ -147,6 +147,13 @@ test('dessiner le parcours : la boucle suit le dessin', async ({ page }) => {
   await expect(pad.locator('circle.start')).toHaveCount(1);
   await page.getByRole('button', { name: 'Annuler le dernier trait' }).click();
   await expect(pad.locator('circle.start')).toHaveCount(0);
+  // Une idée de dessin à partir d'une phrase (bibliothèque de l'app, IA si elle est branchée).
+  await page.getByRole('textbox', { name: /Décris la forme/ }).fill('un diamant');
+  await page.getByRole('button', { name: 'Proposer des dessins' }).click();
+  await page.getByRole('button', { name: /^Courir ce dessin : Diamant$/ }).click();
+  await expect(pad.locator('circle.start')).toHaveCount(1);
+  // Le dessin peut aller chercher le meilleur endroit autour du départ.
+  await expect(page.getByRole('slider', { name: 'Lieu du dessin' })).toBeVisible();
   // … ou une forme toute prête. Le relief et le milieu ne comptent plus : grisés.
   await page.getByRole('button', { name: 'Étoile' }).click();
   await expect(page.getByRole('button', { name: 'Étoile' })).toHaveAttribute('aria-pressed', 'true');
@@ -160,12 +167,12 @@ test('dessiner le parcours : la boucle suit le dessin', async ({ page }) => {
   await expect(page.getByRole('option').first()).toContainText(/Étoile( par|$)/);
 });
 
-test('lieux sur la carte : cinq icônes, sans défiler', async ({ page }) => {
+test('lieux sur la carte : six icônes sans défiler, mise au point sur le plus proche', async ({ page }) => {
   await open(page);
   const bar = page.getByRole('group', { name: 'Lieux à voir sur la carte' });
   await expect(bar).toBeVisible();
   const box = (await bar.boundingBox())!;
-  for (const name of ['Pistes d’athlétisme', 'Parcs et jardins', 'Lacs, étangs et rivières', 'Bois et forêts', 'Fontaines d’eau potable']) {
+  for (const name of ['Pistes d’athlétisme', 'Parcs et jardins publics', 'Lacs, étangs et rivières', 'Bois et forêts', 'Fontaines d’eau potable', 'Toilettes publiques']) {
     const btn = bar.getByRole('button', { name: new RegExp('^' + name) });
     const r = (await btn.boundingBox())!;
     expect(r.x).toBeGreaterThanOrEqual(box.x - 1);
@@ -174,6 +181,13 @@ test('lieux sur la carte : cinq icônes, sans défiler', async ({ page }) => {
   const parks = bar.getByRole('button', { name: /^Parcs et jardins/ });
   await parks.click();
   await expect(parks).toHaveAttribute('aria-pressed', 'true');
+  // La carte va montrer le parc le plus proche : une bulle dit lequel, à quelle distance, et passe au suivant.
+  const focus = page.getByRole('status').filter({ hasText: /à \d/ });
+  await expect(focus).toContainText(/1\/\d+/, { timeout: 20_000 });
+  await page.getByRole('button', { name: 'Lieu suivant' }).click();
+  await expect(focus).toContainText(/2\/\d+/);
+  await parks.click();
+  await expect(focus).toHaveCount(0);
 });
 
 test('chercher un point de départ par adresse', async ({ page }) => {

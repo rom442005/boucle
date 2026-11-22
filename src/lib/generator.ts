@@ -48,6 +48,10 @@ export interface GenerateOptions {
   vias?: Place[];
   /** mode Dessin : la boucle reproduit ce dessin (points de passage, relief et milieux ne comptent plus) */
   drawing?: Drawing | null;
+  /** mode Dessin : le dessin peut être posé jusqu'à cette distance du départ (km) ; 0 : il passe par le départ */
+  drawReach?: number;
+  /** mode Dessin : le parcours commence au départ et va jusqu'au dessin */
+  drawApproach?: boolean;
   params: Params;
   settings: Settings;
   seed: number;
@@ -271,8 +275,8 @@ interface Cand {
   plan: Plan;
   built: Built;
   heading: number | null;
-  /** mode Dessin : le dessin posé et la ressemblance */
-  art?: { ghost: LngLat[]; fit: number };
+  /** mode Dessin : le dessin posé, la ressemblance, son départ et le trajet d'accès compris au début (m) */
+  art?: { ghost: LngLat[]; fit: number; start: LngLat; approach: number };
 }
 
 interface SearchOpts {
@@ -659,7 +663,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
     cleanStart: false,
     minStem: Infinity,
     headingTries: 0,
-    deadline: Date.now() + (art ? 13000 : 9000),
+    deadline: Date.now() + (art ? 16000 : 9000),
     lastError: null,
   };
 
@@ -687,13 +691,13 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
   /** Nom d'une proposition : les voies les plus parcourues ; pour un dessin, la forme d'abord. */
   const nameOf = (cand: Cand) =>
     cand.art
-      ? artName(art?.preset ? PRESET_NAMES[art.preset] : 'Dessin', cand.res.maneuvers)
+      ? artName(art?.name ?? (art?.preset ? PRESET_NAMES[art.preset] : 'Dessin'), cand.res.maneuvers)
       : routeName((cand.half ?? cand.res).maneuvers, p.shape, start.coord, cand.far, dest ? o.destination?.name : undefined);
 
   let candidates: Cand[] = [];
   const S = start.coord;
   if (art) {
-    candidates = await artLoops(ctx, art);
+    candidates = await artLoops(ctx, art, { reach: o.drawReach, approach: o.drawApproach });
   } else if (p.shape === 'loop') {
     if (!vias.length) candidates = await loops(ctx);
     else if (via) candidates = await viaLoops(ctx, via);
@@ -823,7 +827,7 @@ export async function generate(o: GenerateOptions): Promise<GenerateResult> {
 /* ---------------------------------- Dessin ---------------------------------- */
 
 /** Boucles qui reproduisent le dessin (voir art.ts), en propositions comme les autres. */
-async function artLoops(c: Ctx, drawing: Drawing): Promise<Cand[]> {
+async function artLoops(c: Ctx, drawing: Drawing, o: { reach?: number; approach?: boolean }): Promise<Cand[]> {
   const plan = makePlan({ rank: 0, status: 'done', target: c.D, windAlign: 0, initSize: () => 0, build: () => ({ job: { points: [] }, size: 0, far: c.start, anchors: [] }) });
   // Une même proposition garde le même objet (celle montrée tout de suite est retrouvée à la fin).
   const made = new Map<object, Cand>();
@@ -840,7 +844,7 @@ async function artLoops(c: Ctx, drawing: Drawing): Promise<Cand[]> {
         plan,
         built: { job: { points: [] }, size: 0, far: a.far, anchors: [] },
         heading: null,
-        art: { ghost: a.ghost, fit: a.fit },
+        art: { ghost: a.ghost, fit: a.fit, start: a.start, approach: a.approach },
       };
       made.set(a, cand);
     }
@@ -848,7 +852,9 @@ async function artLoops(c: Ctx, drawing: Drawing): Promise<Cand[]> {
   };
   const out = await drawingLoops({
     drawing,
-    start: c.start,
+    origin: c.start,
+    reach: Math.max(0, (o.reach ?? 0) * 1000),
+    approach: !!o.approach,
     D: c.D,
     sport: c.p.sport,
     costing: c.costing,
@@ -1470,7 +1476,8 @@ function analyse(cand: Cand, c: Ctx, raster: EnvRaster | null, water: LngLat[], 
   const waterPoints = p.water ? nearRoute(res.coords, water, 40) : [];
   const tracks = trackShare(raster, res.coords);
   const unpaved = unpavedWeight(p);
-  const signed = (lengthM - D) / D;
+  // Dessin : la distance visée est celle du dessin, sans le trajet d'accès.
+  const signed = cand.art ? cand.err : (lengthM - D) / D;
   const distErr = Math.abs(signed);
   // Une boucle un peu plus longue (jusqu'à 1 km) vaut mieux qu'une boucle qui repasse.
   const allowance = Math.min(1000, 0.1 * D) / D;
@@ -1513,7 +1520,7 @@ function analyse(cand: Cand, c: Ctx, raster: EnvRaster | null, water: LngLat[], 
       ...(fit != null ? { art: fit } : {}),
       score,
     },
-    ...(cand.art ? { art: { ghost: simplify(cand.art.ghost, 2), fit: cand.art.fit } } : {}),
+    ...(cand.art ? { art: { ghost: simplify(cand.art.ghost, 2), fit: cand.art.fit, start: cand.art.start, approach: cand.art.approach } } : {}),
     params: { ...p, envs: [...p.envs] },
     createdAt: Date.now(),
   };
