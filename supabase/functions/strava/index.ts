@@ -38,11 +38,14 @@ Deno.serve(async (req) => {
   if (!CLIENT_ID || !CLIENT_SECRET) return json({ error: 'not_configured' }, 503);
 
   const url = Deno.env.get('SUPABASE_URL')!;
-  const asUser = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
+  // Clés publique et de service : anciens noms (ANON, SERVICE_ROLE) ou nouveaux (PUBLISHABLE, SECRET).
+  const pub = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '';
+  const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SECRET_KEY') ?? '';
+  const asUser = createClient(url, pub, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
   const { data: who } = await asUser.auth.getUser();
   const user = who?.user;
   if (!user) return json({ error: 'auth' }, 401);
-  const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const admin = createClient(url, secret);
 
   let body: { action?: string; code?: string } = {};
   try {

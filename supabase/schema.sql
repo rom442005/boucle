@@ -350,3 +350,26 @@ create table if not exists public.strava_links (
 );
 alter table public.strava_links enable row level security;
 revoke all on public.strava_links from anon, authenticated;
+
+-- ---------------------------------------------------------------- Santé (Apple Santé, Health Connect)
+
+-- Une ligne par jour, envoyée par l'app du téléphone (iPhone : Santé ; Android : Health Connect), lue par le
+-- profil sur tous les appareils. Donnée de santé : seul son propriétaire la lit ou l'écrit ; elle part avec
+-- le compte.
+create table if not exists public.health_days (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  day date not null,
+  steps int,
+  resting_hr real,
+  vo2max real,
+  distance_m int not null default 0,
+  workouts jsonb not null default '[]',
+  source text check (source in ('ios', 'android')),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, day)
+);
+alter table public.health_days enable row level security;
+drop policy if exists "ma santé" on public.health_days;
+create policy "ma santé" on public.health_days for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+revoke all on public.health_days from anon;
+grant select, insert, update, delete on public.health_days to authenticated;

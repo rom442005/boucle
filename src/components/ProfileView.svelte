@@ -12,6 +12,7 @@
   import { last28, SPORT_EMOJI } from '../lib/scenes';
   import { tactile } from '../lib/haptics';
   import { links } from '../lib/links.svelte';
+  import { healthPlatform } from '../lib/health';
   import { duration } from '../lib/format';
 
   /*
@@ -45,7 +46,8 @@
     void links.loadHealth();
   });
   const st = $derived(mine && links.strava?.connected ? links.strava : null);
-  const hd = $derived(mine && links.healthOn ? links.health : null);
+  // Reçues par le serveur : elles s'affichent sur tous les appareils, pas seulement sur le téléphone.
+  const hd = $derived(mine ? links.health : null);
   const dateShortFr = (iso: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(iso));
   const kmText = (m: number) => (m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 </script>
@@ -98,8 +100,8 @@
       <button use:tactile type="button" class="link-btn strava" disabled={links.stravaBusy} onclick={() => links.connectStrava()}>{links.stravaBusy ? 'Liaison…' : 'Relier'}</button>
     </section>
   {/if}
-  {#if mine && links.healthPossible && !links.healthOn}
-    <section class="card link glass photo-card" aria-label="Apple Santé">
+  {#if mine && links.healthCanSend && !links.healthOn}
+    <section class="card link glass photo-card" aria-label={healthPlatform === 'android' ? 'Health Connect' : 'Apple Santé'}>
       <span class="k">❤️ Santé</span>
       <button use:tactile type="button" class="link-btn" disabled={links.healthBusy} onclick={() => links.connectHealth()}>{links.healthBusy ? 'Accord…' : 'Relier'}</button>
     </section>
@@ -130,16 +132,16 @@
       <span class="k">❤️ Au repos</span><b class="n rounded tabular">{hd.restingHr != null ? Math.round(hd.restingHr) : '–'}<small>bpm</small></b>
     </section>
     <section class="card stat glass photo-card" aria-label="VO2 max">
-      <span class="k">🫁 VO2 max</span><b class="n rounded tabular">{hd.vo2max != null ? hd.vo2max.toFixed(1) : '–'}</b>
+      <span class="k">🫁 VO2 max</span><b class="n rounded tabular">{hd.vo2max != null ? hd.vo2max.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '–'}</b>
     </section>
     <section class="card stat glass photo-card" aria-label="Entraînements, 28 jours">
-      <span class="k">⌚ 28 jours</span><b class="n rounded tabular">{kmText(hd.workouts.distance)}<small>km</small></b>
+      <span class="k">⌚ 28 jours</span><b class="n rounded tabular">{kmText(hd.distance)}<small>km</small></b>
     </section>
     {#if hd.last}
       <section class="card wide glass photo-card" aria-label="Dernière sortie">
-        <div class="row"><span class="k">Dernière sortie · {dateShortFr(hd.last.date)}</span>{#if hd.last.source}<span class="k">via {hd.last.source}</span>{/if}</div>
+        <div class="row"><span class="k">Dernière sortie · {dateShortFr(hd.last.start)}</span>{#if hd.last.source}<span class="k">via {hd.last.source}</span>{/if}</div>
         <b class="big2 rounded tabular">{hd.last.sport === 'ride' ? '🚴' : hd.last.sport === 'walk' ? '🥾' : '🏃'} {kmText(hd.last.distance)}<small>km</small></b>
-        <span class="k tabular">{duration(hd.last.time)}</span>
+        <span class="k tabular">{duration(hd.last.time)}{hd.last.kcal ? ` · 🔥 ${hd.last.kcal}${NNBSP}kcal` : ''}</span>
       </section>
     {/if}
   {/if}

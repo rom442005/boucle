@@ -13,9 +13,11 @@
     "e2e": "playwright test",
     "icons": "node scripts/make-icons.mjs",
     "ios": "vite build --mode native && cap sync ios",
+    "android": "vite build --mode native && cap sync android",
     "ios:ouvrir": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
     "@capacitor/core": "8.6.0",
     "@capacitor/filesystem": "8.1.5",
     "@capacitor/haptics": "8.0.2",

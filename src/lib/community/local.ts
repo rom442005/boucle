@@ -15,6 +15,7 @@ import {
   type PublishInput,
   type RoutePhoto,
   type Session,
+  type HealthDay,
 } from './types';
 import { blobToDataUrl } from '../images';
 
@@ -44,6 +45,7 @@ interface Db {
   likes: [string, string][];
   comments: StoredComment[];
   photos?: StoredPhoto[];
+  health?: Record<string, HealthDay[]>;
   follows: [string, string][];
   blocks: [string, string][];
   reports: { by: string; target: string; reason: string; at: number }[];
@@ -355,6 +357,23 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
         r.uses++;
         save();
       }
+    },
+    async healthDays() {
+      const u = me();
+      return u ? (db.health?.[u] ?? []) : [];
+    },
+    async saveHealth(days) {
+      const u = need();
+      db.health ??= {};
+      const byDay = new Map((db.health[u] ?? []).map((d) => [d.day, d]));
+      for (const d of days) byDay.set(d.day, d);
+      db.health[u] = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-60);
+      save();
+    },
+    async clearHealth() {
+      const u = need();
+      if (db.health) delete db.health[u];
+      save();
     },
     async uploadAvatar(image) {
       await wait();

@@ -148,6 +148,29 @@ export interface StravaData {
   activities?: { id: number; name: string; type: string; distance: number; time: number; elevation: number; date: string }[];
 }
 
+/** Une sortie lue dans Santé (iPhone) ou Health Connect (Android). */
+export interface HealthWorkout {
+  sport: 'run' | 'ride' | 'walk' | 'other';
+  distance: number;
+  time: number;
+  start: string;
+  source: string | null;
+  /** énergie dépensée, si l'app de la montre ou du téléphone la donne */
+  kcal?: number | null;
+}
+/** Une journée de santé, envoyée par l'app du téléphone, lue par le profil partout. */
+export interface HealthDay {
+  /** AAAA-MM-JJ */
+  day: string;
+  steps: number | null;
+  restingHr: number | null;
+  vo2max: number | null;
+  /** distance des sorties du jour (m) */
+  distance: number;
+  workouts: HealthWorkout[];
+  source: 'ios' | 'android';
+}
+
 export class CommunityError extends Error {}
 
 /**
@@ -188,6 +211,10 @@ export interface CommunityBackend {
   photosBy(authorId: string): Promise<RoutePhoto[]>;
   addPhoto(routeId: string, p: PhotoInput): Promise<RoutePhoto>;
   deletePhoto(id: string): Promise<void>;
+  /** santé : mes journées (28 derniers jours), envoyées par l'app du téléphone */
+  healthDays(): Promise<HealthDay[]>;
+  saveHealth(days: HealthDay[]): Promise<void>;
+  clearHealth(): Promise<void>;
   /** lien avec Strava (serveur en ligne seulement) */
   strava?(action: 'connect' | 'stats' | 'disconnect', code?: string): Promise<StravaData>;
   /** un parcours de la communauté vient d'être repris (favori, suivi, GPX) */

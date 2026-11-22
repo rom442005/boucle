@@ -17,6 +17,7 @@ import {
   type RoutePhoto,
   type Session,
   type StravaData,
+  type HealthDay,
 } from './community/types';
 import { app } from './state.svelte';
 import { haptic } from './haptics';
@@ -642,6 +643,17 @@ class CommunityState {
     } catch (e) {
       this.say(e);
     }
+  }
+
+  /** Santé : mes journées (serveur), envoi depuis le téléphone, effacement. */
+  async healthDays() {
+    return (await this.api()).healthDays();
+  }
+  async saveHealth(days: HealthDay[]) {
+    await (await this.api()).saveHealth(days);
+  }
+  async clearHealth() {
+    await (await this.api()).clearHealth();
   }
 
   /** Lien avec Strava, par la fonction du serveur (le compte Boucle doit être connecté). */

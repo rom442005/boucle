@@ -19,6 +19,7 @@ import {
   type RoutePhoto,
   type Session,
   type StravaData,
+  type HealthDay,
 } from './types';
 
 /* Communauté en ligne : Supabase (base PostgreSQL, comptes par code e-mail). Chargé à la demande. */
@@ -422,6 +423,48 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       }
       const { data: row } = await sb.from('photos_feed').select('*').eq('id', (data as { id: string }).id).single();
       return toPhoto(row as PhotoRow);
+    },
+    async healthDays() {
+      const me = await uid();
+      if (!me) return [];
+      // les 28 jours du téléphone, aujourd'hui compris, en date locale
+      const t = new Date();
+      t.setDate(t.getDate() - 27);
+      const since = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+      const { data, error } = await sb.from('health_days').select('*').eq('user_id', me).gte('day', since).order('day');
+      if (error) fail(error, 'Santé indisponible pour le moment.');
+      return ((data ?? []) as { day: string; steps: number | null; resting_hr: number | null; vo2max: number | null; distance_m: number; workouts: HealthDay['workouts']; source: HealthDay['source'] }[]).map((r) => ({
+        day: r.day,
+        steps: r.steps,
+        restingHr: r.resting_hr,
+        vo2max: r.vo2max,
+        distance: r.distance_m,
+        workouts: r.workouts ?? [],
+        source: r.source,
+      }));
+    },
+    async saveHealth(days) {
+      const me = await need();
+      if (!days.length) return;
+      const { error } = await sb.from('health_days').upsert(
+        days.map((d) => ({
+          user_id: me,
+          day: d.day,
+          steps: d.steps,
+          resting_hr: d.restingHr,
+          vo2max: d.vo2max,
+          distance_m: Math.round(d.distance),
+          workouts: d.workouts,
+          source: d.source,
+          updated_at: new Date().toISOString(),
+        })),
+      );
+      if (error) fail(error, 'Envoi des données de santé impossible pour le moment.');
+    },
+    async clearHealth() {
+      const me = await need();
+      const { error } = await sb.from('health_days').delete().eq('user_id', me);
+      if (error) fail(error, 'Effacement impossible pour le moment.');
     },
     async strava(action, code) {
       const { data, error } = await sb.functions.invoke('strava', { body: { action, code } });

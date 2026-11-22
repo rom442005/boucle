@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Version de test seulement (assembleDebug) : droit d'écrire dans Health Connect et écran SeedHealthActivity,
+  pour déposer des données d'essai sur l'émulateur. La version publiée (release) ne fait que lire.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.health.WRITE_STEPS" tools:node="replace" />
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" tools:node="replace" />
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" tools:node="replace" />
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" tools:node="replace" />
+    <uses-permission android:name="android.permission.health.WRITE_RESTING_HEART_RATE" tools:node="replace" />
+    <uses-permission android:name="android.permission.health.WRITE_VO2_MAX" tools:node="replace" />
+
+    <application>
+        <activity
+            android:name=".SeedHealthActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    </application>
+
+</manifest>

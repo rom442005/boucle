@@ -69,6 +69,10 @@
     const idle = (f: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 4000 }) : setTimeout(f, 1500));
     setTimeout(() => idle(() => warmScene(sceneAt())), 2500);
     setTimeout(() => idle(() => void community.prefetch()), 3500);
+    // App du téléphone reliée à Santé / Health Connect : ses données partent au retour sur l'app (30 min au plus souvent).
+    setTimeout(() => idle(() => void links.loadHealth()), 5000);
+    const onBack = () => document.visibilityState === 'visible' && void links.syncHealth().catch(() => {});
+    document.addEventListener('visibilitychange', onBack);
     const onWide = () => (app.wide = wideQuery.matches);
     wideQuery.addEventListener('change', onWide);
     const h = location.hash;

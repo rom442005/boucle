@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Boucle</string>
+    <string name="title_activity_main">Boucle</string>
+    <string name="package_name">fr.boucle.parcours</string>
+    <string name="custom_url_scheme">fr.boucle.parcours</string>
+    <string name="health_connect_privacy_policy_url">https://rom442005.github.io/boucle/confidentialite.html</string>
+</resources>
