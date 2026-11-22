@@ -1014,7 +1014,7 @@ textarea {
 /*
  * Verre liquide (fil rouge) : sur la photo et la carte Paysage, le verre a de l'épaisseur. Une lueur
  * intérieure en haut, une ombre intérieure en bas, un liseré fin, et ce qu'il y a derrière légèrement
- * éclairci, comme à travers une lentille. Les icônes se détachent d'une ombre douce.
+ * éclairci, comme à travers une lentille. Les icônes restent nettes (pas d'ombre floue).
  */
 .on-photo .glass::after,
 .on-photo.glass::after {
@@ -1029,10 +1029,6 @@ textarea {
   -webkit-backdrop-filter: blur(var(--blur, 30px)) saturate(var(--sat, 1.45)) brightness(1.05);
   backdrop-filter: blur(var(--blur, 30px)) saturate(var(--sat, 1.45)) brightness(1.05);
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.16);
-}
-.on-photo .glass .icon,
-.on-photo .round .icon {
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.3));
 }
 /* Les boutons ronds de verre gonflent sous le doigt, comme une bulle, puis reviennent avec un rebond. */
 .on-photo .round {
@@ -1065,3 +1061,51 @@ textarea {
   object-fit: cover;
   object-position: top;
 }
+
+/*
+ * Lentille de verre liquide des onglets (lens.ts), recopiée de Deezer : verre clair, liseré brillant en haut,
+ * bords irisés (rose à gauche, bleu à droite), ombre douce ; dedans, les onglets agrandis.
+ */
+.lens {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(9px) saturate(1.7) brightness(1.06);
+  backdrop-filter: blur(9px) saturate(1.7) brightness(1.06);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1px 1.5px rgba(255, 255, 255, 0.32),
+    inset 4px 0 7px -4px rgba(255, 70, 180, 0.55),
+    inset -4px 0 7px -4px rgba(70, 180, 255, 0.55),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.35),
+    0 10px 24px -10px rgba(0, 0, 0, 0.5);
+}
+.lens-view {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+}
+.lens-view > * {
+  pointer-events: none;
+}
+/* Pendant le fondu d'un changement d'onglet, les barres d'onglets restent vivantes : la lentille se voit en entier. */
+::view-transition-old(tabbar),
+::view-transition-old(tabs-mac) {
+  display: none;
+}
+::view-transition-new(tabbar),
+::view-transition-new(tabs-mac) {
+  animation: none;
+}
+

@@ -476,3 +476,10 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **Today** on iPhone is a one-line pill (sky, temperature, place). **Launch** opens at zoom 12 around the start, never zooming in on the position. **Auth** fields carry their name inside ("Adresse mail", "Mot de passe", "Code à 6 chiffres"), compact header.
 - **Liquid glass**: on photo and Paysage, glass gets thickness (inner top glow, inner bottom shade, hairline), photo cards brighten what they cover (brightness 1.05) with a faint text shadow, icons get a soft drop shadow, round glass buttons swell (1.12) under the finger instead of shrinking. The map veil is a little lighter (top 50 %, bottom 35 %, corners 25 %).
 
+## Update 22/11/2026 (lentille Deezer)
+
+- **Tab lens copied from Deezer** (frame by frame from Romain's screen recording, `src/lib/lens.ts`): at rest the selected tab is a pill darker than the bar (`rgba(0,0,0,0.34)`), its icon filled in the accent pink, its label white. On change, the pill turns into a clear glass lens taller than the bar (×1.36 high), bright rim, iridescent edges (pink left, blue right), that magnifies the tabs under it (×1.24, a live copy kept aligned through affine keyframes since Safari cannot refract the backdrop); it travels stretched (up to ×1.62 wide) and retracts into the pill at the new tab, ~560 ms. Same lens on the Mac header tabs; pressing the lit tab swells the lens in place. Both bars carry their own `view-transition-name` and skip the page cross-fade, so the lens stays visible.
+- **iPhone tab bar** now has Deezer's short labels under the icons (Créer, Communauté, Parcours, Profil); 54 px tabs, 66 px pink bubble.
+- **Crisp icons**: no drop-shadow on icons anywhere (it read as blurred and clipped).
+- **Bottom strip**: iOS 26 can leave an unpainted band under the tab bar (WebKit bug with fixed layouts and the home-indicator inset); the page background and browser theme colour now take the tone of the bottom of the screen (Paysage mixed with the photo of the moment), so the band melts into the screen instead of showing as a grey rectangle.
+

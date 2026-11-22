@@ -5,13 +5,14 @@
   import { community } from '../lib/community.svelte';
   import { haptic, tactile } from '../lib/haptics';
   import { smoothly } from '../lib/motion';
+  import { liquidMove, liquidPress } from '../lib/lens';
 
   /*
    * iPhone : quatre onglets en bas de l'écran (Créer, Communauté, Mes parcours, Profil) dans une capsule de
    * verre qui flotte ; le contenu défile dessous. À côté, la bulle rose « Faire une boucle », comme la bulle
    * de recherche des apps d'iOS 26 : une seule ligne en bas, le reste de l'écran pour la carte et les blocs.
-   * L'onglet choisi est une bulle de verre liquide : elle s'étire vers son nouvel onglet puis se resserre
-   * (comme Deezer), et grossit sous le doigt.
+   * L'onglet allumé : une pastille sombre, icône rose pleine et libellé blanc, comme Deezer. En changeant
+   * d'onglet, elle devient une lentille de verre qui grossit les onglets et glisse vers le nouveau (lens.ts).
    */
   let {
     active,
@@ -21,8 +22,7 @@
 
   let h = $state(0);
   let el = $state<HTMLElement>();
-  let pill = $state<HTMLElement>();
-  const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let nav = $state<HTMLElement>();
 
   // Place occupée en bas de l'écran (barre et marge sous elle, zone du geste comprise) : le contenu s'y arrête.
   $effect(() => {
@@ -33,38 +33,20 @@
 
   const TABS = ['create', 'community', 'library', 'profile'] as const;
   const LABEL = { create: 'Créer', community: 'Communauté', library: 'Mes parcours', profile: 'Profil' } as const;
+  /** Libellé court sous l'icône (comme Deezer). */
+  const SHORT = { create: 'Créer', community: 'Communauté', library: 'Parcours', profile: 'Profil' } as const;
   const ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;
 
-  // La bulle liquide : en changeant d'onglet, elle s'étire dans le sens du trajet, puis se resserre en place.
+  // La lentille : à chaque changement d'onglet, de l'ancien vers le nouveau.
   let prev = -1;
   $effect(() => {
     const i = TABS.indexOf(active);
-    if (prev >= 0 && prev !== i && pill && !reduce) {
-      pill.animate(
-        [
-          { scale: '1 1', offset: 0 },
-          { scale: '1.36 1.12', offset: 0.3 },
-          { scale: '0.92 1.05', offset: 0.66 },
-          { scale: '1.02 0.99', offset: 0.84 },
-          { scale: '1 1', offset: 1 },
-        ],
-        { duration: 640, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
-      );
-    }
+    if (prev >= 0 && prev !== i) liquidMove(nav, prev, i);
     prev = i;
   });
-  /** Sous le doigt, la bulle de l'onglet allumé grossit ; au relâché, elle revient avec un rebond. */
+  /** Sous le doigt, sur l'onglet déjà allumé, la lentille gonfle sur place. */
   function press(t: typeof active) {
-    if (t !== active || !pill || reduce) return;
-    pill.animate([{ scale: '1 1' }, { scale: '1.14 1.1' }], { duration: 180, easing: 'ease-out', fill: 'forwards' });
-  }
-  function release() {
-    if (!pill || reduce) return;
-    pill.animate([{ scale: getComputedStyle(pill).scale === 'none' ? '1 1' : getComputedStyle(pill).scale }, { scale: '1 1' }], {
-      duration: 460,
-      easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-      fill: 'forwards',
-    });
+    if (t === active) liquidPress(nav, TABS.indexOf(t));
   }
 
   function go(t: typeof active) {
@@ -91,8 +73,8 @@
 </script>
 
 <div class="dock" class:on-photo={onphoto} bind:offsetHeight={h} bind:this={el}>
-  <nav class="tabbar glass" aria-label="Sections" style:--at={TABS.indexOf(active)}>
-    <span class="pill-on" bind:this={pill} aria-hidden="true"></span>
+  <nav class="tabbar glass" aria-label="Sections" style:--at={TABS.indexOf(active)} bind:this={nav}>
+    <span class="pill-on" aria-hidden="true"></span>
     {#each TABS as t (t)}
       <button
         use:tactile
@@ -103,16 +85,14 @@
         title={LABEL[t]}
         aria-current={active === t ? 'page' : undefined}
         onpointerdown={() => press(t)}
-        onpointerup={release}
-        onpointercancel={release}
-        onpointerleave={release}
         onclick={() => go(t)}
       >
         {#if t === 'profile' && community.me}
-          <span class="av" class:ring={active === t}><Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={28} /></span>
+          <span class="av" class:ring={active === t}><Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} /></span>
         {:else}
-          <Icon name={ICON[t]} size={25} fill={active === t} />
+          <Icon name={ICON[t]} size={23} fill={active === t} />
         {/if}
+        <span class="lbl">{SHORT[t]}</span>
       </button>
     {/each}
   </nav>
@@ -127,6 +107,7 @@
 <style>
   /* Une seule ligne qui flotte au-dessus du bas de l'écran : la capsule des onglets, puis la bulle rose. */
   .dock {
+    view-transition-name: tabbar;
     position: fixed;
     z-index: 22;
     left: 0;
@@ -170,23 +151,35 @@
     transition: translate 560ms var(--spring-bouncy);
     transform-origin: center;
   }
+  /* Au repos, comme Deezer : une pastille plus sombre que la barre, à peine liserée. */
   .on-photo .pill-on {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.12));
+    background: rgba(0, 0, 0, 0.34);
     box-shadow:
-      inset 0 1px 0.5px rgba(255, 255, 255, 0.72),
-      inset 0 -1px 1px rgba(255, 255, 255, 0.14),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.18),
-      0 6px 16px -8px rgba(0, 0, 0, 0.5);
-    -webkit-backdrop-filter: blur(4px) saturate(1.9) brightness(1.12);
-    backdrop-filter: blur(4px) saturate(1.9) brightness(1.12);
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.1),
+      inset 0 -0.5px 0 rgba(255, 255, 255, 0.05);
   }
   .tab {
     position: relative;
     display: grid;
     place-items: center;
-    height: 50px;
+    align-content: center;
+    gap: 3px;
+    height: 54px;
     color: var(--label-2);
     transition: color 220ms var(--ease-out);
+  }
+  .lbl {
+    font-size: 0.65625rem;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .on-photo .tab {
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .on-photo .tab.on .lbl {
+    color: #fff;
   }
   .tab :global(.icon) {
     transition: transform 360ms var(--spring-bouncy);
@@ -198,11 +191,9 @@
   .tab.on {
     color: var(--tint);
   }
+  /* L'icône allumée en couleur pleine (le violet de Deezer, ici le rose de Boucle), le libellé reste blanc. */
   .on-photo .tab.on {
-    color: #fff;
-  }
-  .on-photo .tab :global(.icon) {
-    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+    color: var(--tint);
   }
   .tab.on :global(.icon) {
     animation: tab-pop 480ms var(--spring-bouncy);
@@ -227,8 +218,8 @@
   /* La bulle rose : du verre liquide teinté, un reflet en haut ; elle se replie quand elle n'a rien à faire. */
   .act {
     flex: none;
-    width: 62px;
-    height: 62px;
+    width: 66px;
+    height: 66px;
     margin-left: 10px;
     display: grid;
     place-items: center;
@@ -260,7 +251,6 @@
   }
   .loop {
     flex: none;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
   }
   @media (prefers-reduced-motion: reduce) {
     .dock,

@@ -35,6 +35,9 @@
   import TodayCard from './components/TodayCard.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
   import { smoothly } from './lib/motion';
+  import { liquidMove, liquidPress } from './lib/lens';
+  import { mix, sceneTone } from './lib/scene.svelte';
+  import { PAYSAGE_BG } from './lib/mapstyle';
   import { links } from './lib/links.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
@@ -46,7 +49,12 @@
     const world = app.mapType !== 'plan';
     document.documentElement.classList.toggle('on-photo', world);
     const light = !world && !matchMedia('(prefers-color-scheme: dark)').matches;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', world ? '#28312C' : light ? '#F2F1ED' : '#1E1F21');
+    // Le fond de la page prend la teinte du bas de l'écran (carte Paysage voilée, bas des photos) : la bande
+    // qu'iOS 26 laisse parfois sous la barre d'onglets (zone du geste, bug WebKit) se fond au lieu de faire
+    // un rectangle gris. La barre du navigateur prend la même teinte.
+    const ground = mix(mix(PAYSAGE_BG, sceneTone(), 0.32), '#000000', 0.22);
+    for (const el of [document.documentElement, document.body]) el.style.backgroundColor = world ? ground : '';
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', world ? ground : light ? '#F2F1ED' : '#1E1F21');
   });
 
   /** Premier lancement : te connecter ou créer un compte (une fois, ensuite plus jamais imposé). */
@@ -196,6 +204,14 @@
   function goTab(t: (typeof TABS)[number]) {
     smoothly(() => changeTab(t));
   }
+  // Mac : la même lentille de verre liquide que sur iPhone (lens.ts), de l'onglet quitté vers le nouveau.
+  let tabsNav = $state<HTMLElement>();
+  let prevTab = -1;
+  $effect(() => {
+    const i = TABS.indexOf(tab);
+    if (prevTab >= 0 && prevTab !== i) liquidMove(tabsNav, prevTab, i);
+    prevTab = i;
+  });
   function changeTab(t: (typeof TABS)[number]) {
     community.sheet = null;
     if (t === 'create') {
@@ -273,10 +289,10 @@
           <span class="logo" aria-hidden="true">
             <svg viewBox="0 0 1024 1024" width="36" height="36"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path class="logo-trace" pathLength="1" d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
           </span>
-          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)}>
+          <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} bind:this={tabsNav}>
             <span class="tab-on" aria-hidden="true"></span>
             {#each TABS as t (t)}
-              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onclick={() => goTab(t)}>
+              <button use:tactile type="button" class="tab" class:on={tab === t} aria-label={TAB_LABEL[t]} title={TAB_LABEL[t]} aria-current={tab === t ? 'page' : undefined} onpointerdown={() => tab === t && liquidPress(tabsNav, TABS.indexOf(t))} onclick={() => goTab(t)}>
                 {#if t === 'profile' && community.me}
                   <Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} />
                 {:else}
@@ -493,6 +509,7 @@
   }
   /* Quatre sections en icônes, une pastille glisse sous la section active. */
   .tabs {
+    view-transition-name: tabs-mac;
     position: relative;
     flex: 1;
     display: grid;
@@ -524,6 +541,19 @@
     transition: color 200ms var(--ease-out);
   }
   .tab.on {
+    color: var(--tint);
+  }
+  /* Sur la photo et la carte Paysage, comme Deezer : la pastille de l'onglet allumé, plus sombre que la barre. */
+  :global(.on-photo) .tab-on {
+    background: rgba(0, 0, 0, 0.32);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.1),
+      inset 0 -0.5px 0 rgba(255, 255, 255, 0.05);
+  }
+  :global(.on-photo) .tabs .tab {
+    color: rgba(255, 255, 255, 0.9);
+  }
+  :global(.on-photo) .tabs .tab.on {
     color: var(--tint);
   }
   .tab :global(.icon) {
@@ -595,7 +625,6 @@
   }
   .play :global(.icon) {
     translate: 1px 0;
-    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.25));
   }
   .sum {
     padding-bottom: 4px;
