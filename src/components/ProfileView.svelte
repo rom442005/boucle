@@ -135,6 +135,13 @@
     <section class="card stat glass photo-card" aria-label="Entraînements, 28 jours">
       <span class="k">⌚ 28 jours</span><b class="n rounded tabular">{kmText(hd.workouts.distance)}<small>km</small></b>
     </section>
+    {#if hd.last}
+      <section class="card wide glass photo-card" aria-label="Dernière sortie">
+        <div class="row"><span class="k">Dernière sortie · {dateShortFr(hd.last.date)}</span>{#if hd.last.source}<span class="k">via {hd.last.source}</span>{/if}</div>
+        <b class="big2 rounded tabular">{hd.last.sport === 'ride' ? '🚴' : hd.last.sport === 'walk' ? '🥾' : '🏃'} {kmText(hd.last.distance)}<small>km</small></b>
+        <span class="k tabular">{duration(hd.last.time)}</span>
+      </section>
+    {/if}
   {/if}
 
   {#if month}
