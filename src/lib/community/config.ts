@@ -8,3 +8,6 @@ export const SUPABASE_URL: string = import.meta.env.VITE_SUPABASE_URL ?? '';
 export const SUPABASE_ANON_KEY: string = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
 
 export const communityConfigured = () => !!SUPABASE_URL && !!SUPABASE_ANON_KEY;
+
+/** Application Strava (numéro public) : le code secret, lui, ne vit que dans la fonction Supabase « strava ». */
+export const STRAVA_CLIENT_ID: string = import.meta.env.VITE_STRAVA_CLIENT_ID ?? '';

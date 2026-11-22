@@ -18,6 +18,7 @@ import {
   type PublishInput,
   type RoutePhoto,
   type Session,
+  type StravaData,
 } from './types';
 
 /* Communauté en ligne : Supabase (base PostgreSQL, comptes par code e-mail). Chargé à la demande. */
@@ -421,6 +422,11 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
       }
       const { data: row } = await sb.from('photos_feed').select('*').eq('id', (data as { id: string }).id).single();
       return toPhoto(row as PhotoRow);
+    },
+    async strava(action, code) {
+      const { data, error } = await sb.functions.invoke('strava', { body: { action, code } });
+      if (error) throw new CommunityError('Strava ne répond pas pour le moment.');
+      return data as StravaData;
     },
     async deletePhoto(id) {
       const { data: row } = await sb.from('route_photos').select('author_id, path, thumb_path').eq('id', id).maybeSingle();

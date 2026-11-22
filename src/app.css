@@ -993,3 +993,15 @@ textarea {
   animation-duration: 240ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* Le panneau glisse d'une place à l'autre (vers le centre pour la Communauté et les profils sur Mac). */
+::view-transition-group(panel) {
+  animation-duration: 620ms;
+  animation-timing-function: cubic-bezier(0.2, 1.15, 0.3, 1);
+}
+::view-transition-old(panel),
+::view-transition-new(panel) {
+  animation-duration: 320ms;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}

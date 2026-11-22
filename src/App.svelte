@@ -36,6 +36,7 @@
   import TodayCard from './components/TodayCard.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
   import { smoothly } from './lib/motion';
+  import { links } from './lib/links.svelte';
 
   const wideQuery = matchMedia('(min-width: 860px)');
   app.wide = wideQuery.matches;
@@ -62,6 +63,8 @@
       }
       if (community.available && !community.session && !seen && !location.hash.startsWith('#r=')) welcome = true;
     });
+    // Retour de Strava après l'accord : le code est échangé par le serveur.
+    void links.finishStrava();
     // Pendant un moment calme, ce qui fera attendre plus tard se prépare : la photo du moment et la Communauté.
     const idle = (f: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(f, { timeout: 4000 }) : setTimeout(f, 1500));
     setTimeout(() => idle(() => warmScene(sceneAt())), 2500);
@@ -225,7 +228,7 @@
   {#if athome}
     {#if !app.pickOnMap && !welcome}<HomeBar />{/if}
   {:else}
-  <Panel solid={fullsheet && !photo} {photo} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
+  <Panel solid={fullsheet && !photo} {photo} centered={app.phase === 'community' || app.phase === 'library'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
       {#if app.wide}
         <!-- Le logo, puis les quatre sections en icônes : une seule ligne, sans le nom de l'app. -->

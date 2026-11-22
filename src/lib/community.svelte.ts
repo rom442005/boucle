@@ -16,6 +16,7 @@ import {
   type ReportTarget,
   type RoutePhoto,
   type Session,
+  type StravaData,
 } from './community/types';
 import { app } from './state.svelte';
 import { haptic } from './haptics';
@@ -641,6 +642,13 @@ class CommunityState {
     } catch (e) {
       this.say(e);
     }
+  }
+
+  /** Lien avec Strava, par la fonction du serveur (le compte Boucle doit être connecté). */
+  async strava(action: 'connect' | 'stats' | 'disconnect', code?: string): Promise<StravaData> {
+    const b = await this.api();
+    if (!b.strava) throw new CommunityError('Strava n’est disponible qu’avec la Communauté en ligne.');
+    return b.strava(action, code);
   }
 
   /** Onglet Profil : ton profil, ou la connexion d'abord (dans le panneau de la Communauté). */

@@ -11,6 +11,8 @@
   import { km, NNBSP } from '../lib/format';
   import { last28, SPORT_EMOJI } from '../lib/scenes';
   import { tactile } from '../lib/haptics';
+  import { links } from '../lib/links.svelte';
+  import { duration } from '../lib/format';
 
   /*
    * Un profil en quelques blocs de verre sur la photo : qui (photo, prénom, niveau, ville, présentation),
@@ -36,6 +38,15 @@
     await community.changeAvatar(file);
     avatarBusy = false;
   }
+  // Mon profil : les chiffres de Strava et de Santé, s'ils sont reliés.
+  $effect(() => {
+    if (!mine) return;
+    void links.loadStrava();
+    void links.loadHealth();
+  });
+  const st = $derived(mine && links.strava?.connected ? links.strava : null);
+  const hd = $derived(mine && links.healthOn ? links.health : null);
+  const dateShortFr = (iso: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(iso));
   const kmText = (m: number) => (m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 </script>
 
@@ -80,6 +91,51 @@
     <span class="k">Sports</span>
     <b class="n emo">{#each p.sports as s (s)}<span title={SPORTS[s].label}>{SPORT_EMOJI[s]}</span>{:else}–{/each}</b>
   </section>
+
+  {#if mine && links.stravaPossible && !st}
+    <section class="card link glass photo-card" aria-label="Strava">
+      <span class="k"><i class="strava-dot" aria-hidden="true"></i>Strava</span>
+      <button use:tactile type="button" class="link-btn strava" disabled={links.stravaBusy} onclick={() => links.connectStrava()}>{links.stravaBusy ? 'Liaison…' : 'Relier'}</button>
+    </section>
+  {/if}
+  {#if mine && links.healthPossible && !links.healthOn}
+    <section class="card link glass photo-card" aria-label="Apple Santé">
+      <span class="k">❤️ Santé</span>
+      <button use:tactile type="button" class="link-btn" disabled={links.healthBusy} onclick={() => links.connectHealth()}>{links.healthBusy ? 'Accord…' : 'Relier'}</button>
+    </section>
+  {/if}
+
+  {#if st}
+    <section class="card wide glass photo-card" aria-label="Strava">
+      <div class="row"><span class="k"><i class="strava-dot" aria-hidden="true"></i>Strava · cette année</span><span class="k">{st.athlete ?? ''}</span></div>
+      <div class="pair">
+        <span><b class="big2 rounded tabular">{kmText(st.ytd?.run.distance ?? 0)}<small>km</small></b><span class="k">🏃 {st.ytd?.run.count ?? 0} courses</span></span>
+        <span><b class="big2 rounded tabular">{kmText(st.ytd?.ride.distance ?? 0)}<small>km</small></b><span class="k">🚴 {st.ytd?.ride.count ?? 0} sorties vélo</span></span>
+      </div>
+      {#if st.activities?.length}
+        {@const a = st.activities[0]}
+        <div class="sep"></div>
+        <span class="k">Dernière activité · {dateShortFr(a.date)}</span>
+        <span class="last">{a.name}<span class="k tabular"> · {kmText(a.distance)} km · {duration(a.time)}{a.elevation ? ` · ⛰️ ${a.elevation} m` : ''}</span></span>
+      {/if}
+      <span class="powered">Données Strava</span>
+    </section>
+  {/if}
+
+  {#if hd}
+    <section class="card stat glass photo-card" aria-label="Pas par jour">
+      <span class="k">👣 Pas / jour</span><b class="n rounded tabular">{hd.steps.toLocaleString('fr-FR')}</b>
+    </section>
+    <section class="card stat glass photo-card" aria-label="Fréquence cardiaque au repos">
+      <span class="k">❤️ Au repos</span><b class="n rounded tabular">{hd.restingHr != null ? Math.round(hd.restingHr) : '–'}<small>bpm</small></b>
+    </section>
+    <section class="card stat glass photo-card" aria-label="VO2 max">
+      <span class="k">🫁 VO2 max</span><b class="n rounded tabular">{hd.vo2max != null ? hd.vo2max.toFixed(1) : '–'}</b>
+    </section>
+    <section class="card stat glass photo-card" aria-label="Entraînements, 28 jours">
+      <span class="k">⌚ 28 jours</span><b class="n rounded tabular">{kmText(hd.workouts.distance)}<small>km</small></b>
+    </section>
+  {/if}
 
   {#if month}
     <section class="card wide glass photo-card" aria-label="28 derniers jours">
@@ -267,6 +323,78 @@
   .row {
     display: flex;
     justify-content: space-between;
+  }
+  .stat .n small,
+  .big2 small {
+    font-family: var(--font);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--label-2);
+    margin-left: 3px;
+  }
+  .link {
+    align-content: space-between;
+    min-height: 104px;
+  }
+  .link-btn {
+    justify-self: start;
+    min-height: 34px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-weight: 650;
+    font-size: 0.875rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+    transition: transform 240ms var(--spring);
+  }
+  .link-btn:active {
+    transform: scale(0.95);
+  }
+  .link-btn.strava {
+    background: #fc5200;
+  }
+  .strava-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #fc5200;
+    vertical-align: 1px;
+  }
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .pair > span {
+    display: grid;
+    gap: 2px;
+  }
+  .big2 {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .sep {
+    height: 0.5px;
+    margin: 6px 0 2px;
+    background: var(--separator);
+  }
+  .last {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .powered {
+    justify-self: end;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #fc5200;
   }
   .big {
     font-size: 2.5rem;

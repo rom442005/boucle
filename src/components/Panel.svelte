@@ -11,6 +11,7 @@
     onswipe,
     solid = false,
     photo = null,
+    centered = false,
   }: {
     header?: Snippet;
     children: Snippet;
@@ -22,6 +23,8 @@
     solid?: boolean;
     /** sur un paysage : verre fumé (« sheet »), ou plus de feuille du tout, seulement des blocs de verre (« cards ») */
     photo?: 'sheet' | 'cards' | null;
+    /** Mac : Communauté, Mes parcours et profils au centre de l'écran (la colonne y glisse) */
+    centered?: boolean;
   } = $props();
 
   let vh = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
@@ -82,7 +85,7 @@
   // Zone de carte masquée par le panneau : sert à cadrer les parcours.
   $effect(() => {
     if (app.wide) {
-      app.padding = { top: 40, bottom: app.route ? 210 : 40, left: 384 + 40, right: 80 };
+      app.padding = { top: 40, bottom: app.route ? 210 : 40, left: centered ? 40 : 384 + 40, right: 80 };
     } else if (dragH == null) {
       // Pendant la composition, la barre du départ occupe le haut ; ensuite, la carte est libre jusqu'en haut.
       const top = app.phase === 'compose' ? 128 : 40;
@@ -200,6 +203,7 @@
   class:over-tabs={tabs > 0}
   class:on-photo={!!photo}
   class:bare={photo === 'cards'}
+  class:centered={app.wide && centered}
   style:height={app.wide ? undefined : `${height}px`}
   style:bottom={tabs ? `${tabs + 6}px` : undefined}
   aria-label={label}
@@ -289,7 +293,22 @@
     right: auto;
     width: 384px;
     border-radius: 28px;
+    /* Hors changement d'onglet (qui a sa propre transition), la colonne glisse sur un ressort. */
+    transition:
+      left 640ms var(--spring),
+      width 640ms var(--spring);
+  }
+  /* Communauté, Mes parcours, profils : la colonne glisse au centre de l'écran et s'élargit un peu. */
+  .panel.wide.centered {
+    left: calc(50% - 230px);
+    width: 460px;
+  }
+  :global(html.vt) .panel {
     transition: none;
+  }
+  /* Le panneau garde son identité pendant un changement d'onglet : il glisse d'une place à l'autre. */
+  .panel {
+    view-transition-name: panel;
   }
   .top {
     flex: none;
@@ -355,11 +374,7 @@
   .bare .foot {
     border-top: none;
   }
-  /* Les blocs qui défilent s'effacent en douceur sous le titre au lieu d'être coupés net. */
-  .bare .body {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
-    mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
-  }
+  /* Pas de masque sur la zone qui défile : il couperait le verre des blocs de ce qu'il y a derrière (plus de flou). */
   .wide .foot,
   .over-tabs .foot {
     padding-bottom: 12px;

@@ -333,3 +333,20 @@ create policy "boucle remplacer ses images" on storage.objects for update to aut
 drop policy if exists "boucle retirer ses images" on storage.objects;
 create policy "boucle retirer ses images" on storage.objects for delete to authenticated
   using (bucket_id in ('avatars', 'photos') and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------------- Strava
+
+-- Lien avec un compte Strava : les jetons ne sortent jamais du serveur. Aucune règle d'accès n'est donnée
+-- à l'app (ni lecture, ni écriture) : seule la fonction « strava » (clé de service) lit et écrit ici.
+create table if not exists public.strava_links (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  athlete_id bigint not null,
+  athlete_name text,
+  access_token text not null,
+  refresh_token text not null,
+  expires_at bigint not null,
+  scope text,
+  updated_at timestamptz not null default now()
+);
+alter table public.strava_links enable row level security;
+revoke all on public.strava_links from anon, authenticated;

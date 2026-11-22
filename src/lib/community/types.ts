@@ -132,6 +132,22 @@ export interface PublishInput {
 
 export type ProfileInput = Omit<Profile, 'id' | 'createdAt'>;
 
+/** Ce que la fonction « strava » renvoie (chiffres de Strava, résumés). */
+export interface StravaTotals {
+  count: number;
+  distance: number;
+  time: number;
+  elevation: number;
+}
+export interface StravaData {
+  connected: boolean;
+  revoked?: boolean;
+  athlete?: string | null;
+  ytd?: { run: StravaTotals; ride: StravaTotals };
+  recent?: { run: StravaTotals; ride: StravaTotals };
+  activities?: { id: number; name: string; type: string; distance: number; time: number; elevation: number; date: string }[];
+}
+
 export class CommunityError extends Error {}
 
 /**
@@ -172,6 +188,8 @@ export interface CommunityBackend {
   photosBy(authorId: string): Promise<RoutePhoto[]>;
   addPhoto(routeId: string, p: PhotoInput): Promise<RoutePhoto>;
   deletePhoto(id: string): Promise<void>;
+  /** lien avec Strava (serveur en ligne seulement) */
+  strava?(action: 'connect' | 'stats' | 'disconnect', code?: string): Promise<StravaData>;
   /** un parcours de la communauté vient d'être repris (favori, suivi, GPX) */
   used(routeId: string): Promise<void>;
 }

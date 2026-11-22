@@ -46,8 +46,12 @@ export function traceTimeAt(f: number): number {
 export function smoothly(change: () => void) {
   const doc = document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => unknown };
   if (!doc.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return change();
-  doc.startViewTransition(async () => {
+  // Pendant le fondu, le panneau glisse par la transition elle-même : ses propres transitions se taisent.
+  const root = document.documentElement;
+  root.classList.add('vt');
+  const t = doc.startViewTransition(async () => {
     change();
     await tick();
-  });
+  }) as { finished?: Promise<void> } | undefined;
+  void (t?.finished ?? Promise.resolve()).finally(() => root.classList.remove('vt'));
 }

@@ -2,6 +2,7 @@
   import Icon from './Icon.svelte';
   import Segmented from './Segmented.svelte';
   import Avatar from './Avatar.svelte';
+  import { links } from '../lib/links.svelte';
   import { untrack } from 'svelte';
   import { community } from '../lib/community.svelte';
   import { pageUrl } from '../lib/platform';
@@ -170,6 +171,16 @@
     <button use:tactile type="button" class="row link" onclick={() => community.signOut()}>
       <span class="row-icon"><Icon name="signout" size={20} /></span><span class="row-label">Se déconnecter</span>
     </button>
+    {#if links.strava?.connected}
+      <button use:tactile type="button" class="row link" disabled={links.stravaBusy} onclick={() => links.disconnectStrava()}>
+        <span class="row-icon"><Icon name="link" size={20} /></span><span class="row-label">Délier Strava</span>
+      </button>
+    {/if}
+    {#if links.healthOn}
+      <button use:tactile type="button" class="row link" onclick={() => links.disconnectHealth()}>
+        <span class="row-icon"><Icon name="link" size={20} /></span><span class="row-label">Ne plus lire Santé</span>
+      </button>
+    {/if}
     <a class="row link" href={pageUrl('confidentialite.html')} target="_blank" rel="noopener">
       <span class="row-icon"><Icon name="lock" size={20} /></span><span class="row-label">Confidentialité</span><Icon name="chevron" size={14} />
     </a>
