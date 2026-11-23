@@ -139,6 +139,17 @@ body {
     background: #1e1f21;
   }
 }
+/*
+ * iPhone, app ajoutée à l'écran d'accueil (iOS 26, bug WebKit 301108) : tant que la page est moins haute que
+ * l'écran, WebKit lui donne une vue raccourcie de la hauteur de la barre d'état, et tout ce qui est fixé en
+ * bas (carte, onglets) s'arrête au-dessus d'une bande vide. Une page haute comme l'écran la fait disparaître ;
+ * min() la laisse à la hauteur visible partout ailleurs (rien ne défile).
+ */
+@media (display-mode: standalone) {
+  html {
+    min-height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px)));
+  }
+}
 /* Carte Paysage : le fond de page a sa couleur, pas d'éclair clair pendant le chargement des tuiles. */
 html.on-photo,
 html.on-photo body {

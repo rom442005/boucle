@@ -159,7 +159,7 @@
   const athome = $derived(!app.wide && app.phase === 'compose' && app.home);
   // Accueil iPhone : la carte se cadre au-dessus de la barre d'onglets (la bulle « Faire une boucle » y est).
   $effect(() => {
-    if (athome) app.padding = { top: 64, bottom: app.tabbarH + 28 + app.band, left: 28, right: 64 };
+    if (athome) app.padding = { top: 64, bottom: app.tabbarH + 28, left: 28, right: 64 };
   });
   /** iPhone : les réglages couvrent l'écran (pas de boutons de carte par-dessus). */
   const fullsheet = $derived(!app.wide && app.phase === 'compose' && !app.home && app.detent === 'full');
@@ -648,7 +648,7 @@
   .widgets {
     position: fixed;
     z-index: 15;
-    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
     left: var(--gutter);
     width: min(300px, calc(100vw - 2 * var(--gutter) - 64px));
     display: grid;

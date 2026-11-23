@@ -51,6 +51,14 @@
     else if (t === 'library') app.openLibrary();
     else community.openMe();
   }
+  /** Enregistrer un lieu : depuis la carte de Créer (pour pouvoir aussi le choisir dessus). */
+  function addPlace() {
+    haptic('tap');
+    community.sheet = null;
+    if (app.phase !== 'compose') app.closeLibrary();
+    else app.home = true;
+    app.addSavedPlace({});
+  }
   /** La bulle rose : les réglages d'une nouvelle boucle, depuis n'importe quel onglet. */
   function compose() {
     smoothly(() => {
@@ -82,6 +90,10 @@
         {/if}
       </button>
     {/each}
+    <!-- Enregistrer un lieu (adresse, position, point de la carte) : une action, pas un onglet. -->
+    <button use:tactile type="button" class="tab-add" aria-label="Enregistrer un lieu" title="Enregistrer un lieu" onclick={addPlace}>
+      <Icon name="pinPlus" size={25} />
+    </button>
   </nav>
   <button use:tactile type="button" class="act" class:off={!action} aria-label="Faire une boucle" title="Faire une boucle" tabindex={action ? 0 : -1} aria-hidden={!action} onclick={compose}>
     <svg class="loop" viewBox="0 0 1024 1024" width="26" height="26" aria-hidden="true">
@@ -96,9 +108,6 @@
   /* Nom de transition seulement pendant un changement d'onglet (sinon le verre ne floute plus le fond). */
   :global(html.vt) .dock {
     view-transition-name: tabbar;
-  }
-  :global(html.band) .dock {
-    bottom: calc(22px - var(--band));
   }
   .dock {
     position: fixed;
@@ -128,7 +137,7 @@
     max-width: 360px;
     min-width: 0;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     padding: 6px;
     border-radius: 999px;
     /* Le doigt glisse le long de la barre (la lentille le suit) : pas de défilement ni de zoom ici. */
@@ -140,7 +149,7 @@
     top: 6px;
     bottom: 6px;
     left: 6px;
-    width: calc((100% - 12px) / 4);
+    width: calc((100% - 12px) / 5);
     border-radius: 999px;
     background: var(--tint-soft);
     translate: calc(var(--at) * 100%) 0;
@@ -163,8 +172,20 @@
     color: var(--label-2);
     transition: color 220ms var(--ease-out);
   }
-  .on-photo .tab {
+  .on-photo .tab,
+  .on-photo .tab-add {
     color: rgba(255, 255, 255, 0.92);
+  }
+  .tab-add {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 50px;
+    color: var(--label-2);
+    transition: transform 300ms var(--spring-bouncy);
+  }
+  .tab-add:active {
+    transform: scale(0.86);
   }
   .tab :global(.icon) {
     transition: transform 360ms var(--spring-bouncy);

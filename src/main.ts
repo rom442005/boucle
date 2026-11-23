@@ -6,22 +6,6 @@ import { app as state } from './lib/state.svelte';
 
 const app = mount(App, { target: document.getElementById('app')! });
 
-/*
- * iPhone, app ajoutée à l'écran d'accueil (iOS 26) : la page s'arrête au-dessus de la barre du geste et
- * laisse en bas une bande grise. On la mesure (écran moins page) pour y prolonger la carte et y descendre
- * les onglets. Ailleurs, elle vaut 0.
- */
-const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true || matchMedia('(display-mode: standalone)').matches;
-function measureBand() {
-  const portrait = innerHeight > innerWidth;
-  const band = standalone && /iPhone|iPod/.test(navigator.userAgent) && portrait ? Math.max(0, Math.min(80, Math.round(screen.height - innerHeight))) : 0;
-  document.documentElement.style.setProperty('--band', `${band}px`);
-  document.documentElement.classList.toggle('band', band > 0);
-  state.band = band;
-}
-measureBand();
-addEventListener('resize', measureBand);
-
 /** L'app a déjà été touchée (une mise à jour attend alors qu'elle passe en arrière-plan). */
 let touched = false;
 addEventListener('pointerdown', () => (touched = true), { once: true, capture: true });

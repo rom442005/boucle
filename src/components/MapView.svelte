@@ -2477,15 +2477,14 @@
 {/if}
 
 <style>
-  /* La carte descend jusqu'en bas de l'écran, bande d'iOS 26 comprise (--band, main.ts). */
   .map {
     position: fixed;
-    inset: 0 0 calc(-1 * var(--band, 0px));
+    inset: 0;
     z-index: 0;
   }
   .atmo {
     position: fixed;
-    inset: 0 0 calc(-1 * var(--band, 0px));
+    inset: 0;
     z-index: 1;
     pointer-events: none;
     opacity: 0;

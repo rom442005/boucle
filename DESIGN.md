@@ -540,10 +540,12 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 ## Update 23/11/2026 (iPhone épuré, façon Instagram)
 
 - **Tab bar: icons only** (25 px, the lit one in its dark pill), no labels; bar 62 px, pink loop bubble 62 px. It sits low, 22 px above the bottom of the screen like Instagram.
-- **iOS 26 home-screen band**: the installed app stops above the gesture bar and leaves a grey band. `main.ts` measures it (`screen.height − innerHeight`, portrait, standalone iPhone → `--band`, `html.band`, `app.band`); the map, its veil and the photo backdrop extend into it, the tab bar goes down into it, and map paddings count it.
+- **iOS 26 home-screen band** (WebKit 301108): while the page is shorter than the screen, the installed app gets a viewport short by the status bar, and everything fixed at the bottom stops above an empty band. Fix in `app.css`: under `@media (display-mode: standalone)`, `html { min-height: min(100lvh, calc(100% + env(safe-area-inset-top))) }`. (A first attempt measuring the band in JS did nothing and was removed.)
 - **Map home on iPhone**: no weather pill (the weather stays on Mac and in the proposals); the places bar is the first thing at the top, aligned with the locate button (safe area + 8 px). The focus bubble is gone: lighting a kind opens the nearest place's card over the overview, with « 1/12 » and ‹ › to step through.
 - **Enregistrer un lieu**: a round glass button with a pin-plus under the map controls, in Créer on iPhone and Mac; it opens the search in save mode (address, my position, point on the map).
 - **Map credits without the (i) button**: a discreet « © OpenStreetMap » text just above the tab bar or the panel (bottom-right on Mac); tapping it unfolds every credit (licences require them).
 - Lighter top and bottom veil on the map (40 % / 27 %, shorter).
 - **Phone blocks a bit more compact** in Communauté, Mes parcours and Profil: 12 × 14 px padding, 24 px corners, 12 px labels, hero figures 2.375 rem, tab figures 1.75 rem. Signed out, « Rejoins la Communauté » sits in the middle of the screen.
+- **Tab bar, 5 icons**: the four tabs plus « Enregistrer un lieu » (pin-plus), an action that opens the save search from the Créer map. On iPhone the map's right column is now locate + 3D (the map-type switch stays on Mac); the pin-plus moved to the tab bar (Mac keeps it under the map controls).
+- Top of the iPhone screens a little lower, clear of the blur iOS puts under the status bar: places bar and map buttons at safe area + 14 px, first block of the photo screens at safe area + 22 px.
 

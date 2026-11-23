@@ -139,7 +139,7 @@
       const top = app.phase === 'compose' ? 128 : 40;
       // Parcours affiché : marges latérales plus larges pour que les pastilles des côtes tiennent à l'écran.
       const side = app.phase === 'results' || app.phase === 'detail' ? 64 : 28;
-      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24 + tabs + app.band, left: side, right: 64 };
+      app.padding = { top: safeTop + top, bottom: heights[app.detent] + 24 + tabs, left: side, right: 64 };
     }
   });
 
@@ -474,11 +474,12 @@
       translate: 0 18px;
     }
   }
+  /* Le premier bloc un peu sous l'heure, hors du flou que l'iPhone pose sous la barre d'état. */
   .fullscreen .top {
-    padding-top: calc(var(--safe-top) + 6px);
+    padding-top: calc(var(--safe-top) + 14px);
   }
   .fullscreen > .body:first-child .body-in {
-    padding-top: calc(var(--safe-top) + 10px);
+    padding-top: calc(var(--safe-top) + 22px);
   }
   .fullscreen .body-in {
     padding-bottom: calc(var(--tabs-h, 0px) + 24px);

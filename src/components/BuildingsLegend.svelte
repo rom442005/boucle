@@ -12,7 +12,7 @@
   });
   const c = $derived(BUILDING_COLORS[theme]);
   // Sur iPhone, juste au-dessus du panneau ; sur Mac, en haut à gauche de la carte.
-  const bottom = $derived(app.wide ? undefined : `${Math.max(12, app.padding.bottom - 14 - app.band)}px`);
+  const bottom = $derived(app.wide ? undefined : `${Math.max(12, app.padding.bottom - 14)}px`);
 </script>
 
 <div class="legend glass" class:wide={app.wide} style:bottom role="note" aria-label="Bâtiments en volume, colorés selon leur hauteur">

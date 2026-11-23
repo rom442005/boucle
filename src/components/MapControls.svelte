@@ -5,7 +5,7 @@
   import { ORTHO_TILES, type MapType } from '../lib/mapstyle';
   import type { LngLat } from '../lib/types';
 
-  /** Accueil épuré : seulement « Me localiser ». */
+  /** Accueil épuré : « Me localiser » et la 3D, sans le choix du fond de carte. */
   let { minimal = false }: { minimal?: boolean } = $props();
   let pill: HTMLDivElement | undefined = $state();
   let open = $state(false);
@@ -73,9 +73,8 @@
   <button use:tactile type="button" class="round" aria-label="Me localiser" aria-busy={app.locating} onclick={() => app.locateButton()}>
     <span class:spin={app.locating}><Icon name="locate" size={20} fill={!!app.userPos} /></span>
   </button>
-  {#if !minimal}
   <span class="sep" aria-hidden="true"></span>
-  <!-- Comme dans Plans : le bouton annonce la vue vers laquelle il bascule. -->
+  <!-- Comme dans Plans : le bouton annonce la vue vers laquelle il bascule (sur iPhone aussi, sous la flèche). -->
   <button use:tactile
     type="button"
     class="round"
@@ -89,7 +88,6 @@
   >
     {#key app.terrain3d}<span class="three">{app.terrain3d ? '2D' : '3D'}</span>{/key}
   </button>
-  {/if}
   {#if Math.abs(app.bearing) > 2}
     <span class="sep" aria-hidden="true"></span>
     <button use:tactile type="button" class="round" aria-label="Remettre le nord en haut" onclick={() => app.northTick++}>
@@ -97,8 +95,8 @@
     </button>
   {/if}
 </div>
-{#if app.phase === 'compose'}
-  <!-- Enregistrer un lieu (adresse, position, point de la carte) dans Mes lieux, sans quitter Créer. -->
+{#if app.phase === 'compose' && app.wide}
+  <!-- Mac : enregistrer un lieu (adresse, position, point de la carte) sans quitter Créer (sur iPhone, dans les onglets). -->
   <div class="ctrls glass">
     <button use:tactile type="button" class="round" aria-label="Enregistrer un lieu" title="Enregistrer un lieu dans Mes lieux" onclick={() => {
         haptic('tap');
@@ -160,7 +158,7 @@
     position: fixed;
     z-index: 15;
     right: var(--gutter);
-    top: calc(var(--safe-top) + 8px);
+    top: calc(var(--safe-top) + 14px);
     display: grid;
     gap: 10px;
   }
