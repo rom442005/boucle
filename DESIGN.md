@@ -549,3 +549,8 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **Tab bar, 5 icons**: the four tabs plus « Enregistrer un lieu » (pin-plus), an action that opens the save search from the Créer map. On iPhone the map's right column is now locate + 3D (the map-type switch stays on Mac); the pin-plus moved to the tab bar (Mac keeps it under the map controls).
 - Top of the iPhone screens a little lower, clear of the blur iOS puts under the status bar: places bar and map buttons at safe area + 14 px, first block of the photo screens at safe area + 22 px.
 
+## Update 23/11/2026 (Mac : la carte d'abord)
+
+- **The Mac menu** keeps only the four sections and « Enregistrer un lieu » (pin-plus, right end): no app logo on the left, no iPhone/QR button (the QR card stays inside the settings).
+- **Settings closed by default on Mac**: Créer shows the map alone, with the weather and places widgets at the left gutter and a pink pill « Créer un parcours » (52 px, path icon) centred at the bottom of the map. It opens the settings column on the left; a ✕ in its header closes it. A place card opens above the pill.
+

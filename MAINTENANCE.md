@@ -110,6 +110,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **23/11/2026** : Mac : réglages fermés par défaut, ouverts par « Créer un parcours » en bas de la carte ; menu sans logo ni bouton iPhone, avec « Enregistrer un lieu ».
 - **23/11/2026** : bande vide en bas de l'app installée sur iPhone (iOS 26, bug WebKit 301108) corrigée par une page aussi haute que l'écran en mode app ; bouton « Enregistrer un lieu » dans la barre d'onglets, 3D sous la flèche, haut des écrans un peu plus bas.
 - **23/11/2026** : iPhone épuré : onglets en icônes seules et plus bas, bande grise du bas d'iOS 26 recouverte par la carte (mesurée au lancement), météo retirée de l'accueil iPhone, barre des lieux en haut, fiche du lieu le plus proche à la place de la bulle, bouton « Enregistrer un lieu » sur la carte (iPhone et Mac), crédits de la carte en petit texte au lieu du bouton (i), blocs plus compacts.
 - **23/11/2026** : onglets de l'iPhone plus sûrs (changement au doigt levé) ; une nouvelle version ne recharge plus l'app au changement d'onglet (au lancement, ou en arrière-plan). Passe d'harmonisation : marges communes, fenêtres de recherche et « Enregistrer » plus opaques, blocs-onglets de Mes parcours comme ceux de Communauté.

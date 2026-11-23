@@ -196,10 +196,10 @@
   }
   @media (min-width: 860px) {
     .card {
-      left: calc(408px + (100vw - 408px - 400px) / 2);
+      left: var(--place-left-wide, calc(408px + (100vw - 408px - 400px) / 2));
       right: auto;
       width: 400px;
-      bottom: 20px;
+      bottom: var(--place-bottom-wide, 20px);
     }
   }
   .photos {

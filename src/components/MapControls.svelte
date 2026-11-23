@@ -95,15 +95,6 @@
     </button>
   {/if}
 </div>
-{#if app.phase === 'compose' && app.wide}
-  <!-- Mac : enregistrer un lieu (adresse, position, point de la carte) sans quitter Créer (sur iPhone, dans les onglets). -->
-  <div class="ctrls glass">
-    <button use:tactile type="button" class="round" aria-label="Enregistrer un lieu" title="Enregistrer un lieu dans Mes lieux" onclick={() => {
-        haptic('tap');
-        app.addSavedPlace({});
-      }}><Icon name="pinPlus" size={21} /></button>
-  </div>
-{/if}
 {#if app.wide && !minimal}
   <!-- Comme dans Plans sur Mac : zoomer et dézoomer d'un clic ; dézoomer loin mène à la Terre entière. -->
   <div class="ctrls zoom glass" role="group" aria-label="Zoom">

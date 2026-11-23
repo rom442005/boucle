@@ -43,10 +43,11 @@ async function open(page: Page) {
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
 }
 
-/** Les réglages : sur iPhone, « Faire une boucle » les fait monter ; sur Mac, ils sont déjà dans le panneau. */
+/** Les réglages : sur iPhone, « Faire une boucle » les fait monter ; sur Mac, « Créer un parcours » les ouvre à gauche. */
 async function compose(page: Page) {
-  const go = page.getByRole('button', { name: 'Faire une boucle' });
-  if (await go.count()) await go.click();
+  const go = page.getByRole('button', { name: /^(Faire une boucle|Créer un parcours)$/ });
+  await expect(go.or(page.getByRole('heading', { name: 'Nouveau parcours' })).first()).toBeVisible();
+  if (await go.count()) await go.first().click();
   await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
 }
 
@@ -65,7 +66,7 @@ async function tapMap(page: Page, x: number, y: number, placed: () => Promise<bo
 }
 
 async function createLoop(page: Page) {
-  if (await page.getByRole('button', { name: 'Faire une boucle' }).count()) await compose(page);
+  if (await page.getByRole('button', { name: /^(Faire une boucle|Créer un parcours)$/ }).count()) await compose(page);
   await page.getByRole('button', { name: /Créer la boucle/ }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
   // La première proposition s'affiche tout de suite ; on attend que les autres l'aient rejointe.
@@ -366,13 +367,12 @@ test('ouvrir Boucle sur l’iPhone : bandeau et QR code', async ({ page, browser
   await card.getByRole('button', { name: 'Fermer le QR code' }).click();
   await banner.getByRole('button', { name: 'Masquer ce conseil' }).click();
   await expect(banner).toBeHidden();
-  // Masqué pour de bon ; le bouton téléphone de l'en-tête garde l'accès au QR code.
+  // Masqué pour de bon (le bouton téléphone de l'en-tête a été retiré à la demande de Romain).
   await page.reload();
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
   await compose(page);
   await expect(page.getByRole('note').filter({ hasText: 'Sur ton iPhone' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Installer Boucle sur l’iPhone' }).click();
-  await expect(page.getByRole('dialog', { name: 'Installer Boucle sur l’iPhone' }).locator('.qr svg')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Installer Boucle sur l’iPhone' })).toHaveCount(0);
 });
 
 test('aller simple : arrivée libre, ou placée en touchant la carte', async ({ page, browserName }) => {
@@ -604,7 +604,7 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   await page.getByRole('button', { name: /Retour à la Communauté/ }).click();
   await page.getByRole('button', { name: 'Créer', exact: true }).click();
   // Le changement d'onglet passe par un fondu : on attend l'écran Créer.
-  await expect(page.getByRole('button', { name: 'Faire une boucle' }).or(page.getByRole('heading', { name: 'Nouveau parcours' })).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Faire une boucle|Créer un parcours)$/ }).or(page.getByRole('heading', { name: 'Nouveau parcours' })).first()).toBeVisible();
   await createLoop(page);
   await page.getByRole('button', { name: 'Publier' }).click();
   await page.getByRole('textbox', { name: 'Nom' }).fill('Ma boucle de test');
@@ -646,7 +646,12 @@ test('premier lancement : créer un compte, puis les quatre onglets', async ({ p
     await page.getByRole('button', { name: 'Fermer les réglages' }).click();
     await expect(go).toBeVisible();
   } else {
+    // Mac : la carte seule ; « Créer un parcours » ouvre les réglages à gauche, la croix les referme.
+    const make = page.getByRole('button', { name: 'Créer un parcours' });
+    await make.click();
     await expect(page.getByRole('heading', { name: 'Nouveau parcours' })).toBeVisible();
+    await page.getByRole('button', { name: 'Fermer les réglages' }).click();
+    await expect(make).toBeVisible();
   }
   // Au lancement suivant, plus de question.
   await page.reload();

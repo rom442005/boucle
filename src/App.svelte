@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { tactile } from './lib/haptics';
+  import { haptic, tactile } from './lib/haptics';
   import MapView from './components/MapView.svelte';
   import Panel from './components/Panel.svelte';
   import Composer from './components/Composer.svelte';
@@ -12,7 +12,6 @@
   import FollowHUD from './components/FollowHUD.svelte';
   import ElevationProfile from './components/ElevationProfile.svelte';
   import Icon from './components/Icon.svelte';
-  import InstallGuide from './components/InstallGuide.svelte';
   import Stops from './components/Stops.svelte';
   import BuildingsLegend from './components/BuildingsLegend.svelte';
   import RollingNumber from './components/RollingNumber.svelte';
@@ -148,15 +147,27 @@
     void ctaEl.offsetWidth;
     ctaEl.classList.add('shake');
   });
-  let showInstall = $state(false);
 
   /** iPhone : balayer le résumé pour passer d'une proposition à l'autre. */
   function swipe(dir: 1 | -1) {
     const n = app.routes.length;
     if (n > 1) app.select((app.selected + dir + n) % n);
   }
-  /** Accueil (iPhone) : la carte seule, « Faire une boucle » et les onglets. Sur Mac, le panneau reste ouvert. */
+  /** Accueil (iPhone) : la carte seule, « Faire une boucle » et les onglets. */
   const athome = $derived(!app.wide && app.phase === 'compose' && app.home);
+  /** Accueil (Mac) : la carte seule ; les réglages s'ouvrent à gauche avec « Créer un parcours ». */
+  const macHome = $derived(app.wide && app.phase === 'compose' && app.home && !community.sheet);
+  $effect(() => {
+    if (macHome) app.padding = { top: 100, bottom: 110, left: 40, right: 80 };
+  });
+  /** Enregistrer un lieu : depuis la carte de Créer (on peut aussi l'y choisir). */
+  function addPlace() {
+    haptic('tap');
+    community.sheet = null;
+    if (app.phase !== 'compose') app.closeLibrary();
+    else app.home = true;
+    app.addSavedPlace({});
+  }
   // Accueil iPhone : la carte se cadre au-dessus de la barre d'onglets (la bulle « Faire une boucle » y est).
   $effect(() => {
     if (athome) app.padding = { top: 64, bottom: app.tabbarH + 28, left: 28, right: 64 };
@@ -267,13 +278,10 @@
 
 {#if app.wide && !welcome && app.phase !== 'follow'}
   <!--
-    Mac : le menu (logo, quatre sections, iPhone) reste toujours à la même place, en haut au centre, quel que
+    Mac : le menu (quatre sections, Enregistrer un lieu) reste toujours à la même place, en haut au centre, quel que
     soit l'onglet ; les panneaux commencent dessous (Romain : « qu'il ne bouge pas dans tous les sens »).
   -->
   <header class="menu glass glass-panel" aria-label="Menu">
-          <span class="logo" aria-hidden="true">
-            <svg viewBox="0 0 1024 1024" width="36" height="36"><rect width="1024" height="1024" rx="230" fill="var(--tint)" /><path class="logo-trace" pathLength="1" d="M318 688C214 610 226 400 372 344c92-35 140 34 222 4 92-34 186-6 206 104 22 118-62 170-150 206-86 35-84 116-196 118-58 1-100-28-136-88Z" fill="none" stroke="#fff" stroke-width="78" stroke-linecap="round" stroke-linejoin="round" /><circle cx="318" cy="688" r="96" fill="#fff" /><circle cx="318" cy="688" r="46" fill="var(--tint)" /></svg>
-          </span>
           <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} use:liquidTabs={{ active: TABS.indexOf(tab), pick: (i) => goTab(TABS[i]) }}>
             <span class="tab-on" aria-hidden="true"></span>
             {#each TABS as t (t)}
@@ -286,8 +294,9 @@
               </button>
             {/each}
           </nav>
-          <button use:tactile type="button" class="round phone" aria-label="Installer Boucle sur l’iPhone" title="Ouvrir Boucle sur l’iPhone (QR code)" aria-expanded={showInstall} onclick={() => (showInstall = !showInstall)}>
-            <Icon name="phone" size={18} />
+          <!-- Enregistrer un lieu dans Mes lieux (adresse, position, point de la carte), depuis la carte de Créer. -->
+          <button use:tactile type="button" class="round add-place" aria-label="Enregistrer un lieu" title="Enregistrer un lieu" onclick={addPlace}>
+            <Icon name="pinPlus" size={20} />
           </button>
         </header>
 {/if}
@@ -297,13 +306,13 @@
   {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
     <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
     <!-- iPhone : la barre des lieux seule, tout en haut (la météo se lit dans les propositions). -->
-    <div class="widgets">
+    <div class="widgets" class:full={macHome}>
       {#if app.wide}<TodayCard />{/if}
       <ZonesCard />
     </div>
     {#if app.place}
       <!-- Fiche du lieu touché : au-dessus des onglets sur iPhone, en bas de la carte sur Mac. -->
-      <div class="place-zone" style:--place-bottom="{app.tabbarH + 10}px"><PlaceCard /></div>
+      <div class="place-zone" style:--place-bottom="{app.tabbarH + 10}px" style:--place-left-wide={macHome ? 'calc(50vw - 200px)' : undefined} style:--place-bottom-wide={macHome ? '96px' : undefined}><PlaceCard /></div>
     {/if}
   {/if}
   <!-- Légende seulement quand les volumes sont visibles (à partir du zoom 13). -->
@@ -314,13 +323,15 @@
   {#if showTabs}<TabBar active={tab} onphoto={scene || app.mapType !== 'plan'} action={showAction && !welcome} />{/if}
   {#if athome}
     <!-- « Faire une boucle » est la bulle rose à côté des onglets (TabBar). -->
+  {:else if macHome}
+    {#if !welcome && !app.pickOnMap && !app.search && !saved.draft}
+      <!-- Mac : la carte seule ; les réglages du parcours s'ouvrent à gauche, au clic. -->
+      <button use:tactile type="button" class="make" onclick={() => app.openComposer()}><Icon name="path" size={20} />Créer un parcours</button>
+    {/if}
   {:else if !welcome}
   <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
   <Panel solid={fullsheet && !photo} {photo} {headless} centered={app.phase === 'community' || app.phase === 'library' || community.sheet?.kind === 'auth'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet || (!app.wide && (app.phase === 'results' || app.phase === 'detail')) ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
-      {#if app.wide && showInstall}
-        <InstallGuide mode="card" onclose={() => (showInstall = false)} />
-      {/if}
       {#if community.sheet}
         <!-- Une action de la Communauté (connexion, publication, profil, signalement) prend le panneau, sans fenêtre par-dessus. -->
         <div class="nav">
@@ -352,7 +363,9 @@
         <!-- Les réglages, montés du bas : un bouton pour redescendre vers la carte, puis le départ. -->
         <div class="nav">
           {#if app.wide}
-            <span class="navbtn-space" aria-hidden="true"></span>
+            <button use:tactile type="button" class="round navbtn" aria-label="Fermer les réglages" title="Fermer" onclick={() => app.closeComposer()}>
+              <Icon name="close" size={18} />
+            </button>
           {:else}
             <button use:tactile type="button" class="round navbtn" aria-label="Fermer les réglages" onclick={() => app.closeComposer()}>
               <Icon name="down" size={20} />
@@ -515,33 +528,13 @@
     flex: none;
     width: 272px;
   }
-  .logo {
-    display: grid;
-  }
-  .phone {
-    width: 34px;
-    height: 34px;
+  .add-place {
+    width: 36px;
+    height: 36px;
     color: var(--label-2);
   }
-  .phone[aria-expanded='true'] {
+  .add-place:hover {
     color: var(--tint);
-    background: var(--tint-soft);
-  }
-  /* Le logo se dessine à l'ouverture, comme un parcours tout juste trouvé. */
-  .logo svg {
-    display: block;
-    border-radius: 10px;
-    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--tint) 80%, transparent);
-  }
-  .logo-trace {
-    stroke-dasharray: 1;
-    stroke-dashoffset: 1;
-    animation: logo-draw 1.2s cubic-bezier(0.55, 0, 0.2, 1) 300ms forwards;
-  }
-  @keyframes logo-draw {
-    to {
-      stroke-dashoffset: 0;
-    }
   }
   /* Quatre sections en icônes, une pastille glisse sous la section active. */
   .tabs {
@@ -599,10 +592,6 @@
   @media (prefers-reduced-motion: reduce) {
     .tab-on {
       transition: none;
-    }
-    .logo-trace {
-      animation: none;
-      stroke-dashoffset: 0;
     }
   }
   .start-wide {
@@ -665,6 +654,47 @@
     .widgets {
       left: 408px;
       top: 76px;
+    }
+    /* Réglages fermés : la carte occupe tout, les widgets se rangent à gauche. */
+    .widgets.full {
+      left: var(--gutter);
+    }
+  }
+  /* Mac : « Créer un parcours », pastille rose en bas au centre de la carte. */
+  .make {
+    position: fixed;
+    z-index: 18;
+    left: 50%;
+    bottom: 28px;
+    translate: -50% 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 26px 0 22px;
+    border-radius: 999px;
+    font-size: 1.0625rem;
+    font-weight: 650;
+    color: #fff;
+    background:
+      radial-gradient(90% 70% at 32% 12%, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 58%),
+      var(--tint);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.5),
+      0 16px 32px -14px color-mix(in srgb, var(--tint) 90%, transparent);
+    animation: make-in 520ms var(--spring) backwards;
+    transition: transform 260ms var(--spring-bouncy);
+  }
+  .make:hover {
+    transform: scale(1.03);
+  }
+  .make:active {
+    transform: scale(0.97);
+  }
+  @keyframes make-in {
+    from {
+      opacity: 0;
+      translate: -50% 16px;
     }
   }
   /* ▶ Suivre : bulle rose de verre liquide, comme la bulle « Faire une boucle ». */

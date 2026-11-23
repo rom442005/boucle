@@ -7,7 +7,7 @@
   /**
    * banner : rappel dans Safari sur iPhone.
    * mac : bandeau sur ordinateur, qui s'ouvre sur le QR code à scanner avec l'iPhone.
-   * card : le QR code en surimpression (bouton téléphone de l'en-tête sur Mac).
+   * card : le QR code en surimpression (l'en-tête du Mac n'a plus de bouton téléphone : non utilisé).
    */
   let { mode, onclose }: { mode: 'banner' | 'mac' | 'card'; onclose?: () => void } = $props();
 
