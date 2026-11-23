@@ -150,7 +150,7 @@
   .ctrls-wrap {
     position: fixed;
     z-index: 15;
-    right: 12px;
+    right: var(--gutter);
     top: calc(var(--safe-top) + 12px);
     display: grid;
     gap: 10px;
@@ -223,7 +223,7 @@
   .types {
     position: fixed;
     z-index: 16;
-    right: 70px;
+    right: calc(var(--gutter) + 58px);
     top: calc(var(--safe-top) + 72px);
     display: grid;
     width: min-content;

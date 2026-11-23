@@ -106,13 +106,13 @@
   </section>
 
   <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'favoris'} aria-pressed={app.libTab === 'favoris'} onclick={() => (app.libTab = 'favoris')}>
-    <span class="k">⭐ Favoris</span><b class="n rounded"><CountUp value={app.library.length} /></b>
+    <span class="k">Favoris</span><span class="nrow"><span class="emo-s" aria-hidden="true">⭐</span><b class="n rounded"><CountUp value={app.library.length} /></b></span>
   </button>
   <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'historique'} aria-pressed={app.libTab === 'historique'} onclick={() => (app.libTab = 'historique')}>
-    <span class="k">🕒 Sorties</span><b class="n rounded"><CountUp value={app.history.length} /></b>
+    <span class="k">Sorties</span><span class="nrow"><span class="emo-s" aria-hidden="true">🕒</span><b class="n rounded"><CountUp value={app.history.length} /></b></span>
   </button>
   <button use:tactile type="button" class="card tabcard glass photo-card" class:on={app.libTab === 'lieux'} aria-pressed={app.libTab === 'lieux'} onclick={() => (app.libTab = 'lieux')}>
-    <span class="k">📍 Lieux</span><b class="n rounded"><CountUp value={saved.places.length} /></b>
+    <span class="k">Lieux</span><span class="nrow"><span class="emo-s" aria-hidden="true">📍</span><b class="n rounded"><CountUp value={saved.places.length} /></b></span>
   </button>
 
   <section class="card wide glass photo-card list-card" aria-label={app.libTab === 'favoris' ? 'Parcours favoris' : app.libTab === 'lieux' ? 'Mes lieux' : 'Historique des sorties'}>
@@ -349,6 +349,19 @@
     box-shadow:
       var(--shadow-glass),
       inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+  }
+  /* Comme les blocs-onglets de Communauté : étiquette seule en haut, l'émoji à côté du chiffre. */
+  .tabcard {
+    padding: 13px;
+  }
+  .nrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .emo-s {
+    font-size: 1.125rem;
+    line-height: 1;
   }
   .tabcard .n {
     font-size: 2rem;

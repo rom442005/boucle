@@ -87,7 +87,7 @@
 <svelte:window onkeydown={onkey} />
 
 <div class="scrim" class:wide={app.wide} onclick={close} aria-hidden="true"></div>
-<div class="search glass glass-panel" class:wide={app.wide} role="dialog" aria-modal="true" aria-label={TITLE[kind]}>
+<div class="search glass glass-panel modal-glass" class:wide={app.wide} role="dialog" aria-modal="true" aria-label={TITLE[kind]}>
   <div class="bar">
     <label class="field">
       <Icon name="search" size={18} />
@@ -178,7 +178,7 @@
     position: fixed;
     inset: 0;
     z-index: 39;
-    background: rgba(0, 0, 0, 0.18);
+    background: rgba(0, 0, 0, 0.32);
   }
   /* Sur Mac, seule la colonne est voilée : la carte reste cliquable pour choisir un point. */
   .scrim.wide {

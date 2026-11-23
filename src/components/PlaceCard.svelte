@@ -93,7 +93,7 @@
   {/if}
 {/snippet}
 
-<section class="card glass photo-card on-photo" aria-label="Fiche du lieu : {p.name}" bind:offsetHeight={cardH}>
+<section class="card glass photo-card on-photo" class:under={!!saved.draft} aria-label="Fiche du lieu : {p.name}" bind:offsetHeight={cardH}>
   <div class="photos" bind:clientWidth={photosW} style:height="{H}px">
     {#if photosW}
       {#key p.id}
@@ -163,8 +163,8 @@
   .card {
     position: fixed;
     z-index: 16;
-    left: 12px;
-    right: 12px;
+    left: var(--gutter);
+    right: var(--gutter);
     bottom: calc(var(--place-bottom, 96px));
     padding: 8px 8px 10px;
     border-radius: 30px;
@@ -181,6 +181,12 @@
       translate: 0 28px;
       scale: 0.96;
     }
+  }
+  /* Sous la fenêtre « Enregistrer » : la fiche s'efface (elle se lisait à travers). */
+  .card.under {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms var(--ease-out);
   }
   @media (min-width: 860px) {
     .card {

@@ -2439,7 +2439,7 @@
   </div>
 {/if}
 
-{#if lost && !app.pickOnMap && app.phase !== 'follow'}
+{#if lost && !app.pickOnMap && !app.place && app.phase !== 'follow'}
   <button use:tactile
     type="button"
     class="back-to glass"

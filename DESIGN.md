@@ -526,3 +526,11 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **Place card** (`PlaceCard.svelte`, smoked glass like the bar): two photos side by side, 128 px high, 22 px corners — the IGN aerial view (a track rotated to lie horizontal) and a ground photo aimed at the place (Panoramax 360° photos cropped toward the place, or a matching Wikimedia Commons photo), small « Vue du ciel » / « Sur place » tags, tap to enlarge with the author's credit. Name, what is known (« Piste d'athlétisme · 400 m · 8 couloirs · synthétique · à 0,7 km »), then the pink pill « Partir d'ici » and a glass « Enregistrer » that turns into a white « Enregistré ». Above the tab bar on iPhone, bottom-centre of the map on Mac; the map frames the place above it.
 - **Mes lieux** (`saved.svelte.ts`, `SaveSheet.svelte`, Mes parcours › 📍 Lieux): like Google Maps saved lists. Lists are glass chips with emoji and count (chosen: solid white); default lists Mes adresses 🏠, Favoris ❤️, À essayer 🚩, plus one's own. « Ajouter Domicile / Travail / École » rows until they exist. The save sheet: big emoji on a white disc, name field, suggested names, a 7 × 2 emoji grid, the lists as glass rows with a check, « Nouvelle liste » inline. Saved places show on the map as white discs with their emoji (name from zoom 12.5) and come first in the departure search.
 
+## Update 23/11/2026 (checkpoint fil rouge)
+
+- **One gutter** (`--gutter`, 16 px on iPhone, 12 px on Mac): weather and places widgets, map controls, place card and buildings legend now line up with the tab bar on both sides.
+- **Modal glass** (`.glass.modal-glass`): the search and the save sheet use a denser smoked glass (86 %) over a darker scrim, so the screen below no longer reads through; the place card fades out under the save sheet, and « Revenir au départ » hides while a card is open.
+- **Tab blocks** of Mes parcours now follow Communauté exactly: the label alone on top, the emoji beside the big count, 13 px padding, three per row.
+- Vertical rhythm on the map: 8 px between the weather pill, the places bar and the focus bubble.
+- iPhone tabs switch on finger-up (`lens.ts`), and a new version installs on launch or when the app goes to the background, never on a tab change.
+

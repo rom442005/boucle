@@ -25,7 +25,7 @@
   .legend {
     position: fixed;
     z-index: 14;
-    left: 12px;
+    left: var(--gutter);
     display: flex;
     gap: 12px;
     padding: 7px 12px;

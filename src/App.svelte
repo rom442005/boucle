@@ -644,8 +644,8 @@
     position: fixed;
     z-index: 15;
     top: calc(env(safe-area-inset-top, 0px) + 12px);
-    left: 12px;
-    width: min(300px, calc(100vw - 96px));
+    left: var(--gutter);
+    width: min(300px, calc(100vw - 2 * var(--gutter) - 64px));
     display: grid;
     gap: 8px;
     pointer-events: none;

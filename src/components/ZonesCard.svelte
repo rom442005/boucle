@@ -76,7 +76,7 @@
   .zones-col {
     display: grid;
     justify-items: start;
-    gap: 6px;
+    gap: 8px;
   }
   .zones {
     display: flex;

@@ -138,7 +138,7 @@
     position: fixed;
     inset: 0;
     z-index: 44;
-    background: rgba(0, 0, 0, 0.32);
+    background: rgba(0, 0, 0, 0.4);
     animation: fade 240ms var(--ease-out);
   }
   @keyframes fade {
@@ -159,7 +159,7 @@
     color: #fff;
     display: grid;
     gap: 12px;
-    --g-bg: rgba(22, 24, 26, 0.72);
+    --g-bg: rgba(22, 23, 25, 0.88);
     --blur: 30px;
     animation: up 520ms var(--spring) backwards;
   }
