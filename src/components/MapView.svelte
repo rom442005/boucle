@@ -29,6 +29,8 @@
   const dark = matchMedia('(prefers-color-scheme: dark)');
   /** Zoom du lancement : la ville et ses environs, jamais un gros plan sur la position. */
   const LAUNCH_ZOOM = 12;
+  /** Mes lieux se voient à partir d'ici (vue d'une agglomération), et s'effacent au-delà. */
+  const SAVED_MINZOOM = 9.6;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /** Ciel étoilé autour du globe : deux motifs de tailles différentes, pour que la répétition ne se voie pas. */
@@ -541,6 +543,8 @@
         id: 'saved-pins',
         type: 'symbol',
         source: 'saved',
+        // De trop loin (au-delà d'une agglomération), Mes lieux s'effacent ; ils reviennent en se rapprochant.
+        minzoom: SAVED_MINZOOM,
         layout: {
           'icon-image': ['concat', 'sv-', ['get', 'emoji']],
           'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.7, 14, 1] as unknown as number,
@@ -554,7 +558,12 @@
           'text-max-width': 9,
           'text-optional': true,
         },
-        paint: { 'text-color': theme === 'dark' ? '#FFFFFF' : '#1C1C1E', 'text-halo-color': theme === 'dark' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)', 'text-halo-width': 1.4 },
+        paint: {
+          'icon-opacity': ['interpolate', ['linear'], ['zoom'], SAVED_MINZOOM, 0, SAVED_MINZOOM + 0.8, 1] as unknown as number,
+          'text-color': theme === 'dark' ? '#FFFFFF' : '#1C1C1E',
+          'text-halo-color': theme === 'dark' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)',
+          'text-halo-width': 1.4,
+        },
       },
       before,
     );
@@ -591,7 +600,7 @@
       'saved',
       app.phase === 'follow'
         ? EMPTY
-        : { type: 'FeatureCollection', features: saved.places.map((p) => ({ type: 'Feature', properties: { id: p.id, name: p.name, emoji: p.emoji }, geometry: { type: 'Point', coordinates: p.coord } })) },
+        : { type: 'FeatureCollection', features: saved.places.map((p) => ({ type: 'Feature', properties: { id: p.id, name: p.name, emoji: saved.emojiOf(p) }, geometry: { type: 'Point', coordinates: p.coord } })) },
     );
   }
 
@@ -2373,6 +2382,7 @@
   // Mes lieux : la carte suit les ajouts, changements et retraits (pas pendant le suivi).
   $effect(() => {
     void saved.places;
+    void saved.lists;
     void app.phase;
     if (!ready || !map) return;
     untrack(showSaved);
@@ -2489,7 +2499,7 @@
     pointer-events: none;
     opacity: 0;
     background:
-      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 40%, transparent), transparent 15%),
+      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 24%, transparent), transparent 12%),
       linear-gradient(to top, color-mix(in srgb, var(--tone) 27%, transparent), transparent 21%),
       radial-gradient(130% 95% at 50% 46%, transparent 64%, color-mix(in srgb, var(--tone) 25%, transparent));
     transition:

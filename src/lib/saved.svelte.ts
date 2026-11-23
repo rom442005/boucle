@@ -132,6 +132,11 @@ class Saved {
     return this.lists.find((l) => l.id === id) ?? this.lists[0] ?? DEFAULT_LISTS[0];
   }
 
+  /** Émoji montré pour un lieu : celui de sa liste (on le change depuis la liste). */
+  emojiOf(p: Pick<SavedPlace, 'list'>): string {
+    return this.listOf(p.list).emoji;
+  }
+
   placesIn(list: string): SavedPlace[] {
     return this.places.filter((p) => p.list === list);
   }

@@ -117,6 +117,8 @@ export interface FeedQuery {
 export interface Session {
   userId: string;
   email: string;
+  /** compte de ce téléphone, ouvert par l'accord de Santé / Health Connect, sans e-mail ni mot de passe */
+  device?: boolean;
 }
 
 export interface PublishInput {
@@ -192,6 +194,8 @@ export interface CommunityBackend {
   verifyCode(email: string, code: string): Promise<Session>;
   /** connexion par mot de passe (choisi avec le profil, à la création du compte) */
   signInWithPassword(email: string, password: string): Promise<Session>;
+  /** compte de ce téléphone, sans e-mail ni mot de passe (ouvert après l'accord de Santé) */
+  signInWithDevice(): Promise<Session>;
   /** choisit ou change le mot de passe du compte connecté */
   setPassword(password: string): Promise<void>;
   signOut(): Promise<void>;

@@ -157,7 +157,7 @@
             <button use:tactile type="button" class="del" aria-label="Retirer {it.p.name}" onclick={() => saved.remove(it.p.id)}><Icon name="remove" size={24} /></button>
           {/if}
           <button use:tactile type="button" class="item" disabled={editing} onclick={() => app.showSavedPlace(it.p.id)}>
-            <span class="pemo" aria-hidden="true">{it.p.emoji}</span>
+            <span class="pemo" aria-hidden="true">{saved.emojiOf(it.p)}</span>
             <span class="txt">
               <span class="name">{it.p.name}</span>
               <span class="meta tabular">{[it.p.detail, it.dist != null ? `à ${km(it.dist)}` : ''].filter(Boolean).join(' · ') || 'Lieu enregistré'}</span>

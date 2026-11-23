@@ -203,7 +203,9 @@ test('pistes : toutes sur la carte, fiche avec photos, enregistrer dans Mes lieu
   await expect(card.getByRole('button', { name: 'Agrandir la vue du ciel' })).toBeVisible();
   await card.getByRole('button', { name: 'Enregistrer' }).click();
   const sheet = page.getByRole('dialog', { name: 'Enregistrer le lieu' });
-  await expect(sheet.getByRole('radio', { name: '🏟️' })).toHaveAttribute('aria-checked', 'true');
+  // Le nom de la piste est déjà écrit ; le lieu prend l'émoji de sa liste.
+  await expect(sheet.getByRole('textbox', { name: 'Nom du lieu' })).not.toHaveValue('');
+  await expect(sheet.getByRole('radio', { name: /Favoris/ })).toHaveAttribute('aria-checked', 'true');
   await sheet.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Enregistré' })).toHaveAttribute('aria-pressed', 'true');
   await card.getByRole('button', { name: 'Fermer la fiche' }).click();
@@ -251,9 +253,16 @@ test('enregistrer un lieu depuis Créer : bouton de la carte, adresse, Mes lieux
   await page.getByRole('searchbox').fill('Place Royale Nantes');
   await page.getByRole('button', { name: /Place Royale/ }).first().click();
   const sheet = page.getByRole('dialog', { name: 'Enregistrer le lieu' });
-  await sheet.getByRole('button', { name: /Travail/ }).click();
+  // La fiche se réduit au nom et aux listes : plus d'émojis ni de noms proposés.
+  await expect(sheet.getByRole('radiogroup', { name: 'Émoji du lieu' })).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: /^École$|🎓/ })).toHaveCount(0);
+  await sheet.getByRole('textbox', { name: 'Nom du lieu' }).fill('Travail');
+  // L'émoji d'une liste se change depuis sa pastille crayon.
+  await sheet.getByRole('button', { name: /Changer l’émoji de la liste Favoris/ }).click();
+  await sheet.getByRole('radiogroup', { name: 'Émoji de la liste Favoris' }).getByRole('radio', { name: '⭐' }).click();
+  await expect(sheet.getByRole('button', { name: /Changer l’émoji de la liste Favoris \(⭐\)/ })).toBeVisible();
   await sheet.getByRole('button', { name: 'Enregistrer', exact: true }).click();
-  await expect(page.getByText(/Travail : enregistré dans/)).toBeVisible();
+  await expect(page.getByText(/Travail : enregistré dans ⭐ Favoris/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Enregistrer un lieu' })).toBeVisible();
 });
 
@@ -658,6 +667,37 @@ test('premier lancement : créer un compte, puis les quatre onglets', async ({ p
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
   await page.waitForTimeout(1500);
   await expect(page.getByRole('dialog', { name: 'Boucle' })).toHaveCount(0);
+});
+
+test('app du téléphone : se connecter en autorisant Santé, sans e-mail ni mot de passe', async ({ page }) => {
+  // Faux Santé (comme dans l'app iPhone) : l'accord est donné, une journée de pas à lire.
+  await page.addInitScript(() => {
+    const d = new Date();
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    (globalThis as { __boucleHealth?: unknown }).__boucleHealth = {
+      platform: 'ios',
+      days: [{ day, steps: 8421, restingHr: 54, vo2max: 48, distance: 0, workouts: [], source: 'ios' }],
+    };
+  });
+  await page.goto('./?demo=communaute');
+  const welcome = page.getByRole('dialog', { name: 'Boucle' });
+  await welcome.getByRole('button', { name: 'Créer un compte' }).click();
+  await page.getByRole('button', { name: 'Continuer avec Apple Santé' }).click();
+  // Le profil, sans mot de passe à choisir.
+  await page.getByRole('textbox', { name: 'Prénom' }).fill('Sam');
+  await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('2000');
+  await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Course' }).click();
+  await expect(page.getByLabel('Mot de passe', { exact: true })).toHaveCount(0);
+  await page.locator('.welcome').getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Créer mon profil' }).click();
+  await expect(welcome).toHaveCount(0);
+  // Connecté : le profil montre les pas lus dans Santé ; le compte vit sur ce téléphone (pas de déconnexion).
+  const tabs = page.getByRole('navigation', { name: 'Sections' });
+  await tabs.getByRole('button', { name: 'Profil', exact: true }).click();
+  await expect(page.getByText(/8\s?421/).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Modifier le profil' }).click();
+  await expect(page.getByText('Compte de ce téléphone, ouvert avec Santé')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Se déconnecter' })).toHaveCount(0);
 });
 
 test('mot de passe : reconnexion sans code, puis mot de passe oublié', async ({ page }) => {

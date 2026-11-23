@@ -213,6 +213,14 @@ export async function createLocalBackend(): Promise<CommunityBackend> {
       setSession(s);
       return s;
     },
+    async signInWithDevice() {
+      await wait();
+      const u = { id: `moi-${id()}`, email: '' };
+      db.users.push(u);
+      const s = { userId: u.id, email: '', device: true };
+      setSession(s);
+      return s;
+    },
     async setPassword(password) {
       await wait();
       const u = db.users.find((x) => x.id === db.session?.userId);

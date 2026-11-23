@@ -243,6 +243,13 @@ class CommunityState {
     return this.enter(() => b.signInWithPassword(email.trim(), password));
   }
 
+  /** Compte de ce téléphone, ouvert par l'accord de Santé / Health Connect : ni e-mail ni mot de passe. */
+  async signInWithDevice(): Promise<'done' | 'profile'> {
+    const b = await this.api();
+    if (this.session?.device) return this.enter(async () => this.session!);
+    return this.enter(() => b.signInWithDevice());
+  }
+
   async setPassword(password: string) {
     await (await this.api()).setPassword(password);
   }

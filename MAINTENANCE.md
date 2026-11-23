@@ -26,6 +26,13 @@ Tout est dans Supabase, accessible depuis Chrome :
 - **Les mots de passe ne se lisent nulle part**, ni par Romain ni par Claude : Supabase n'en garde qu'une empreinte (bcrypt). C'est voulu : une fuite de la base ne livrerait aucun mot de passe.
 - Le schéma `admin` n'est pas publié par l'API : l'app et les visiteurs n'y ont pas accès (vérifié : « Invalid schema: admin »).
 
+## Connexion par Santé (app du téléphone)
+
+- Dans l'app iPhone ou Android, « Continuer avec Apple Santé / Health Connect » demande l'accord de Santé, puis ouvre un **compte anonyme de Supabase** (`signInAnonymously`) : pas d'e-mail ni de mot de passe, la session reste sur le téléphone. Le profil (prénom, année, sport) reste demandé.
+- **À activer une fois** : tableau de bord Supabase, Authentication, Sign In / Providers, « Allow anonymous sign-ins ». Tant que ce n'est pas fait, le bouton répond « La connexion par Santé n'est pas encore ouverte ».
+- Ces comptes ont `is_anonymous = true` ; les règles d'accès (`to authenticated`) s'appliquent pareil. Ils n'ont pas de déconnexion (le compte serait perdu) ; supprimer le compte reste possible. Santé ne donne aucune identité : sur un autre appareil (Mac), il faut un compte par e-mail.
+- Tests : `globalThis.__boucleHealth = { platform: 'ios', days: [...] }` posé avant le chargement simule Santé (test e2e « app du téléphone »).
+
 ## Santé sur l'iPhone sans l'app (raccourci « Boucle Sante »)
 
 Apple ne laisse pas un site lire Santé. Sur l'iPhone, tant que l'app n'est pas installée, un raccourci de l'app Raccourcis fait le lien :
@@ -110,6 +117,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **23/11/2026** : fiche « Enregistrer le lieu » réduite au nom et aux listes (l'émoji d'une liste se change par sa pastille crayon, les lieux prennent l'émoji de leur liste) ; Mes lieux s'effacent de la carte vue de loin ; voile du haut de la carte allégé ; dans l'app du téléphone, connexion par l'accord d'Apple Santé ou de Health Connect (compte du téléphone, sans e-mail ni mot de passe, compte anonyme de Supabase : réglage « Allow anonymous sign-ins » à activer).
 - **23/11/2026** : Mac : réglages fermés par défaut, ouverts par « Créer un parcours » en bas de la carte ; menu sans logo ni bouton iPhone, avec « Enregistrer un lieu ».
 - **23/11/2026** : bande vide en bas de l'app installée sur iPhone (iOS 26, bug WebKit 301108) corrigée par une page aussi haute que l'écran en mode app ; bouton « Enregistrer un lieu » dans la barre d'onglets, 3D sous la flèche, haut des écrans un peu plus bas.
 - **23/11/2026** : iPhone épuré : onglets en icônes seules et plus bas, bande grise du bas d'iOS 26 recouverte par la carte (mesurée au lancement), météo retirée de l'accueil iPhone, barre des lieux en haut, fiche du lieu le plus proche à la place de la bulle, bouton « Enregistrer un lieu » sur la carte (iPhone et Mac), crédits de la carte en petit texte au lieu du bouton (i), blocs plus compacts.

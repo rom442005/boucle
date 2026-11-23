@@ -3,6 +3,8 @@
   import PasswordField from './PasswordField.svelte';
   import ProfileForm from './ProfileForm.svelte';
   import { community } from '../lib/community.svelte';
+  import { links } from '../lib/links.svelte';
+  import { healthPlatform } from '../lib/health';
   import { CommunityError } from '../lib/community/types';
   import { haptic, tactile } from '../lib/haptics';
   import { untrack } from 'svelte';
@@ -12,6 +14,8 @@
    * Créer : une adresse e-mail, un code à 6 chiffres reçu par e-mail (il prouve l'adresse), puis le profil,
    * avec le mot de passe. Se connecter : l'e-mail et le mot de passe, sans e-mail à attendre.
    * Mot de passe oublié : un code par e-mail, et le nouveau mot de passe dans la foulée.
+   * Dans l'app du téléphone : « Continuer avec Apple Santé » (ou Health Connect sur Android) ouvre la feuille
+   * d'accord du système ; l'accord donné, un compte de ce téléphone s'ouvre, sans e-mail ni mot de passe.
    * L'action qui l'a demandé reprend ensuite.
    */
   let { start = 'create' }: { reason?: string; start?: 'create' | 'login' } = $props();
@@ -27,6 +31,31 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let resent = $state(false);
+  /** accord de Santé en cours */
+  let hBusy = $state(false);
+  const HEALTH_NAME = healthPlatform === 'android' ? 'Health Connect' : 'Apple Santé';
+
+  /** L'accord de Santé / Health Connect vaut connexion : un compte de ce téléphone, puis le profil. */
+  async function viaHealth() {
+    error = null;
+    hBusy = true;
+    try {
+      await links.connectHealth();
+      // Refus ou Santé absente : connectHealth a déjà dit quoi faire.
+      if (!links.healthOn) return;
+      if ((await community.signInWithDevice()) === 'profile') step = 'profile';
+      else void links.syncHealth(true).catch(() => {});
+    } catch (err) {
+      fail(err, 'Connexion impossible pour le moment. Réessaie.');
+    } finally {
+      hBusy = false;
+    }
+  }
+  function profileDone() {
+    community.finishAuth();
+    // Le compte existe : les journées lues par le téléphone partent au serveur.
+    void links.syncHealth(true).catch(() => {});
+  }
 
   // Connecté par le lien de l'e-mail (ici ou dans un autre onglet) : reste le profil.
   $effect(() => {
@@ -106,6 +135,14 @@
     </div>
   {/if}
 
+  {#if healthPlatform && ((step === 'email' && !forgot) || step === 'login')}
+    <div class="quick rise">
+      <button use:tactile type="button" class="cta health" disabled={hBusy || busy} onclick={viaHealth}>
+        <Icon name="heart" size={18} fill />{hBusy ? 'Accord de Santé…' : `Continuer avec ${HEALTH_NAME}`}
+      </button>
+      <p class="or"><span>ou avec ton adresse mail</span></p>
+    </div>
+  {/if}
   {#if step === 'login'}
     <form class="step rise" onsubmit={login} novalidate>
       <input class="input" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Adresse mail" aria-label="Adresse e-mail" bind:value={email} use:autofocus required />
@@ -156,7 +193,7 @@
     <div class="lead">
       <h2>Ton profil</h2>
     </div>
-    <ProfileForm creating ondone={() => community.finishAuth()} />
+    <ProfileForm creating ondone={profileDone} />
   {/if}
 </div>
 
@@ -189,6 +226,37 @@
   .step {
     display: grid;
     gap: 12px;
+  }
+  .quick {
+    display: grid;
+    gap: 12px;
+  }
+  /* Bouton blanc à cœur rouge, comme les « Continuer avec… » du système. */
+  .health {
+    color: #1c1c1e;
+    background: #fff;
+    box-shadow:
+      0 12px 26px -14px rgba(0, 0, 0, 0.45),
+      inset 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  }
+  .health :global(.icon) {
+    color: #ff375f;
+  }
+  /* « ou avec ton adresse mail », entre deux filets. */
+  .or {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--label-2);
+  }
+  .or::before,
+  .or::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--separator);
   }
   .sent {
     display: flex;

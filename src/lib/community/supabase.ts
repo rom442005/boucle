@@ -176,8 +176,8 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
     if (!id) throw new CommunityError('Connecte-toi pour continuer.');
     return id;
   };
-  const toSession = (s: { user: { id: string; email?: string } } | null): Session | null =>
-    s ? { userId: s.user.id, email: s.user.email ?? '' } : null;
+  const toSession = (s: { user: { id: string; email?: string; is_anonymous?: boolean } } | null): Session | null =>
+    s ? { userId: s.user.id, email: s.user.email ?? '', ...(s.user.is_anonymous ? { device: true } : {}) } : null;
 
   const backend: CommunityBackend = {
     demo: false,
@@ -201,6 +201,13 @@ export async function createSupabaseBackend(): Promise<CommunityBackend> {
     async signInWithPassword(email, password) {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error || !data.session) fail(error, 'E-mail ou mot de passe incorrect.');
+      return toSession(data.session)!;
+    },
+    async signInWithDevice() {
+      // Compte anonyme de Supabase : gardé sur ce téléphone (session), sans adresse e-mail.
+      const { data, error } = await sb.auth.signInAnonymously();
+      if (error?.code === 'anonymous_provider_disabled') throw new CommunityError('La connexion par Santé n’est pas encore ouverte. Utilise ton adresse e-mail.');
+      if (error || !data.session) fail(error, 'Connexion impossible pour le moment. Réessaie.');
       return toSession(data.session)!;
     },
     async setPassword(password) {

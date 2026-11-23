@@ -7,7 +7,10 @@ import type { HealthDay, HealthWorkout } from './community/types';
  * puis envoie au serveur de Boucle, et le profil affiche ces données sur tous les appareils.
  * Lecture seule : pas, fréquence au repos, VO2 max, sorties (course, vélo, marche).
  */
-export const healthPlatform: 'ios' | 'android' | null = isNativeApp ? (/Android/i.test(navigator.userAgent) ? 'android' : 'ios') : null;
+/** Tests de bout en bout : un faux Santé posé par la page (globalThis.__boucleHealth), jamais présent sinon. */
+const fake = (globalThis as { __boucleHealth?: { platform: 'ios' | 'android'; grant?: boolean; days?: HealthDay[] } }).__boucleHealth ?? null;
+
+export const healthPlatform: 'ios' | 'android' | null = fake?.platform ?? (isNativeApp ? (/Android/i.test(navigator.userAgent) ? 'android' : 'ios') : null);
 
 // Calories : Android ne calcule la distance d'une sortie qu'avec ce droit (sinon, calcul de secours plus lent).
 const READ = ['steps', 'restingHeartRate', 'vo2Max', 'workouts', 'distance', 'calories', 'totalCalories'] as const;
@@ -24,6 +27,7 @@ export type HealthAccess = 'ok' | 'unavailable' | 'denied';
 
 /** Demande l'accord (la feuille de Santé ou de Health Connect s'ouvre). */
 export async function askHealth(): Promise<HealthAccess> {
+  if (fake) return fake.grant === false ? 'denied' : 'ok';
   const { Health: H } = await healthModule();
   const a = await H.isAvailable();
   if (!a.available) return 'unavailable';
@@ -33,6 +37,7 @@ export async function askHealth(): Promise<HealthAccess> {
 
 /** Ouvre Health Connect (Android), où l'on donne ou retire l'accord. */
 export async function openHealthSettings() {
+  if (fake) return;
   const { Health: H } = await healthModule();
   await H.openHealthConnectSettings().catch(() => {});
 }
@@ -44,7 +49,7 @@ export function installHealthConnect() {
 
 /** L'accord tient-il encore ? Android le dit ; l'iPhone ne dit jamais ce qui est refusé en lecture. */
 export async function healthStillAllowed(): Promise<boolean> {
-  if (healthPlatform !== 'android') return true;
+  if (healthPlatform !== 'android' || fake) return true;
   const { Health: H } = await healthModule();
   const st = await H.checkAuthorization({ read: [...READ] }).catch(() => null);
   return !st || st.readAuthorized.length > 0;
@@ -99,6 +104,7 @@ const middle = (from: string, to?: string) => new Date((Date.parse(from) + Date.
 
 /** Les 28 derniers jours, jour par jour, prêts à envoyer. */
 export async function readHealthDays(): Promise<HealthDay[]> {
+  if (fake) return fake.days ?? [];
   const { Health: H } = await healthModule();
   const end = new Date();
   const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 27);

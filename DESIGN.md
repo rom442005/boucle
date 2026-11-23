@@ -554,3 +554,10 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **The Mac menu** keeps only the four sections and « Enregistrer un lieu » (pin-plus, right end): no app logo on the left, no iPhone/QR button (the QR card stays inside the settings).
 - **Settings closed by default on Mac**: Créer shows the map alone, with the weather and places widgets at the left gutter and a pink pill « Créer un parcours » (52 px, path icon) centred at the bottom of the map. It opens the settings column on the left; a ✕ in its header closes it. A place card opens above the pill.
 
+## Update 23/11/2026 (fiche Enregistrer épurée, connexion par Santé)
+
+- **Save sheet reduced to name + lists**: no emoji grid, no suggested names. A full-width name field (address below it), then the lists as glass rows. Each list's emoji disc carries a small white pencil badge; tapping it unfolds a 6 × 2 emoji strip under that row (the chosen one on a white disc) and changes the list's emoji. A saved place now shows its list's emoji everywhere (map pin, Mes lieux, search).
+- **Saved places fade out when zoomed out**: hidden below zoom 9.6 (wider than a metropolitan area), fading back in up to 10.4.
+- **Lighter top veil on the map**: 24 % of the photo tone over the top 12 % (was 40 % over 15 %); the bottom veil is unchanged.
+- **Sign in with Health (phone app only)**: in the account sheet, above the e-mail field, a white pill « Continuer avec Apple Santé » (Android: « Continuer avec Health Connect ») with a red heart, then « ou avec ton adresse mail » between two hairlines. The system Health sheet opens; once allowed, a phone account opens with no e-mail or password, and the profile step skips the password. In Compte, such an account shows « Compte de ce téléphone, ouvert avec Santé » instead of password and sign-out.
+

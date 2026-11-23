@@ -141,7 +141,7 @@
       <div class="group">
         {#each mine as p, i (p.id)}
           <button use:tactile type="button" class="row cascade" style:--i={Math.min(i, 8)} onclick={() => choose({ name: p.name, detail: p.detail, coord: p.coord, kind: 'search' })}>
-            <span class="ic emo" aria-hidden="true">{p.emoji}</span>
+            <span class="ic emo" aria-hidden="true">{saved.emojiOf(p)}</span>
             <span class="row-label">{p.name}<span class="row-sub">{saved.listOf(p.list).emoji} {saved.listOf(p.list).name}{p.detail ? ` · ${p.detail}` : ''}</span></span>
           </button>
         {/each}
