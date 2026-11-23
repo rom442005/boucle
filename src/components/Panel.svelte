@@ -84,6 +84,16 @@
 
   const height = $derived(dragH ?? heights[app.detent]);
 
+  // Nouvel écran dans le même panneau (un parcours ouvert depuis le fil, une autre proposition) : il
+  // commence en haut, pas à la hauteur où la liste précédente était défilée.
+  $effect(() => {
+    void app.phase;
+    void app.route?.id;
+    void app.detailFrom;
+    const el = body;
+    if (el) el.scrollTop = 0;
+  });
+
   /*
    * Mac : la colonne glisse vers le centre (Communauté, Mes parcours, profils) ou en revient, sur un ressort et
    * par un simple déplacement que la carte graphique joue seule ; sa largeur change d'un coup, son contenu
@@ -329,6 +339,13 @@
   .panel.dragging {
     transition: none;
   }
+  /*
+   * iPhone, sur la carte (propositions, détail) : le panneau ouvert couvre le tracé rose, qui se lisait à
+   * travers le texte. Un verre plus dense ; replié sur une ligne, il reste léger.
+   */
+  :global(.on-photo) .panel:not(.wide):not(.on-photo):not(.is-peek):not(.solid) {
+    --g-bg: rgba(18, 18, 20, 0.74);
+  }
   /* Mac : sous le menu fixe en haut au centre (App.svelte). */
   .panel.wide {
     top: 76px;
@@ -391,6 +408,9 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* Pas d'ancrage du défilement : un bloc chargé après coup (photos, commentaires) ne fait plus glisser le
+       haut du contenu sous l'en-tête. */
+    overflow-anchor: none;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     transition: opacity 260ms var(--ease-out);

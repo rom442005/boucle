@@ -87,13 +87,13 @@
   </section>
 
   <section class="card stat glass photo-card" aria-label="Parcours publiés">
-    <span class="k">🗺️ Parcours</span><b class="n rounded"><CountUp value={v.stats.routes} /></b>
+    <span class="k">Parcours</span><span class="nrow"><span class="emo-s" aria-hidden="true">🗺️</span><b class="n rounded"><CountUp value={v.stats.routes} /></b></span>
   </section>
   <section class="card stat glass photo-card" aria-label="Abonnés">
-    <span class="k">👥 Abonnés</span><b class="n rounded"><CountUp value={v.stats.followers} /></b>
+    <span class="k">Abonnés</span><span class="nrow"><span class="emo-s" aria-hidden="true">👥</span><b class="n rounded"><CountUp value={v.stats.followers} /></b></span>
   </section>
   <section class="card stat glass photo-card" aria-label="J’aime reçus">
-    <span class="k">❤️ J’aime</span><b class="n rounded"><CountUp value={v.stats.likes} /></b>
+    <span class="k">J’aime</span><span class="nrow"><span class="emo-s" aria-hidden="true">❤️</span><b class="n rounded"><CountUp value={v.stats.likes} /></b></span>
   </section>
   <section class="card stat glass photo-card" aria-label="Sports">
     <span class="k">Sports</span>
@@ -143,16 +143,16 @@
   {#if hd}
     <HealthCard {hd} onsync={links.healthByShortcut ? () => links.runShortcut() : undefined} />
     <section class="card stat glass photo-card" aria-label="Pas par jour, moyenne sur 7 jours">
-      <span class="k">👣 Moy. 7 jours</span><b class="n rounded"><CountUp value={hd.steps} /></b>
+      <span class="k">Moy. 7 jours</span><span class="nrow"><span class="emo-s" aria-hidden="true">👣</span><b class="n rounded"><CountUp value={hd.steps} /></b></span>
     </section>
     <section class="card stat glass photo-card" aria-label="Fréquence cardiaque au repos">
-      <span class="k">❤️ Au repos</span><b class="n rounded">{#if hd.restingHr != null}<CountUp value={Math.round(hd.restingHr)} />{:else}–{/if}<small>bpm</small></b>
+      <span class="k">Au repos</span><span class="nrow"><span class="emo-s" aria-hidden="true">❤️</span><b class="n rounded">{#if hd.restingHr != null}<CountUp value={Math.round(hd.restingHr)} />{:else}–{/if}<small>bpm</small></b></span>
     </section>
     <section class="card stat glass photo-card" aria-label="VO2 max">
-      <span class="k">🫁 VO2 max</span><b class="n rounded">{#if hd.vo2max != null}<CountUp value={hd.vo2max} decimals={1} />{:else}–{/if}</b>
+      <span class="k">VO2 max</span><span class="nrow"><span class="emo-s" aria-hidden="true">🫁</span><b class="n rounded">{#if hd.vo2max != null}<CountUp value={hd.vo2max} decimals={1} />{:else}–{/if}</b></span>
     </section>
     <section class="card stat glass photo-card" aria-label={hd.distance ? 'Sorties, 28 jours' : 'Marche et course, 28 jours'}>
-      <span class="k">{hd.distance ? '⌚ Sorties 28 j' : '🚶 28 jours'}</span><b class="n rounded"><CountUp value={(hd.distance || hd.walk28) / 1000} decimals={(hd.distance || hd.walk28) < 100000 ? 1 : 0} /><small>km</small></b>
+      <span class="k">{hd.distance ? 'Sorties 28 j' : '28 jours'}</span><span class="nrow"><span class="emo-s" aria-hidden="true">{hd.distance ? '⌚' : '🚶'}</span><b class="n rounded"><CountUp value={(hd.distance || hd.walk28) / 1000} decimals={(hd.distance || hd.walk28) < 100000 ? 1 : 0} /><small>km</small></b></span>
     </section>
     {#if hd.last}
       <section class="card wide glass photo-card" aria-label="Dernière sortie">
@@ -341,6 +341,16 @@
     font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1.05;
+  }
+  /* Comme les blocs-onglets (Communauté, Mes parcours) : étiquette seule, l'émoji à côté du chiffre. */
+  .nrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .emo-s {
+    font-size: 1.125rem;
+    line-height: 1;
   }
   .stat .emo {
     font-size: 1.625rem;

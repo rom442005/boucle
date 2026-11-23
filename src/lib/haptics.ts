@@ -66,6 +66,13 @@ function ensureSwitch(): HTMLLabelElement {
     },
     true,
   );
+  // L'étiquette donne le focus à l'interrupteur caché : il revient au bouton touché, sans faire défiler
+  // (sinon le lecteur d'écran et le clavier perdent leur place, et le panneau glissait de quelques pixels).
+  input.addEventListener('focus', (e) => {
+    const from = (e as FocusEvent).relatedTarget as HTMLElement | null;
+    input.blur();
+    if (from && from !== input && document.contains(from)) from.focus({ preventScroll: true });
+  });
   return label;
 }
 

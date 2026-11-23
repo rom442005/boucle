@@ -164,7 +164,8 @@ test('dessiner le parcours : la boucle suit le dessin', async ({ page }) => {
   if (await folded.count()) await folded.click();
   await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Ressemblance au dessin : \d+/)).toBeVisible();
   // Les propositions portent le nom de la forme.
-  await expect(page.getByRole('option').first()).toContainText(/Étoile( par|$)/);
+  // « Étoile » seule, ou « Étoile par … » quand le tracé a des noms de rues.
+  await expect(page.getByRole('option').first()).toContainText(/^\s*Étoile\b/);
 });
 
 test('lieux sur la carte : six icônes sans défiler, mise au point sur le plus proche', async ({ page }) => {

@@ -533,4 +533,7 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **Tab blocks** of Mes parcours now follow Communauté exactly: the label alone on top, the emoji beside the big count, 13 px padding, three per row.
 - Vertical rhythm on the map: 8 px between the weather pill, the places bar and the focus bubble.
 - iPhone tabs switch on finger-up (`lens.ts`), and a new version installs on launch or when the app goes to the background, never on a tab change.
+- **Profile stat blocks** follow the same pattern as the tab blocks (label alone, emoji beside the count); « Sports » keeps its emojis as the value.
+- **iPhone panel over the map** (proposals, detail): denser smoked glass (74 %) when open, so the pink route no longer reads through the text; folded on one line it stays light.
+- A route opened from the feed starts at the top of the panel (the list's scroll position used to carry over and hide the author under the header). The hidden haptic switch gives focus back to the tapped button.
 
