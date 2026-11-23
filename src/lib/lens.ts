@@ -335,8 +335,9 @@ const nearest = (b: Bar, x: number) => b.centers.reduce((best, c, i) => (Math.ab
 export function liquidTabs(nav: HTMLElement, params: { active: number; pick: (i: number) => void }) {
   let p = params;
   let shown = p.active;
-  /** dernier choix fait par un glissé : le clic qui suit est ignoré */
+  /** dernier choix fait par un glissé ou un toucher : le clic qui suit est ignoré */
   let picked = 0;
+  let tapped = false;
 
   const onDown = (e: PointerEvent) => {
     if (e.button !== 0 || reduce()) return;
@@ -374,7 +375,17 @@ export function liquidTabs(nav: HTMLElement, params: { active: number; pick: (i:
         // Geste repris par le système (défilement) : la lentille revient sur l'onglet allumé.
         shown = p.active;
         release(nav, p.active);
-      } else release(nav, i);
+      } else {
+        release(nav, i);
+        // Au doigt (iPhone), l'onglet change dès que le doigt se lève sur lui, sans attendre le clic qui
+        // suit (qu'iOS peut ne pas envoyer) ; ce clic-là, s'il arrive, est ignoré.
+        const over = (document.elementFromPoint(u.clientX, u.clientY) as HTMLElement | null)?.closest('.tab');
+        if (e.pointerType !== 'mouse' && over === tab) {
+          picked = performance.now();
+          tapped = true;
+          if (i !== p.active) p.pick(i);
+        }
+      }
     };
     addEventListener('pointermove', move, { passive: true });
     addEventListener('pointerup', up);
@@ -384,9 +395,11 @@ export function liquidTabs(nav: HTMLElement, params: { active: number; pick: (i:
   const onClick = (e: MouseEvent) => {
     if (performance.now() - picked < 500) {
       e.stopPropagation();
-      e.preventDefault();
+      // Après un toucher, l'étiquette tactile garde son effet (le tic de l'iPhone) ; après un glissé, rien.
+      if (!tapped) e.preventDefault();
       picked = 0;
     }
+    tapped = false;
   };
   nav.addEventListener('pointerdown', onDown);
   nav.addEventListener('click', onClick, true);

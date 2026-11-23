@@ -236,6 +236,16 @@ test('mes lieux : une liste, Domicile par adresse, puis choisi comme départ', a
   await expect(page.getByRole('button', { name: /Départ : Domicile/ }).first()).toBeVisible();
 });
 
+test('onglets au doigt (iPhone) : chaque toucher change d’onglet', async ({ page, browserName }) => {
+  test.skip(browserName === 'chromium', 'Écran tactile : iPhone seulement.');
+  await open(page);
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  for (const t of ['Communauté', 'Mes parcours', 'Profil', 'Créer', 'Mes parcours']) {
+    await nav.getByRole('button', { name: t, exact: true }).tap();
+    await expect(nav.getByRole('button', { name: t, exact: true })).toHaveAttribute('aria-current', 'page');
+  }
+});
+
 test('chercher un point de départ par adresse', async ({ page }) => {
   await open(page);
   await compose(page);
