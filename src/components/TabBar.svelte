@@ -32,8 +32,6 @@
 
   const TABS = ['create', 'community', 'library', 'profile'] as const;
   const LABEL = { create: 'Créer', community: 'Communauté', library: 'Mes parcours', profile: 'Profil' } as const;
-  /** Libellé court sous l'icône (comme Deezer). */
-  const SHORT = { create: 'Créer', community: 'Communauté', library: 'Parcours', profile: 'Profil' } as const;
   const ICON = { create: 'path', community: 'users', library: 'bookmark', profile: 'user' } as const;
 
   /*
@@ -80,9 +78,8 @@
         {#if t === 'profile' && community.me}
           <span class="av" class:ring={active === t}><Avatar id={community.me.id} name={community.me.firstName} src={community.me.avatar} size={24} /></span>
         {:else}
-          <Icon name={ICON[t]} size={23} fill={active === t} />
+          <Icon name={ICON[t]} size={25} fill={active === t} />
         {/if}
-        <span class="lbl">{SHORT[t]}</span>
       </button>
     {/each}
   </nav>
@@ -100,12 +97,16 @@
   :global(html.vt) .dock {
     view-transition-name: tabbar;
   }
+  :global(html.band) .dock {
+    bottom: calc(22px - var(--band));
+  }
   .dock {
     position: fixed;
     z-index: 22;
     left: 0;
     right: 0;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+    /* Bas de l'écran, comme Instagram : juste au-dessus de la barre du geste (dans la bande d'iOS 26 s'il y en a une). */
+    bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) - 14px));
     display: flex;
     justify-content: center;
     align-items: center;
@@ -158,22 +159,12 @@
     place-items: center;
     align-content: center;
     gap: 3px;
-    height: 54px;
+    height: 50px;
     color: var(--label-2);
     transition: color 220ms var(--ease-out);
   }
-  .lbl {
-    font-size: 0.65625rem;
-    font-weight: 600;
-    letter-spacing: 0.005em;
-    line-height: 1;
-    white-space: nowrap;
-  }
   .on-photo .tab {
     color: rgba(255, 255, 255, 0.92);
-  }
-  .on-photo .tab.on .lbl {
-    color: #fff;
   }
   .tab :global(.icon) {
     transition: transform 360ms var(--spring-bouncy);
@@ -212,8 +203,8 @@
   /* La bulle rose : du verre liquide teinté, un reflet en haut ; elle se replie quand elle n'a rien à faire. */
   .act {
     flex: none;
-    width: 66px;
-    height: 66px;
+    width: 62px;
+    height: 62px;
     margin-left: 10px;
     display: grid;
     place-items: center;

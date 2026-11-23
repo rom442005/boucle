@@ -92,7 +92,8 @@
 <style>
   .backdrop {
     position: fixed;
-    inset: 0;
+    /* Jusqu'en bas de l'écran, bande d'iOS 26 comprise (--band, main.ts). */
+    inset: 0 0 calc(-1 * var(--band, 0px));
     z-index: 6;
     overflow: hidden;
     opacity: 0;

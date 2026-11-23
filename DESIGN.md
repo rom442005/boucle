@@ -537,3 +537,13 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **iPhone panel over the map** (proposals, detail): denser smoked glass (74 %) when open, so the pink route no longer reads through the text; folded on one line it stays light.
 - A route opened from the feed starts at the top of the panel (the list's scroll position used to carry over and hide the author under the header). The hidden haptic switch gives focus back to the tapped button.
 
+## Update 23/11/2026 (iPhone épuré, façon Instagram)
+
+- **Tab bar: icons only** (25 px, the lit one in its dark pill), no labels; bar 62 px, pink loop bubble 62 px. It sits low, 22 px above the bottom of the screen like Instagram.
+- **iOS 26 home-screen band**: the installed app stops above the gesture bar and leaves a grey band. `main.ts` measures it (`screen.height − innerHeight`, portrait, standalone iPhone → `--band`, `html.band`, `app.band`); the map, its veil and the photo backdrop extend into it, the tab bar goes down into it, and map paddings count it.
+- **Map home on iPhone**: no weather pill (the weather stays on Mac and in the proposals); the places bar is the first thing at the top, aligned with the locate button (safe area + 8 px). The focus bubble is gone: lighting a kind opens the nearest place's card over the overview, with « 1/12 » and ‹ › to step through.
+- **Enregistrer un lieu**: a round glass button with a pin-plus under the map controls, in Créer on iPhone and Mac; it opens the search in save mode (address, my position, point on the map).
+- **Map credits without the (i) button**: a discreet « © OpenStreetMap » text just above the tab bar or the panel (bottom-right on Mac); tapping it unfolds every credit (licences require them).
+- Lighter top and bottom veil on the map (40 % / 27 %, shorter).
+- **Phone blocks a bit more compact** in Communauté, Mes parcours and Profil: 12 × 14 px padding, 24 px corners, 12 px labels, hero figures 2.375 rem, tab figures 1.75 rem. Signed out, « Rejoins la Communauté » sits in the middle of the screen.
+

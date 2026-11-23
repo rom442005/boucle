@@ -120,6 +120,7 @@ import toiletF from '@phosphor-icons/core/assets/fill/toilet-fill.svg?raw';
 import sparkle from '@phosphor-icons/core/assets/regular/sparkle.svg?raw';
 import sparkleF from '@phosphor-icons/core/assets/fill/sparkle-fill.svg?raw';
 import arrowUp from '@phosphor-icons/core/assets/bold/arrow-up-bold.svg?raw';
+import pinPlus from '@phosphor-icons/core/assets/regular/map-pin-plus.svg?raw';
 
 /* Piste d'athlétisme (pas d'équivalent chez Phosphor) : un anneau en forme de stade, même trait. */
 const track =
@@ -132,7 +133,7 @@ export const ICONS = {
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
   heart, chat, users, user, signout, report, send, prohibit, lock, key, eye, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
-  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp,
+  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp, pinPlus,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {

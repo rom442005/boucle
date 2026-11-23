@@ -159,7 +159,7 @@
   const athome = $derived(!app.wide && app.phase === 'compose' && app.home);
   // Accueil iPhone : la carte se cadre au-dessus de la barre d'onglets (la bulle « Faire une boucle » y est).
   $effect(() => {
-    if (athome) app.padding = { top: 64, bottom: app.tabbarH + 28, left: 28, right: 64 };
+    if (athome) app.padding = { top: 64, bottom: app.tabbarH + 28 + app.band, left: 28, right: 64 };
   });
   /** iPhone : les réglages couvrent l'écran (pas de boutons de carte par-dessus). */
   const fullsheet = $derived(!app.wide && app.phase === 'compose' && !app.home && app.detent === 'full');
@@ -296,8 +296,9 @@
   {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
   {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
     <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
+    <!-- iPhone : la barre des lieux seule, tout en haut (la météo se lit dans les propositions). -->
     <div class="widgets">
-      <TodayCard />
+      {#if app.wide}<TodayCard />{/if}
       <ZonesCard />
     </div>
     {#if app.place}
@@ -417,7 +418,7 @@
       {@const sh = community.sheet}
       {#key sh}
         <!-- Sur la photo, l'action devient un bloc de verre, comme l'accueil. -->
-        <div class="sheet" class:sheet-card={!!photo} class:glass={!!photo} class:photo-card={!!photo}>
+        <div class="sheet" class:sheet-card={!!photo} class:glass={!!photo} class:photo-card={!!photo} class:mid={profileAuth && !app.wide}>
           {#if sh.kind === 'auth'}
             <AuthFlow reason={sh.reason} />
           {:else if sh.kind === 'publish'}
@@ -622,6 +623,10 @@
     padding: 22px 18px 14px;
     border-radius: 30px;
   }
+  /* iPhone, onglet Profil sans compte : « Rejoins la Communauté » au milieu de l'écran. */
+  .sheet.mid {
+    margin-top: max(0px, calc((100dvh - var(--safe-top) - 330px) / 2 - 20px));
+  }
   .nav h2 {
     flex: 1;
     margin: 0;
@@ -643,7 +648,7 @@
   .widgets {
     position: fixed;
     z-index: 15;
-    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
     left: var(--gutter);
     width: min(300px, calc(100vw - 2 * var(--gutter) - 64px));
     display: grid;

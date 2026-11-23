@@ -97,6 +97,15 @@
     </button>
   {/if}
 </div>
+{#if app.phase === 'compose'}
+  <!-- Enregistrer un lieu (adresse, position, point de la carte) dans Mes lieux, sans quitter Créer. -->
+  <div class="ctrls glass">
+    <button use:tactile type="button" class="round" aria-label="Enregistrer un lieu" title="Enregistrer un lieu dans Mes lieux" onclick={() => {
+        haptic('tap');
+        app.addSavedPlace({});
+      }}><Icon name="pinPlus" size={21} /></button>
+  </div>
+{/if}
 {#if app.wide && !minimal}
   <!-- Comme dans Plans sur Mac : zoomer et dézoomer d'un clic ; dézoomer loin mène à la Terre entière. -->
   <div class="ctrls zoom glass" role="group" aria-label="Zoom">
@@ -151,7 +160,7 @@
     position: fixed;
     z-index: 15;
     right: var(--gutter);
-    top: calc(var(--safe-top) + 12px);
+    top: calc(var(--safe-top) + 8px);
     display: grid;
     gap: 10px;
   }

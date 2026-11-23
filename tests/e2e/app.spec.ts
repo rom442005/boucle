@@ -182,25 +182,22 @@ test('lieux sur la carte : six icônes sans défiler, mise au point sur le plus 
   const parks = bar.getByRole('button', { name: /^Parcs et jardins/ });
   await parks.click();
   await expect(parks).toHaveAttribute('aria-pressed', 'true');
-  // La carte va montrer le parc le plus proche : une bulle dit lequel, à quelle distance, et passe au suivant.
-  const focus = page.getByRole('status').filter({ hasText: /à \d/ });
-  await expect(focus).toContainText(/1\/\d+/, { timeout: 20_000 });
-  await page.getByRole('button', { name: 'Lieu suivant' }).click();
-  await expect(focus).toContainText(/2\/\d+/);
+  // La carte montre les plus proches et la fiche du plus proche s'ouvre ; ‹ › passent aux suivants.
+  const card = page.getByRole('region', { name: /^Fiche du lieu/ });
+  await expect(card).toContainText(/1\/\d+/, { timeout: 20_000 });
+  await card.getByRole('button', { name: 'Lieu suivant' }).click();
+  await expect(card).toContainText(/2\/\d+/);
   await parks.click();
-  await expect(focus).toHaveCount(0);
+  await expect(card).toHaveCount(0);
 });
 
 test('pistes : toutes sur la carte, fiche avec photos, enregistrer dans Mes lieux', async ({ page }) => {
   await open(page);
   const bar = page.getByRole('group', { name: 'Lieux à voir sur la carte' });
   await bar.getByRole('button', { name: /^Pistes d’athlétisme/ }).click();
-  // Les plus proches d'un coup d'œil, la bulle dit laquelle ; la toucher ouvre sa fiche.
-  const near = page.getByRole('button', { name: /^Voir .+, à \d/ });
-  await expect(near).toBeVisible({ timeout: 20_000 });
-  await near.click();
+  // Les plus proches d'un coup d'œil, et la fiche de la plus proche (photos, ‹ ›).
   const card = page.getByRole('region', { name: /^Fiche du lieu/ });
-  await expect(card).toBeVisible();
+  await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText(/\d+ m · \d couloirs/);
   await expect(card.getByRole('button', { name: 'Agrandir la vue du ciel' })).toBeVisible();
   await card.getByRole('button', { name: 'Enregistrer' }).click();
@@ -245,6 +242,18 @@ test('onglets au doigt (iPhone) : chaque toucher change d’onglet', async ({ pa
     await nav.getByRole('button', { name: t, exact: true }).tap();
     await expect(nav.getByRole('button', { name: t, exact: true })).toHaveAttribute('aria-current', 'page');
   }
+});
+
+test('enregistrer un lieu depuis Créer : bouton de la carte, adresse, Mes lieux', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Enregistrer un lieu' }).click();
+  await page.getByRole('searchbox').fill('Place Royale Nantes');
+  await page.getByRole('button', { name: /Place Royale/ }).first().click();
+  const sheet = page.getByRole('dialog', { name: 'Enregistrer le lieu' });
+  await sheet.getByRole('button', { name: /Travail/ }).click();
+  await sheet.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expect(page.getByText(/Travail : enregistré dans/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enregistrer un lieu' })).toBeVisible();
 });
 
 test('chercher un point de départ par adresse', async ({ page }) => {

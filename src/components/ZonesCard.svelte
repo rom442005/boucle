@@ -2,15 +2,13 @@
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
   import { haptic, tactile } from '../lib/haptics';
-  import { km } from '../lib/format';
   import { ZONE_ORDER, ZONES } from '../lib/zones';
 
   /*
-   * Sous la météo, une petite barre de verre à icônes seules (Romain : « très minimaliste », sans défiler) :
-   * pistes d'athlétisme, parcs, eau, forêts, fontaines, toilettes. Un toucher allume ces lieux sur la carte et
-   * la carte montre les plus proches (le plus proche bat) ; la bulle dessous dit lequel, à quelle distance ;
-   * la toucher, ou ‹ ›, ouvre sa fiche (zoom et photos). Les petits chiffres disent combien de pistes,
-   * fontaines ou toilettes sont à l'écran.
+   * En haut de la carte, une petite barre de verre à icônes seules (Romain : « très minimaliste », sans
+   * défiler) : pistes d'athlétisme, parcs, eau, forêts, fontaines, toilettes. Un toucher allume ces lieux,
+   * la carte montre les plus proches (le plus proche bat) et sa fiche s'ouvre en bas, avec ‹ › pour passer
+   * aux suivants. Les petits chiffres disent combien de pistes, fontaines ou toilettes sont à l'écran.
    */
   $effect(() => {
     app.zonesShown = true;
@@ -19,8 +17,6 @@
     };
   });
 
-  const f = $derived(app.zoneFocus);
-  const fz = $derived(f ? ZONES[f.kind] : null);
 </script>
 
 <div class="zones-col">
@@ -51,25 +47,6 @@
     {/each}
   </div>
 
-  {#if f && fz}
-    {#key f.kind}
-      <div class="focus glass photo-card on-photo" style:--c={fz.color} role="status" aria-live="polite">
-        <span class="f-ic" aria-hidden="true"><Icon name={fz.icon} size={16} fill /></span>
-        {#if f.n}
-          <button use:tactile type="button" class="f-txt" aria-label="Voir {f.name}, à {km(f.dist)}" onclick={() => app.stepZone(0)}>
-            <b>{f.name}</b>
-            <small class="tabular">à {km(f.dist)}{f.n > 1 ? ` · ${f.i + 1}/${f.n}` : ''}</small>
-          </button>
-          {#if f.n > 1}
-            <button use:tactile type="button" class="step" aria-label="Lieu précédent" onclick={() => app.stepZone(-1)}><Icon name="caretLeft" size={16} /></button>
-            <button use:tactile type="button" class="step" aria-label="Lieu suivant" onclick={() => app.stepZone(1)}><Icon name="caretRight" size={16} /></button>
-          {/if}
-        {:else}
-          <span class="f-txt"><b>{fz.long}</b><small>aucun près d’ici</small></span>
-        {/if}
-      </div>
-    {/key}
-  {/if}
 </div>
 
 <style>
@@ -160,70 +137,6 @@
       opacity: 0;
     }
   }
-  /* Bulle du lieu mis au point : sa couleur, son nom, sa distance, et les flèches vers les suivants. */
-  .focus {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    max-width: 100%;
-    padding: 5px 5px 5px 6px;
-    border-radius: 999px;
-    color: #fff;
-    --g-bg: rgba(24, 26, 28, 0.66);
-    --blur: 22px;
-    animation: focus-in 520ms var(--spring) backwards;
-  }
-  @keyframes focus-in {
-    from {
-      opacity: 0;
-      translate: 0 -8px;
-      scale: 0.94;
-    }
-  }
-  .f-ic {
-    width: 28px;
-    height: 28px;
-    flex: none;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--c);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent);
-  }
-  .f-txt {
-    min-width: 0;
-    display: grid;
-    line-height: 1.15;
-    padding-right: 4px;
-    text-align: left;
-    color: inherit;
-  }
-  .f-txt b {
-    font-size: 0.8125rem;
-    font-weight: 650;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .f-txt small {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.72);
-  }
-  .step {
-    width: 30px;
-    height: 30px;
-    flex: none;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.12);
-    transition: transform 240ms var(--spring-bouncy);
-  }
-  .step:active {
-    transform: scale(0.86);
-  }
   @media (hover: hover) {
     .zone:not(.on):hover {
       background: rgba(255, 255, 255, 0.12);
@@ -233,8 +146,7 @@
     .zones,
     .slot,
     .zone.on,
-    .n,
-    .focus {
+    .n {
       animation: none;
     }
   }

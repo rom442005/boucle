@@ -572,4 +572,23 @@
       animation: none;
     }
   }
+  /* Téléphone : des blocs un peu plus compacts (Romain, 23/11). */
+  @media (max-width: 859px) {
+    .cards {
+      gap: 8px;
+    }
+    .card {
+      padding: 12px 14px;
+      border-radius: 24px;
+    }
+    .k {
+      font-size: 0.75rem;
+    }
+    .big {
+      font-size: 2.375rem;
+    }
+    .stat .n {
+      font-size: 1.75rem;
+    }
+  }
 </style>

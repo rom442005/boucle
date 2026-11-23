@@ -143,6 +143,11 @@ class AppState {
   }
   /** lieu mis au point par la carte : son genre, son rang parmi les plus proches, son nom et sa distance (m) */
   zoneFocus = $state.raw<{ kind: ZoneKind; i: number; n: number; name: string; dist: number } | null>(null);
+  /**
+   * App installée sur l'iPhone (iOS 26) : bande du bas de l'écran laissée hors de la page (px). La carte s'y
+   * prolonge et les onglets y descendent ; les marges de la carte la comptent.
+   */
+  band = $state(0);
   /** fiche du lieu touché sur la carte (photos, Partir d'ici, Enregistrer) */
   place = $state.raw<PlaceInfo | null>(null);
   /** hauteur de la fiche à l'écran (la carte cadre le lieu au-dessus) */

@@ -38,6 +38,8 @@
     if (app.place) app.place = null;
   });
 
+  /** lieu d'un genre allumé dans la barre : ‹ › passent aux autres, du plus proche au plus lointain */
+  const steps = $derived(!p.savedId && p.zone && app.zoneFocus?.kind === p.zone && app.zoneFocus.n > 1 ? app.zoneFocus : null);
   const mine = $derived(p.savedId ? (saved.places.find((x) => x.id === p.savedId) ?? null) : saved.near(p.coord, 30));
   const from = $derived(app.userPos ?? app.start?.coord ?? null);
   const dist = $derived(from ? haversine(from, p.coord) : null);
@@ -120,8 +122,12 @@
   <div class="head">
     <span class="txt">
       <h3>{p.name}</h3>
-      <small class="tabular">{[p.sub, dist != null && dist > 30 ? `à ${km(dist)}` : ''].filter(Boolean).join(' · ')}</small>
+      <small class="tabular">{[p.sub, dist != null && dist > 30 ? `à ${km(dist)}` : '', steps ? `${steps.i + 1}/${steps.n}` : ''].filter(Boolean).join(' · ')}</small>
     </span>
+    {#if steps}
+      <button use:tactile type="button" class="x" aria-label="Lieu précédent" onclick={() => app.stepZone(-1)}><Icon name="caretLeft" size={16} /></button>
+      <button use:tactile type="button" class="x" aria-label="Lieu suivant" onclick={() => app.stepZone(1)}><Icon name="caretRight" size={16} /></button>
+    {/if}
     <button use:tactile type="button" class="x" aria-label="Fermer la fiche" onclick={close}><Icon name="close" size={16} /></button>
   </div>
 

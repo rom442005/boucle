@@ -810,8 +810,9 @@
     focusList = list.slice(0, 12);
     if (!focusList.length) {
       focused = null;
-      app.zoneFocus = { kind, i: 0, n: 0, name: z.one, dist: 0 };
+      app.zoneFocus = null;
       setFocusPoint(null);
+      app.showToast(`Aucun lieu « ${z.label.toLowerCase()} » près d’ici`);
       return;
     }
     focused = focusList[0];
@@ -821,8 +822,10 @@
     // grande surface : elle seule). Trop loin pour ça : le plus proche seulement.
     const d0 = haversine(ref, focused.coord);
     const near = z.look === 'area' ? focusList.slice(0, 1) : focusList.filter((p, i) => i === 0 || (i < 5 && haversine(ref, p.coord) <= Math.max(3000, d0 * 2)));
-    const pad = untrack(() => app.padding);
-    const padding = { top: pad.top + 36, bottom: pad.bottom + 36, left: pad.left + 24, right: pad.right + 24 };
+    // Sa fiche s'ouvre en bas (‹ › pour les suivants) : la vue d'ensemble se cadre au-dessus d'elle.
+    app.openPlace(infoOf(focused));
+    const pad = placePadding();
+    const padding = { top: pad.top + 36, bottom: pad.bottom + 16, left: pad.left + 24, right: pad.right + 24 };
     const box = (few: ZonePlace[]): [[number, number], [number, number]] => {
       const xs = [ref[0], ...few.flatMap((p) => [p.bounds[0], p.bounds[2]])];
       const ys = [ref[1], ...few.flatMap((p) => [p.bounds[1], p.bounds[3]])];
@@ -1575,8 +1578,9 @@
       customAttribution:
         '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · Itinéraires <a href="https://valhalla1.openstreetmap.de" target="_blank" rel="noopener">Valhalla FOSSGIS</a> · Adresses Photon · Météo Open-Meteo',
     });
-    map.addControl(attrib, 'top-right');
-    // Repliée par défaut : le bouton (i) l'ouvre.
+    // Une mention discrète « © OpenStreetMap » en bas de la carte (à gauche sur iPhone, à droite sur Mac) ;
+    // la toucher montre tous les crédits (obligatoires : licences OpenStreetMap, IGN…).
+    map.addControl(attrib, app.wide ? 'bottom-right' : 'bottom-left');
     requestAnimationFrame(() => el.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
   }
 
@@ -1827,6 +1831,8 @@
   // Zone visible de la carte (le suivi en direct règle la sienne). Avant les cadrages ci-dessous.
   $effect(() => {
     const p = app.padding;
+    // Les crédits de la carte se posent juste au-dessus des onglets ou du panneau.
+    document.documentElement.style.setProperty('--credit-bottom', `${app.wide ? 8 : Math.max(8, p.bottom - 26)}px`);
     if (!ready || !map || app.phase === 'follow') return;
     untrack(() => {
       syncPadding(p);
@@ -2471,20 +2477,21 @@
 {/if}
 
 <style>
+  /* La carte descend jusqu'en bas de l'écran, bande d'iOS 26 comprise (--band, main.ts). */
   .map {
     position: fixed;
-    inset: 0;
+    inset: 0 0 calc(-1 * var(--band, 0px));
     z-index: 0;
   }
   .atmo {
     position: fixed;
-    inset: 0;
+    inset: 0 0 calc(-1 * var(--band, 0px));
     z-index: 1;
     pointer-events: none;
     opacity: 0;
     background:
-      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 50%, transparent), transparent 18%),
-      linear-gradient(to top, color-mix(in srgb, var(--tone) 35%, transparent), transparent 26%),
+      linear-gradient(to bottom, color-mix(in srgb, var(--tone) 40%, transparent), transparent 15%),
+      linear-gradient(to top, color-mix(in srgb, var(--tone) 27%, transparent), transparent 21%),
       radial-gradient(130% 95% at 50% 46%, transparent 64%, color-mix(in srgb, var(--tone) 25%, transparent));
     transition:
       opacity 700ms var(--ease-out),
