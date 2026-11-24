@@ -12,8 +12,8 @@
   import { decodePolyline } from '../lib/geo';
   import { km, NNBSP } from '../lib/format';
   import { last28, SPORT_EMOJI } from '../lib/scenes';
-  import { tactile } from '../lib/haptics';
-  import { links } from '../lib/links.svelte';
+  import { haptic, tactile } from '../lib/haptics';
+  import { links, type HealthMetric } from '../lib/links.svelte';
   import { healthPlatform } from '../lib/health';
   import { duration } from '../lib/format';
 
@@ -54,6 +54,11 @@
   const st = $derived(mine && links.strava?.connected ? links.strava : null);
   // Reçues par le serveur : elles s'affichent sur tous les appareils, pas seulement sur le téléphone.
   const hd = $derived(mine ? links.health : null);
+  /** Une donnée de Santé touchée : sa feuille de détail (28 jours, jour par jour). */
+  function openHealth(m: HealthMetric) {
+    haptic('tap');
+    links.detail = m;
+  }
   const dateShortFr = (iso: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(iso));
   const kmText = (m: number) => (m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 </script>
@@ -142,24 +147,24 @@
 
   {#if hd}
     <HealthCard {hd} onsync={links.healthByShortcut ? () => links.runShortcut() : undefined} />
-    <section class="card stat glass photo-card" aria-label="Pas par jour, moyenne sur 7 jours">
+    <button use:tactile type="button" class="card stat glass photo-card tap" aria-label="Pas par jour, moyenne sur 7 jours : voir le détail" onclick={() => openHealth('steps')}>
       <span class="k">Moy. 7 jours</span><span class="nrow"><span class="emo-s" aria-hidden="true">👣</span><b class="n rounded"><CountUp value={hd.steps} /></b></span>
-    </section>
-    <section class="card stat glass photo-card" aria-label="Fréquence cardiaque au repos">
+    </button>
+    <button use:tactile type="button" class="card stat glass photo-card tap" aria-label="Fréquence cardiaque au repos : voir le détail" onclick={() => openHealth('rhr')}>
       <span class="k">Au repos</span><span class="nrow"><span class="emo-s" aria-hidden="true">❤️</span><b class="n rounded">{#if hd.restingHr != null}<CountUp value={Math.round(hd.restingHr)} />{:else}–{/if}<small>bpm</small></b></span>
-    </section>
-    <section class="card stat glass photo-card" aria-label="VO2 max">
+    </button>
+    <button use:tactile type="button" class="card stat glass photo-card tap" aria-label="VO2 max : voir le détail" onclick={() => openHealth('vo2')}>
       <span class="k">VO2 max</span><span class="nrow"><span class="emo-s" aria-hidden="true">🫁</span><b class="n rounded">{#if hd.vo2max != null}<CountUp value={hd.vo2max} decimals={1} />{:else}–{/if}</b></span>
-    </section>
-    <section class="card stat glass photo-card" aria-label={hd.distance ? 'Sorties, 28 jours' : 'Marche et course, 28 jours'}>
+    </button>
+    <button use:tactile type="button" class="card stat glass photo-card tap" aria-label="{hd.distance ? 'Sorties, 28 jours' : 'Marche et course, 28 jours'} : voir le détail" onclick={() => openHealth(hd.distance ? 'runs' : 'walk')}>
       <span class="k">{hd.distance ? 'Sorties 28 j' : '28 jours'}</span><span class="nrow"><span class="emo-s" aria-hidden="true">{hd.distance ? '⌚' : '🚶'}</span><b class="n rounded"><CountUp value={(hd.distance || hd.walk28) / 1000} decimals={(hd.distance || hd.walk28) < 100000 ? 1 : 0} /><small>km</small></b></span>
-    </section>
+    </button>
     {#if hd.last}
-      <section class="card wide glass photo-card" aria-label="Dernière sortie">
+      <button use:tactile type="button" class="card wide glass photo-card tap" aria-label="Dernière sortie : voir les sorties" onclick={() => openHealth('runs')}>
         <div class="card-top"><span class="k">Dernière sortie · {dateShortFr(hd.last.start)}</span>{#if hd.last.source}<span class="k">via {hd.last.source}</span>{/if}</div>
         <b class="big2 rounded tabular">{hd.last.sport === 'ride' ? '🚴' : hd.last.sport === 'walk' ? '🥾' : '🏃'} {kmText(hd.last.distance)}<small>km</small></b>
         <span class="k tabular">{duration(hd.last.time)}{hd.last.kcal ? ` · 🔥 ${hd.last.kcal}${NNBSP}kcal` : ''}</span>
-      </section>
+      </button>
     {/if}
   {/if}
 
@@ -359,6 +364,16 @@
   .card-top {
     display: flex;
     justify-content: space-between;
+  }
+  /* Blocs de Santé : ils s'ouvrent en détail. */
+  .tap {
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    transition: transform 220ms var(--spring);
+  }
+  .tap:active {
+    transform: scale(0.97);
   }
   .stat .n small,
   .big2 small {

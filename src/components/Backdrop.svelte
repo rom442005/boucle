@@ -66,6 +66,21 @@
     };
   });
 
+  // Défilement en cours (n'importe quelle zone) : la dérive s'arrête, puis reprend 600 ms après.
+  let still = $state(false);
+  onMount(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const onScroll = () => {
+      if (!still) still = true;
+      clearTimeout(t);
+      t = setTimeout(() => (still = false), 600);
+    };
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('scroll', onScroll, { capture: true });
+    };
+  });
   function loaded(key: number) {
     layers = layers.map((l) => (l.key === key ? { ...l, ready: true } : l));
     // Une fois la nouvelle photo posée, l'ancienne s'en va.
@@ -73,7 +88,7 @@
   }
 </script>
 
-<div class="backdrop" class:visible style:background={SCENES[current].tone} aria-hidden="true">
+<div class="backdrop" class:visible class:still style:background={SCENES[current].tone} aria-hidden="true">
   <div class="par" style:transform="translate3d({px}px, {py}px, 0)">
     {#each layers as l (l.key)}
       <img
@@ -98,21 +113,24 @@
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    /* Fil rouge : la photo se dissout dans la carte en perdant sa netteté, et revient en faisant le point. */
-    filter: blur(18px);
+    /*
+     * Fil rouge : la photo se fond dans la carte et revient d'un léger recul. Fondu et échelle seulement (le
+     * processeur graphique les fait seul) : un flou animé en plein écran faisait saccader l'iPhone.
+     */
+    transform: scale(1.04);
     transition:
       opacity 460ms var(--ease-out),
-      filter 520ms var(--ease-out),
+      transform 620ms var(--ease-out),
       visibility 0s linear 520ms,
       background-color 900ms var(--ease-out);
   }
   .backdrop.visible {
     opacity: 1;
     visibility: visible;
-    filter: none;
+    transform: none;
     transition:
       opacity 460ms var(--ease-out),
-      filter 620ms var(--ease-out),
+      transform 720ms var(--spring),
       visibility 0s,
       background-color 900ms var(--ease-out);
   }
@@ -137,6 +155,10 @@
   }
   .visible img {
     animation-play-state: running;
+  }
+  /* Pendant un défilement, la photo s'immobilise : le verre des blocs n'a pas à se recalculer à chaque image. */
+  .still img {
+    animation-play-state: paused;
   }
   img.in {
     opacity: 1;

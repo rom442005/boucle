@@ -17,9 +17,85 @@
     <meta name="format-detection" content="telephone=no" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!--
+      Ouverture : la boucle de l'icône se trace, un point la parcourt, puis « Boucle » monte, le temps que l'app
+      et la carte se chargent dessous. Seulement des animations d'opacité et de déplacement : la carte graphique
+      les joue seule, sans à-coup même quand le code de l'app occupe le processeur. main.ts la retire dès que la
+      carte est prête (1,5 s au moins, 3,5 s au plus). Écrite ici pour s'afficher dès la première image.
+    -->
+    <style>
+      html { background: #0c110f; }
+      #intro { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; pointer-events: none;
+        background: radial-gradient(60% 45% at 50% 46%, rgba(255, 45, 85, 0.16), transparent 70%), radial-gradient(120% 90% at 50% 40%, #1a231f 0%, #0c110f 62%, #070a09 100%);
+        transition: opacity 460ms cubic-bezier(0.2, 0.8, 0.2, 1); will-change: opacity; }
+      #intro .ib { display: grid; justify-items: center; gap: 18px; transition: transform 560ms cubic-bezier(0.5, 0, 0.75, 0), opacity 400ms ease; will-change: transform, opacity; }
+      #intro .loop { position: relative; width: 200px; height: 160px; animation: ib-beat 1.2s ease-in-out 1.05s infinite; will-change: transform; }
+      #intro .loop > svg { position: absolute; inset: 0; overflow: visible; }
+      #intro .glow { opacity: 0; animation: ib-in 700ms ease-out 500ms forwards; will-change: opacity; }
+      #intro .glow polyline { fill: none; stroke: #ff2d55; stroke-width: 16; stroke-linejoin: round; filter: blur(9px); opacity: 0.3; }
+      #intro .sg { opacity: 0; animation: ib-in 140ms linear forwards; animation-delay: calc(80ms + var(--i) * 34ms); will-change: opacity; }
+      #intro .sg polyline { fill: none; stroke: #ff3b62; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+      #intro .start { position: absolute; left: 36.9px; top: 124.4px; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 5px #ff2d55;
+        animation: ib-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; will-change: transform; }
+      #intro .dot { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform;
+        animation: ib-run 900ms cubic-bezier(0.65, 0, 0.35, 1) 80ms both, ib-run 1.3s linear 980ms infinite; }
+      #intro .dot::after { content: ""; position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: #fff;
+        box-shadow: 0 0 0 4px rgba(255, 45, 85, 0.55), 0 0 18px 6px rgba(255, 45, 85, 0.6); }
+      #intro .word { margin: 0; font: 700 34px/1 -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Segoe UI", Roboto, sans-serif; letter-spacing: -0.035em; color: #fff;
+        opacity: 0; transform: translateY(14px); animation: ib-rise 620ms cubic-bezier(0.34, 1.4, 0.64, 1) 640ms forwards; will-change: transform, opacity; }
+      #intro.out { opacity: 0; }
+      #intro.out .ib { transform: scale(2.2); opacity: 0; }
+      @keyframes ib-in { to { opacity: 1; } }
+      @keyframes ib-pop { from { transform: scale(0); } }
+      @keyframes ib-rise { to { opacity: 1; transform: none; } }
+      @keyframes ib-beat { 50% { transform: scale(1.045); } }
+      @keyframes ib-run { 0.0% { transform: translate(36.9px, 124.4px); } 2.5% { transform: translate(28.0px, 115.7px); } 5.0% { transform: translate(21.6px, 105.0px); } 7.5% { transform: translate(17.5px, 93.2px); } 10.0% { transform: translate(15.6px, 80.9px); } 12.5% { transform: translate(16.0px, 68.4px); } 15.0% { transform: translate(18.5px, 56.2px); } 17.5% { transform: translate(23.1px, 44.6px); } 20.0% { transform: translate(29.9px, 34.2px); } 22.5% { transform: translate(38.8px, 25.4px); } 25.0% { transform: translate(49.4px, 18.8px); } 27.5% { transform: translate(61.1px, 14.7px); } 30.0% { transform: translate(73.5px, 13.8px); } 32.5% { transform: translate(85.8px, 15.9px); } 35.0% { transform: translate(97.9px, 19.1px); } 37.5% { transform: translate(110.3px, 20.5px); } 40.0% { transform: translate(122.5px, 18.3px); } 42.5% { transform: translate(134.5px, 14.9px); } 45.0% { transform: translate(147.0px, 13.9px); } 47.5% { transform: translate(159.3px, 15.8px); } 50.0% { transform: translate(170.4px, 21.3px); } 52.5% { transform: translate(179.2px, 30.1px); } 55.0% { transform: translate(185.0px, 41.1px); } 57.5% { transform: translate(187.9px, 53.2px); } 60.0% { transform: translate(188.5px, 65.7px); } 62.5% { transform: translate(185.9px, 77.9px); } 65.0% { transform: translate(180.0px, 88.8px); } 67.5% { transform: translate(171.4px, 97.8px); } 70.0% { transform: translate(161.2px, 105.0px); } 72.5% { transform: translate(150.1px, 110.8px); } 75.0% { transform: translate(138.7px, 115.8px); } 77.5% { transform: translate(128.1px, 122.3px); } 80.0% { transform: translate(119.0px, 130.9px); } 82.5% { transform: translate(110.4px, 139.9px); } 85.0% { transform: translate(100.3px, 147.2px); } 87.5% { transform: translate(88.4px, 151.1px); } 90.0% { transform: translate(76.0px, 151.8px); } 92.5% { transform: translate(63.8px, 149.4px); } 95.0% { transform: translate(52.9px, 143.4px); } 97.5% { transform: translate(44.0px, 134.6px); } 100.0% { transform: translate(36.9px, 124.4px); } }
+      @media (prefers-reduced-motion: reduce) {
+        #intro .sg, #intro .glow { animation: none; opacity: 1; }
+        #intro .dot, #intro .start, #intro .loop { animation: none; }
+        #intro .dot { display: none; }
+        #intro .word { animation: none; opacity: 1; transform: none; }
+        #intro.out .ib { transform: none; }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="intro" aria-hidden="true">
+      <div class="ib">
+        <div class="loop">
+          <svg class="glow" viewBox="0 0 200 160" width="200" height="160"><polyline points="36.9,124.4 32.3,120.4 28.2,115.9 24.7,110.9 21.8,105.5 19.4,99.8 17.6,93.7 16.3,87.5 15.6,81.1 15.5,74.6 16.0,68.1 17.1,61.6 18.7,55.3 21.0,49.1 23.9,43.2 27.3,37.6 31.4,32.5 36.1,27.7 41.3,23.5 47.3,19.9 53.8,16.9 58.0,15.5 62.0,14.5 65.9,13.9 69.6,13.7 73.1,13.8 76.6,14.1 79.9,14.6 83.2,15.3 86.4,16.1 89.6,16.9 92.8,17.8 95.9,18.6 99.1,19.3 102.3,19.9 105.5,20.3 108.8,20.5 112.2,20.5 115.7,20.1 119.3,19.3 123.1,18.1 127.4,16.7 131.7,15.5 136.0,14.7 140.3,14.1 144.4,13.9 148.5,13.9 152.5,14.3 156.4,15.1 160.1,16.1 163.7,17.5 167.2,19.2 170.4,21.2 173.4,23.7 176.3,26.4 178.8,29.5 181.1,33.0 183.2,36.8 184.9,41.0 186.4,45.6 187.5,50.6 188.3,56.0 188.6,61.1 188.5,65.9 187.9,70.4 186.9,74.7 185.6,78.7 183.9,82.4 181.9,86.0 179.6,89.3 176.9,92.4 174.1,95.4 171.0,98.1 167.7,100.7 164.2,103.1 160.5,105.4 156.7,107.5 152.8,109.6 148.8,111.5 144.7,113.3 140.6,115.0 136.8,116.7 133.3,118.7 130.2,120.7 127.3,123.0 124.7,125.3 122.2,127.6 119.8,130.1 117.6,132.5 115.3,134.9 113.1,137.3 110.8,139.6 108.3,141.7 105.8,143.8 103.0,145.7 100.0,147.4 96.6,148.8 93.0,150.1 88.9,151.0 84.4,151.6 79.4,151.9 76.7,151.9 74.1,151.7 71.5,151.4 69.1,151.0 66.7,150.4 64.3,149.6 62.0,148.8 59.8,147.7 57.6,146.6 55.5,145.3 53.5,143.8 51.5,142.2 49.5,140.5 47.6,138.6 45.7,136.6 43.9,134.5 42.1,132.2 40.3,129.7 38.6,127.1 36.9,124.4 36.9,124.4" /></svg>
+          <svg class="sg" style="--i: 0" viewBox="0 0 200 160" width="200" height="160"><polyline points="36.9,124.4 34.9,122.8 32.9,121.0 31.1,119.2 29.3,117.3 27.7,115.2 26.2,113.1 24.8,111.0 23.4,108.7" /></svg>
+          <svg class="sg" style="--i: 1" viewBox="0 0 200 160" width="200" height="160"><polyline points="23.4,108.7 22.2,106.4 21.1,104.1 20.1,101.7 19.2,99.2 18.4,96.7 17.7,94.2 17.1,91.7 16.6,89.2" /></svg>
+          <svg class="sg" style="--i: 2" viewBox="0 0 200 160" width="200" height="160"><polyline points="16.6,89.2 16.2,86.6 15.9,84.0 15.7,81.4 15.5,78.8 15.5,76.2 15.6,73.6 15.7,71.0 16.0,68.4" /></svg>
+          <svg class="sg" style="--i: 3" viewBox="0 0 200 160" width="200" height="160"><polyline points="16.0,68.4 16.3,65.8 16.8,63.3 17.3,60.7 17.9,58.2 18.6,55.7 19.4,53.2 20.3,50.8 21.3,48.4" /></svg>
+          <svg class="sg" style="--i: 4" viewBox="0 0 200 160" width="200" height="160"><polyline points="21.3,48.4 22.4,46.0 23.6,43.7 24.9,41.4 26.3,39.2 27.7,37.1 29.3,35.0 30.9,33.0 32.7,31.0" /></svg>
+          <svg class="sg" style="--i: 5" viewBox="0 0 200 160" width="200" height="160"><polyline points="32.7,31.0 34.5,29.2 36.4,27.4 38.4,25.7 40.5,24.2 42.6,22.7 44.8,21.3 47.0,20.0 49.4,18.8" /></svg>
+          <svg class="sg" style="--i: 6" viewBox="0 0 200 160" width="200" height="160"><polyline points="49.4,18.8 51.7,17.7 54.1,16.8 56.6,15.9 59.1,15.2 61.6,14.6 64.2,14.1 66.8,13.9 69.4,13.7" /></svg>
+          <svg class="sg" style="--i: 7" viewBox="0 0 200 160" width="200" height="160"><polyline points="69.4,13.7 72.0,13.7 74.6,13.9 77.2,14.2 79.7,14.6 82.3,15.1 84.8,15.7 87.3,16.3 89.9,17.0" /></svg>
+          <svg class="sg" style="--i: 8" viewBox="0 0 200 160" width="200" height="160"><polyline points="89.9,17.0 92.4,17.6 94.9,18.3 97.4,18.9 100.0,19.5 102.5,19.9 105.1,20.3 107.7,20.5 110.3,20.5" /></svg>
+          <svg class="sg" style="--i: 9" viewBox="0 0 200 160" width="200" height="160"><polyline points="110.3,20.5 112.9,20.4 115.5,20.1 118.0,19.6 120.6,18.9 123.0,18.1 125.5,17.3 128.0,16.5 130.5,15.8" /></svg>
+          <svg class="sg" style="--i: 10" viewBox="0 0 200 160" width="200" height="160"><polyline points="130.5,15.8 133.0,15.2 135.6,14.7 138.1,14.3 140.7,14.1 143.3,13.9 145.9,13.9 148.5,13.9 151.1,14.2" /></svg>
+          <svg class="sg" style="--i: 11" viewBox="0 0 200 160" width="200" height="160"><polyline points="151.1,14.2 153.7,14.5 156.2,15.0 158.8,15.7 161.2,16.5 163.7,17.4 166.0,18.6 168.3,19.8 170.4,21.3" /></svg>
+          <svg class="sg" style="--i: 12" viewBox="0 0 200 160" width="200" height="160"><polyline points="170.4,21.3 172.5,22.9 174.5,24.6 176.3,26.4 178.0,28.4 179.5,30.5 180.9,32.7 182.2,34.9 183.4,37.3" /></svg>
+          <svg class="sg" style="--i: 13" viewBox="0 0 200 160" width="200" height="160"><polyline points="183.4,37.3 184.4,39.7 185.3,42.1 186.1,44.6 186.8,47.1 187.3,49.6 187.8,52.2 188.1,54.8 188.4,57.4" /></svg>
+          <svg class="sg" style="--i: 14" viewBox="0 0 200 160" width="200" height="160"><polyline points="188.4,57.4 188.6,60.0 188.6,62.6 188.5,65.2 188.3,67.8 187.9,70.3 187.4,72.9 186.7,75.4 185.9,77.9" /></svg>
+          <svg class="sg" style="--i: 15" viewBox="0 0 200 160" width="200" height="160"><polyline points="185.9,77.9 184.9,80.3 183.8,82.6 182.6,84.9 181.2,87.1 179.6,89.2 178.0,91.2 176.3,93.2 174.4,95.0" /></svg>
+          <svg class="sg" style="--i: 16" viewBox="0 0 200 160" width="200" height="160"><polyline points="174.4,95.0 172.5,96.8 170.5,98.5 168.5,100.1 166.4,101.6 164.2,103.1 162.1,104.5 159.8,105.8 157.6,107.1" /></svg>
+          <svg class="sg" style="--i: 17" viewBox="0 0 200 160" width="200" height="160"><polyline points="157.6,107.1 155.3,108.3 152.9,109.5 150.6,110.6 148.2,111.7 145.9,112.8 143.5,113.8 141.1,114.8 138.7,115.8" /></svg>
+          <svg class="sg" style="--i: 18" viewBox="0 0 200 160" width="200" height="160"><polyline points="138.7,115.8 136.3,117.0 134.1,118.2 131.8,119.6 129.7,121.1 127.7,122.7 125.7,124.4 123.7,126.1 121.9,127.9" /></svg>
+          <svg class="sg" style="--i: 19" viewBox="0 0 200 160" width="200" height="160"><polyline points="121.9,127.9 120.1,129.8 118.3,131.7 116.5,133.6 114.8,135.5 113.0,137.4 111.1,139.2 109.2,141.0 107.2,142.7" /></svg>
+          <svg class="sg" style="--i: 20" viewBox="0 0 200 160" width="200" height="160"><polyline points="107.2,142.7 105.1,144.2 103.0,145.7 100.7,147.0 98.4,148.1 96.0,149.1 93.5,149.9 91.0,150.6 88.4,151.1" /></svg>
+          <svg class="sg" style="--i: 21" viewBox="0 0 200 160" width="200" height="160"><polyline points="88.4,151.1 85.9,151.5 83.3,151.7 80.7,151.9 78.1,151.9 75.5,151.8 72.9,151.6 70.3,151.2 67.8,150.6" /></svg>
+          <svg class="sg" style="--i: 22" viewBox="0 0 200 160" width="200" height="160"><polyline points="67.8,150.6 65.3,149.9 62.8,149.1 60.4,148.0 58.1,146.8 55.9,145.5 53.7,144.0 51.7,142.4 49.7,140.7" /></svg>
+          <svg class="sg" style="--i: 23" viewBox="0 0 200 160" width="200" height="160"><polyline points="49.7,140.7 47.8,138.9 46.1,137.0 44.4,135.0 42.7,133.0 41.2,130.9 39.7,128.8 38.3,126.6 36.9,124.4" /></svg>
+          <span class="start"></span>
+          <span class="dot"></span>
+        </div>
+        <p class="word">Boucle</p>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

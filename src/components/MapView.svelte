@@ -1276,6 +1276,22 @@
       left: Math.max(0, pad.left - own.left),
       right: Math.max(0, pad.right - own.right),
     };
+    // Panneau très haut (ou petite fenêtre) : les marges se partagent ce qu'il reste, sinon MapLibre renonce
+    // à cadrer (« Map cannot fit within canvas ») et le parcours restait hors de vue.
+    const cv = map.getCanvas();
+    const W = cv.clientWidth - own.left - own.right;
+    const H = cv.clientHeight - own.top - own.bottom;
+    const squeeze = (a: 'top' | 'left', b: 'bottom' | 'right', size: number) => {
+      const room = size - 80;
+      const sum = rest[a] + rest[b];
+      if (sum > room && sum > 0) {
+        const k = Math.max(0, room) / sum;
+        rest[a] = Math.floor(rest[a] * k);
+        rest[b] = Math.floor(rest[b] * k);
+      }
+    };
+    squeeze('top', 'bottom', H);
+    squeeze('left', 'right', W);
     const cam = map.cameraForBounds(
       [
         [w, s],
@@ -1683,6 +1699,8 @@
     lastZoom = map.getZoom();
     updateOrbit();
     map.on('style.load', onStyleLoad);
+    // Première image complète de la carte : l'ouverture (index.html) peut s'effacer dessus.
+    map.once('load', () => dispatchEvent(new Event('boucle:ready')));
     map.on('rotate', () => {
       if (!swinging) app.bearing = map!.getBearing();
     });

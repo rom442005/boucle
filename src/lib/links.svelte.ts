@@ -29,7 +29,12 @@ function flag(key: string, v?: string | null): string | null {
   return null;
 }
 
+/** Une donnée de Santé ouverte en détail (feuille HealthDetail). */
+export type HealthMetric = 'steps' | 'walk' | 'kcal' | 'exercise' | 'rhr' | 'vo2' | 'runs';
+
 class Links {
+  /** donnée de Santé montrée en détail, null : feuille fermée */
+  detail = $state<HealthMetric | null>(null);
   strava = $state.raw<StravaData | null>(null);
   stravaBusy = $state(false);
   /** mes journées de santé (serveur), lues sur tous les appareils */

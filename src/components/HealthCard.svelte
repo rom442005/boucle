@@ -3,12 +3,19 @@
   import Icon from './Icon.svelte';
   import { tactile } from '../lib/haptics';
   import type { HealthSummary } from '../lib/health';
+  import { links, type HealthMetric } from '../lib/links.svelte';
+  import { haptic } from '../lib/haptics';
 
   /*
    * Santé du jour, comme un widget de l'app Santé : l'anneau des pas vers 10 000, le nombre qui monte, la
    * semaine en barres (aujourd'hui en rose), puis distance à pied, énergie et exercice du jour.
    */
   let { hd, onsync }: { hd: HealthSummary; onsync?: () => void } = $props();
+  /** Toucher une partie du bloc ouvre son détail (feuille HealthDetail). */
+  function open(m: HealthMetric) {
+    haptic('tap');
+    links.detail = m;
+  }
 
   const GOAL = 10000;
   const R = 27;
@@ -30,13 +37,13 @@
 
 <section class="card wide glass photo-card health" aria-label="Santé, {label}">
   <div class="card-top">
-    <span class="k">❤️ Santé · {label}</span>
+    <button use:tactile type="button" class="k head" onclick={() => open('steps')}>❤️ Santé · {label}<Icon name="chevron" size={12} /></button>
     <span class="end">
       {#if received}<span class="k">{received}</span>{/if}
       {#if onsync}<button use:tactile type="button" class="sync" aria-label="Envoyer Santé maintenant (raccourci)" title="Envoyer maintenant" onclick={onsync}><Icon name="again" size={15} /></button>{/if}
     </span>
   </div>
-  <div class="today">
+  <button use:tactile type="button" class="today" aria-label="Pas : {(t.steps ?? 0).toLocaleString('fr-FR')}, voir le détail" onclick={() => open('steps')}>
     <svg class="ring" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" style:--c="{C.toFixed(1)}" style:--off="{(C * (1 - ratio)).toFixed(1)}">
       <circle cx="32" cy="32" r={R} class="track" />
       <circle cx="32" cy="32" r={R} class="fill" stroke-dasharray={C.toFixed(1)} />
@@ -46,8 +53,9 @@
       <b class="big rounded"><CountUp value={t.steps ?? 0} /><small>pas</small></b>
       <span class="k">{Math.round(ratio * 100)} % de {GOAL.toLocaleString('fr-FR')}</span>
     </div>
-  </div>
-  <ol class="week" aria-label="Pas par jour, 7 derniers jours">
+  </button>
+  <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+  <ol class="week" aria-label="Pas par jour, 7 derniers jours : voir le détail" role="button" tabindex="0" onclick={() => open('steps')} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && open('steps')}>
     {#each hd.week as d, i (d.day)}
       <li class:today={i === 6} style:--h={d.steps ? Math.max(0.1, d.steps / top) : 0.04} style:--i={i} aria-label="{letter(d.day)} : {d.steps.toLocaleString('fr-FR')} pas">
         <span class="bar"></span>
@@ -56,9 +64,9 @@
     {/each}
   </ol>
   <div class="trio">
-    <span style:--i={0}><i aria-hidden="true">🚶</i><b class="tabular">{#if t.walkM != null}<CountUp value={t.walkM / 1000} decimals={1} />{:else}–{/if}</b><small>km</small></span>
-    <span style:--i={1}><i aria-hidden="true">🔥</i><b class="tabular">{#if t.kcal != null}<CountUp value={t.kcal} />{:else}–{/if}</b><small>kcal</small></span>
-    <span style:--i={2}><i aria-hidden="true">⏱️</i><b class="tabular">{#if t.exercise != null}<CountUp value={t.exercise} />{:else}–{/if}</b><small>min</small></span>
+    <button use:tactile type="button" aria-label="Marche et course, voir le détail" style:--i={0} onclick={() => open('walk')}><i aria-hidden="true">🚶</i><b class="tabular">{#if t.walkM != null}<CountUp value={t.walkM / 1000} decimals={1} />{:else}–{/if}</b><small>km</small></button>
+    <button use:tactile type="button" aria-label="Énergie active, voir le détail" style:--i={1} onclick={() => open('kcal')}><i aria-hidden="true">🔥</i><b class="tabular">{#if t.kcal != null}<CountUp value={t.kcal} />{:else}–{/if}</b><small>kcal</small></button>
+    <button use:tactile type="button" aria-label="Exercice, voir le détail" style:--i={2} onclick={() => open('exercise')}><i aria-hidden="true">⏱️</i><b class="tabular">{#if t.exercise != null}<CountUp value={t.exercise} />{:else}–{/if}</b><small>min</small></button>
   </div>
 </section>
 
@@ -113,6 +121,19 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    text-align: left;
+    color: inherit;
+  }
+  .head {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .head :global(.icon) {
+    opacity: 0.7;
+  }
+  .week {
+    cursor: pointer;
   }
   .ring {
     flex: none;
@@ -214,7 +235,9 @@
     padding-top: 8px;
     border-top: 0.5px solid var(--separator);
   }
-  .trio span {
+  .trio button {
+    color: inherit;
+    text-align: left;
     display: flex;
     align-items: baseline;
     gap: 4px;
@@ -245,7 +268,7 @@
     .health,
     .fill,
     .bar,
-    .trio span {
+    .trio button {
       animation: none;
     }
   }

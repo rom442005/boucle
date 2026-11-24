@@ -6,6 +6,28 @@ import { app as state } from './lib/state.svelte';
 
 const app = mount(App, { target: document.getElementById('app')! });
 
+/*
+ * Ouverture (index.html) : elle reste le temps que la carte soit prête, 1,5 s au moins depuis le lancement
+ * (l'animation va au bout), 3,5 s au plus ; puis elle s'ouvre sur l'app. Pas d'ouverture pour les tests.
+ */
+const intro = document.getElementById('intro');
+if (intro) {
+  let gone = false;
+  const leave = () => {
+    if (gone) return;
+    gone = true;
+    setTimeout(() => {
+      intro.classList.add('out');
+      setTimeout(() => intro.remove(), 600);
+    }, Math.max(0, 1500 - performance.now()));
+  };
+  if (navigator.webdriver) intro.remove();
+  else {
+    addEventListener('boucle:ready', leave, { once: true });
+    setTimeout(leave, 3500);
+  }
+}
+
 /** L'app a déjà été touchée (une mise à jour attend alors qu'elle passe en arrière-plan). */
 let touched = false;
 addEventListener('pointerdown', () => (touched = true), { once: true, capture: true });

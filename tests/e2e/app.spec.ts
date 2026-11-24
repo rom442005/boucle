@@ -707,6 +707,56 @@ test('app du téléphone : se connecter en autorisant Santé, sans e-mail ni mot
   await expect(page.getByRole('button', { name: 'Se déconnecter' })).toHaveCount(0);
 });
 
+test('Santé en détail : toucher une donnée ouvre ses 7 ou 28 jours', async ({ page }) => {
+  await page.addInitScript(() => {
+    const days = Array.from({ length: 28 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - 27 + i);
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const run = i % 3 === 0;
+      return {
+        day,
+        steps: 6000 + i * 150,
+        restingHr: 52 - (i % 4),
+        vo2max: 49 + i * 0.05,
+        distance: run ? 8000 : 0,
+        workouts: run ? [{ sport: 'run', distance: 8000, time: 2580, start: `${day}T07:00:00.000Z`, source: 'Strava', kcal: 500 }] : [],
+        source: 'ios',
+        walkM: 4500,
+        activeKcal: 420,
+        exerciseMin: 34,
+      };
+    });
+    (globalThis as { __boucleHealth?: unknown }).__boucleHealth = { platform: 'ios', days };
+  });
+  await page.goto('./?demo=communaute');
+  await page.getByRole('dialog', { name: 'Boucle' }).getByRole('button', { name: 'Créer un compte' }).click();
+  await page.getByRole('button', { name: 'Continuer avec Apple Santé' }).click();
+  await page.getByRole('textbox', { name: 'Prénom' }).fill('Sam');
+  await page.getByRole('spinbutton', { name: 'Année de naissance' }).fill('2000');
+  await page.getByRole('group', { name: 'Sports pratiqués' }).getByRole('button', { name: 'Course' }).click();
+  await page.locator('.welcome').getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Créer mon profil' }).click();
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: 'Profil', exact: true }).click();
+  // La fréquence au repos s'ouvre en détail : courbe, repères, jour par jour.
+  await page.getByRole('button', { name: /Fréquence cardiaque au repos : voir le détail/ }).click();
+  const sheet = page.getByRole('dialog').filter({ has: page.getByRole('tablist', { name: 'Donnée de Santé' }) });
+  await expect(sheet.getByRole('heading', { name: /Fréquence au repos/ })).toBeVisible();
+  await expect(sheet.getByText('Dernière mesure')).toBeVisible();
+  await expect(sheet.getByRole('img', { name: /Fréquence au repos, 7 derniers jours/ })).toBeVisible();
+  await sheet.getByRole('radio', { name: '28 jours' }).click();
+  await expect(sheet.getByRole('img', { name: /28 derniers jours/ })).toBeVisible();
+  // Une autre donnée, puis un jour touché sur le graphique.
+  await sheet.getByRole('tab', { name: /Sorties/ }).click();
+  await expect(sheet.getByText('Sorties reçues de Santé')).toBeVisible();
+  await expect(sheet.getByText(/8,0\s?km/).first()).toBeVisible();
+  await sheet.getByRole('tab', { name: 'Pas', exact: true }).click();
+  await sheet.locator('.hit').last().click();
+  await expect(sheet.getByText(/% de l’objectif/)).toBeVisible();
+  await sheet.getByRole('button', { name: 'Fermer' }).first().click();
+  await expect(sheet).toHaveCount(0);
+});
+
 test('mot de passe : reconnexion sans code, puis mot de passe oublié', async ({ page }) => {
   await page.goto('./?demo=communaute');
   const welcome = page.getByRole('dialog', { name: 'Boucle' });

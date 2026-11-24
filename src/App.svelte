@@ -35,6 +35,7 @@
   import ZonesCard from './components/ZonesCard.svelte';
   import PlaceCard from './components/PlaceCard.svelte';
   import SaveSheet from './components/SaveSheet.svelte';
+  import HealthDetail from './components/HealthDetail.svelte';
   import { saved } from './lib/saved.svelte';
   import HealthLink from './components/HealthLink.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
@@ -488,6 +489,7 @@
   <SearchOverlay />
 {/if}
 {#if saved.draft}<SaveSheet />{/if}
+{#if links.detail}<HealthDetail />{/if}
 
 {#if welcome}<Welcome onclose={closeWelcome} />{/if}
 {#if community.lightbox}<Lightbox />{/if}

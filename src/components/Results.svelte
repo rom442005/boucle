@@ -413,7 +413,7 @@
     margin: 0 0 16px;
     padding: 0;
   }
-  /* Les propositions arrivent l'une après l'autre, du flou au net. */
+  /* Les propositions arrivent l'une après l'autre (fondu et léger recul : pas de flou animé, coûteux sur iPhone). */
   .card {
     animation: card-in 520ms var(--ease-out) backwards;
     animation-delay: calc(var(--i, 0) * 70ms + 80ms);
@@ -422,7 +422,7 @@
     from {
       opacity: 0;
       translate: 0 12px;
-      filter: blur(6px);
+      scale: 0.97;
     }
   }
   .card {
