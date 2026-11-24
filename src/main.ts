@@ -7,24 +7,30 @@ import { app as state } from './lib/state.svelte';
 const app = mount(App, { target: document.getElementById('app')! });
 
 /*
- * Ouverture (index.html) : elle reste le temps que la carte soit prête, 1,5 s au moins depuis le lancement
- * (l'animation va au bout), 3,5 s au plus ; puis elle s'ouvre sur l'app. Pas d'ouverture pour les tests.
+ * Ouverture (index.html, scripts/intro.py) : une sortie se trace, les chiffres défilent, « Boucle » se pose. Elle
+ * reste au moins 3,3 s (le temps d'aller au bout) et au plus 5 s, jusqu'à la première image complète de la carte.
+ * Puis on plonge dans la boucle : la carte se pose d'un léger zoom (MapView, « boucle:intro-out ») et l'interface
+ * arrive élément par élément (html.arrive, app.css). Pas d'ouverture pour les tests automatisés.
  */
 const intro = document.getElementById('intro');
 if (intro) {
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let gone = false;
   const leave = () => {
     if (gone) return;
     gone = true;
     setTimeout(() => {
       intro.classList.add('out');
-      setTimeout(() => intro.remove(), 600);
-    }, Math.max(0, 1500 - performance.now()));
+      dispatchEvent(new Event('boucle:intro-out'));
+      document.documentElement.classList.add('arrive');
+      setTimeout(() => intro.remove(), calm ? 400 : 1050);
+      setTimeout(() => document.documentElement.classList.remove('arrive'), 2200);
+    }, Math.max(0, (calm ? 1200 : 3300) - performance.now()));
   };
   if (navigator.webdriver) intro.remove();
   else {
     addEventListener('boucle:ready', leave, { once: true });
-    setTimeout(leave, 3500);
+    setTimeout(leave, 5000);
   }
 }
 

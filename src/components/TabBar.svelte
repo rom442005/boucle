@@ -69,7 +69,7 @@
   }
 </script>
 
-<div class="dock" class:on-photo={onphoto} bind:offsetHeight={h} bind:this={el}>
+<div class="dock" data-arrive="up" style="--arrive-delay: 520ms" class:on-photo={onphoto} bind:offsetHeight={h} bind:this={el}>
   <nav class="tabbar glass" aria-label="Sections" style:--at={TABS.indexOf(active)} use:liquidTabs={{ active: TABS.indexOf(active), pick: (i) => go(TABS[i]) }}>
     <span class="pill-on" aria-hidden="true"></span>
     {#each TABS as t (t)}

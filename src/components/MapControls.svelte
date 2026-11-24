@@ -51,7 +51,7 @@
 
 <svelte:window onpointerdown={onDown} onkeydown={(e) => open && e.key === 'Escape' && (open = false)} />
 
-<div class="ctrls-wrap" class:wide={app.wide} bind:this={pill}>
+<div class="ctrls-wrap" data-arrive="side" style="--arrive-delay: 450ms" class:wide={app.wide} bind:this={pill}>
 <div class="ctrls glass" role="toolbar" aria-label="Carte">
   {#if !minimal}
   <!-- Comme dans Plans : le type de carte en haut de la pilule. -->

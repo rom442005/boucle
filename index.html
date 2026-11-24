@@ -17,84 +17,196 @@
     <meta name="format-detection" content="telephone=no" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <!--
-      Ouverture : la boucle de l'icône se trace, un point la parcourt, puis « Boucle » monte, le temps que l'app
-      et la carte se chargent dessous. Seulement des animations d'opacité et de déplacement : la carte graphique
-      les joue seule, sans à-coup même quand le code de l'app occupe le processeur. main.ts la retire dès que la
-      carte est prête (1,5 s au moins, 3,5 s au plus). Écrite ici pour s'afficher dès la première image.
-    -->
+    <!-- INTRO (scripts/intro.py) -->
     <style>
-      html { background: #0c110f; }
-      #intro { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; pointer-events: none;
-        background: radial-gradient(60% 45% at 50% 46%, rgba(255, 45, 85, 0.16), transparent 70%), radial-gradient(120% 90% at 50% 40%, #1a231f 0%, #0c110f 62%, #070a09 100%);
-        transition: opacity 460ms cubic-bezier(0.2, 0.8, 0.2, 1); will-change: opacity; }
-      #intro .ib { display: grid; justify-items: center; gap: 18px; transition: transform 560ms cubic-bezier(0.5, 0, 0.75, 0), opacity 400ms ease; will-change: transform, opacity; }
-      #intro .loop { position: relative; width: 200px; height: 160px; animation: ib-beat 1.2s ease-in-out 1.05s infinite; will-change: transform; }
-      #intro .loop > svg { position: absolute; inset: 0; overflow: visible; }
-      #intro .glow { opacity: 0; animation: ib-in 700ms ease-out 500ms forwards; will-change: opacity; }
-      #intro .glow polyline { fill: none; stroke: #ff2d55; stroke-width: 16; stroke-linejoin: round; filter: blur(9px); opacity: 0.3; }
-      #intro .sg { opacity: 0; animation: ib-in 140ms linear forwards; animation-delay: calc(80ms + var(--i) * 34ms); will-change: opacity; }
-      #intro .sg polyline { fill: none; stroke: #ff3b62; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
-      #intro .start { position: absolute; left: 36.9px; top: 124.4px; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #fff; box-shadow: inset 0 0 0 5px #ff2d55;
-        animation: ib-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; will-change: transform; }
-      #intro .dot { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform;
-        animation: ib-run 900ms cubic-bezier(0.65, 0, 0.35, 1) 80ms both, ib-run 1.3s linear 980ms infinite; }
-      #intro .dot::after { content: ""; position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: #fff;
-        box-shadow: 0 0 0 4px rgba(255, 45, 85, 0.55), 0 0 18px 6px rgba(255, 45, 85, 0.6); }
-      #intro .word { margin: 0; font: 700 34px/1 -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Segoe UI", Roboto, sans-serif; letter-spacing: -0.035em; color: #fff;
-        opacity: 0; transform: translateY(14px); animation: ib-rise 620ms cubic-bezier(0.34, 1.4, 0.64, 1) 640ms forwards; will-change: transform, opacity; }
-      #intro.out { opacity: 0; }
-      #intro.out .ib { transform: scale(2.2); opacity: 0; }
+      html { background: #090c0b; }
+      #intro { position: fixed; inset: 0; z-index: 1000; overflow: hidden; pointer-events: none; color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "Segoe UI", Roboto, sans-serif; }
+      /* Le fond (ville de nuit) : plongée par le trou qui s'ouvre au centre de la boucle à la sortie. */
+      #intro .bg { position: absolute; inset: -2%; background: radial-gradient(52% 40% at 50% 40%, rgba(255, 45, 85, 0.15), transparent 70%), radial-gradient(130% 95% at 50% 38%, #18211d 0%, #0b100e 60%, #060807 100%);
+        transform-origin: 50% 40%; will-change: transform; }
+      #intro .city { position: absolute; left: 50%; top: 40%; width: max(820px, 130vmax); height: max(820px, 130vmax);
+        margin: calc(max(410px, 65vmax) * -1) 0 0 calc(max(410px, 65vmax) * -1); opacity: 0;
+        transform: perspective(900px) rotateX(46deg) scale(1.05); will-change: transform, opacity;
+        animation: ib-fade 900ms ease-out 60ms forwards, ib-dolly 5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards; }
+      #intro .city line { stroke: rgba(255, 255, 255, 0.075); }
+      #intro .city .river { fill: none; stroke: rgba(70, 130, 160, 0.22); stroke-width: 26; stroke-linecap: round; }
+      #intro .stage { position: absolute; left: 50%; top: 40%; width: 300px; height: 240px; margin: -120px 0 0 -150px; will-change: transform, opacity; }
+      #intro .stage > svg { position: absolute; inset: 0; overflow: visible; }
+      #intro .glow { opacity: 0; animation: ib-fade 1200ms ease-out 900ms forwards; }
+      #intro .glow polyline { fill: none; stroke: #ff2d55; stroke-width: 22; stroke-linejoin: round; filter: blur(12px); opacity: 0.32; }
+      #intro .sg { opacity: 0; animation: ib-fade 160ms linear forwards; animation-delay: var(--d); will-change: opacity; }
+      #intro .sg polyline { fill: none; stroke: #ff3b62; stroke-width: 7.5; stroke-linecap: round; stroke-linejoin: round; }
+      #intro .start { position: absolute; left: 55.3px; top: 186.6px; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #fff;
+        box-shadow: inset 0 0 0 6px #ff2d55, 0 6px 18px -4px rgba(0, 0, 0, 0.6); animation: ib-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 180ms both; will-change: transform; }
+      #intro .comet { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; will-change: transform, opacity;
+        animation: ib-comet 1800ms linear 350ms both, ib-in 120ms linear 350ms forwards, ib-out 260ms ease-in 2110ms forwards; }
+      #intro .comet::before { content: ""; position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 90, 120, 0.75) 0%, rgba(255, 45, 85, 0.25) 40%, transparent 70%); }
+      #intro .comet::after { content: ""; position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px 3px #fff; }
+      #intro .km { position: absolute; width: 0; height: 0; }
+      #intro .km b { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+        font-size: 12px; font-weight: 800; color: #ff2d55; background: #fff; box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+        animation: ib-pop 460ms cubic-bezier(0.34, 1.7, 0.64, 1) var(--d) both; will-change: transform; }
+      #intro .ring { position: absolute; left: 55.3px; top: 186.6px; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+        border: 3px solid #ff3b62; opacity: 0; transform: scale(0.15); animation: ib-ring 900ms cubic-bezier(0.16, 1, 0.3, 1) 2150ms forwards; will-change: transform, opacity; }
+      #intro .sp { position: absolute; left: 55.3px; top: 186.6px; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #ffd1db; opacity: 0;
+        animation: ib-spark 820ms cubic-bezier(0.16, 1, 0.3, 1) 2170ms forwards; will-change: transform, opacity; }
+      #intro .stats { position: absolute; left: 50%; top: calc(40% + 154px); width: min(360px, calc(100vw - 32px)); translate: -50% 0;
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; will-change: transform, opacity; }
+      #intro .st { display: grid; gap: 4px; justify-items: center; opacity: 0; transform: translateY(14px);
+        animation: ib-rise 640ms cubic-bezier(0.16, 1, 0.3, 1) calc(420ms + var(--i) * 90ms) forwards; }
+      #intro .sk { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+      #intro .sv { display: inline-flex; align-items: baseline; font-size: 30px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+      #intro .sv small { margin-left: 3px; font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.6); }
+      #intro .col { display: inline-block; height: 1.1em; padding: 0.05em 0; margin: -0.05em 0; overflow: hidden;
+        -webkit-mask: linear-gradient(transparent, #000 10%, #000 90%, transparent); mask: linear-gradient(transparent, #000 10%, #000 90%, transparent); }
+      #intro .strip { display: flex; flex-direction: column; will-change: transform; animation: ib-roll var(--t) cubic-bezier(0.22, 0.61, 0.36, 1) var(--d) both; }
+      #intro .strip span { display: block; height: 1em; line-height: 1; }
+      #intro .word { position: absolute; left: 0; right: 0; top: calc(40% - 194px); margin: 0; display: flex; justify-content: center;
+        font-size: 40px; font-weight: 800; letter-spacing: -0.04em; will-change: transform, opacity; }
+      #intro .word span { display: inline-block; opacity: 0; transform: translateY(22px) scale(0.9);
+        animation: ib-letter 720ms cubic-bezier(0.34, 1.4, 0.64, 1) calc(2270ms + var(--i) * 45ms) forwards; }
+      /* Sortie : plongée dans la boucle vers la carte. */
+      #intro.out .bg { -webkit-mask: radial-gradient(circle at 50% 40%, transparent 0 22px, #000 23px); mask: radial-gradient(circle at 50% 40%, transparent 0 22px, #000 23px);
+        animation: ib-dive 1000ms cubic-bezier(0.6, 0, 0.8, 0.4) forwards; }
+      #intro.out .city { animation: ib-out 500ms ease-in forwards; }
+      #intro.out .stage { animation: ib-push 900ms cubic-bezier(0.55, 0, 0.75, 0.2) forwards; }
+      #intro.out .stats, #intro.out .word { animation: ib-sink 520ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+      @keyframes ib-fade { to { opacity: 1; } }
       @keyframes ib-in { to { opacity: 1; } }
+      @keyframes ib-out { to { opacity: 0; } }
       @keyframes ib-pop { from { transform: scale(0); } }
       @keyframes ib-rise { to { opacity: 1; transform: none; } }
-      @keyframes ib-beat { 50% { transform: scale(1.045); } }
-      @keyframes ib-run { 0.0% { transform: translate(36.9px, 124.4px); } 2.5% { transform: translate(28.0px, 115.7px); } 5.0% { transform: translate(21.6px, 105.0px); } 7.5% { transform: translate(17.5px, 93.2px); } 10.0% { transform: translate(15.6px, 80.9px); } 12.5% { transform: translate(16.0px, 68.4px); } 15.0% { transform: translate(18.5px, 56.2px); } 17.5% { transform: translate(23.1px, 44.6px); } 20.0% { transform: translate(29.9px, 34.2px); } 22.5% { transform: translate(38.8px, 25.4px); } 25.0% { transform: translate(49.4px, 18.8px); } 27.5% { transform: translate(61.1px, 14.7px); } 30.0% { transform: translate(73.5px, 13.8px); } 32.5% { transform: translate(85.8px, 15.9px); } 35.0% { transform: translate(97.9px, 19.1px); } 37.5% { transform: translate(110.3px, 20.5px); } 40.0% { transform: translate(122.5px, 18.3px); } 42.5% { transform: translate(134.5px, 14.9px); } 45.0% { transform: translate(147.0px, 13.9px); } 47.5% { transform: translate(159.3px, 15.8px); } 50.0% { transform: translate(170.4px, 21.3px); } 52.5% { transform: translate(179.2px, 30.1px); } 55.0% { transform: translate(185.0px, 41.1px); } 57.5% { transform: translate(187.9px, 53.2px); } 60.0% { transform: translate(188.5px, 65.7px); } 62.5% { transform: translate(185.9px, 77.9px); } 65.0% { transform: translate(180.0px, 88.8px); } 67.5% { transform: translate(171.4px, 97.8px); } 70.0% { transform: translate(161.2px, 105.0px); } 72.5% { transform: translate(150.1px, 110.8px); } 75.0% { transform: translate(138.7px, 115.8px); } 77.5% { transform: translate(128.1px, 122.3px); } 80.0% { transform: translate(119.0px, 130.9px); } 82.5% { transform: translate(110.4px, 139.9px); } 85.0% { transform: translate(100.3px, 147.2px); } 87.5% { transform: translate(88.4px, 151.1px); } 90.0% { transform: translate(76.0px, 151.8px); } 92.5% { transform: translate(63.8px, 149.4px); } 95.0% { transform: translate(52.9px, 143.4px); } 97.5% { transform: translate(44.0px, 134.6px); } 100.0% { transform: translate(36.9px, 124.4px); } }
+      @keyframes ib-letter { to { opacity: 1; transform: none; } }
+      @keyframes ib-roll { from { transform: translateY(0); } to { transform: translateY(var(--to)); } }
+      @keyframes ib-dolly { to { transform: perspective(900px) rotateX(46deg) scale(1.22); } }
+      @keyframes ib-ring { 0% { opacity: 1; transform: scale(0.15); } 100% { opacity: 0; transform: scale(2.4); } }
+      @keyframes ib-spark { 0% { opacity: 1; transform: translate(0, 0) scale(var(--s)); } 100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(0.2); } }
+      @keyframes ib-dive { to { transform: scale(42); } }
+      @keyframes ib-push { to { transform: scale(3.6); opacity: 0; } }
+      @keyframes ib-sink { to { transform: translateY(26px); opacity: 0; } }
+      @keyframes ib-comet { 0.00% { transform: translate(55.3px, 186.6px); } 1.67% { transform: translate(54.9px, 186.3px); } 3.33% { transform: translate(53.7px, 185.3px); } 5.00% { transform: translate(51.8px, 183.7px); } 6.67% { transform: translate(49.1px, 181.3px); } 8.33% { transform: translate(45.9px, 178.0px); } 10.00% { transform: translate(42.3px, 173.8px); } 11.67% { transform: translate(38.4px, 168.5px); } 13.33% { transform: translate(34.6px, 162.1px); } 15.00% { transform: translate(31.0px, 154.4px); } 16.67% { transform: translate(27.8px, 145.6px); } 18.33% { transform: translate(25.3px, 135.7px); } 20.00% { transform: translate(23.7px, 124.7px); } 21.67% { transform: translate(23.3px, 112.8px); } 23.33% { transform: translate(24.3px, 100.1px); } 25.00% { transform: translate(27.0px, 86.9px); } 26.67% { transform: translate(31.6px, 73.4px); } 28.33% { transform: translate(38.5px, 60.2px); } 30.00% { transform: translate(47.9px, 47.8px); } 31.67% { transform: translate(59.8px, 36.9px); } 33.33% { transform: translate(74.0px, 28.2px); } 35.00% { transform: translate(90.2px, 22.4px); } 36.67% { transform: translate(107.8px, 20.6px); } 38.33% { transform: translate(125.7px, 23.1px); } 40.00% { transform: translate(143.6px, 27.8px); } 41.67% { transform: translate(162.1px, 30.8px); } 43.33% { transform: translate(181.0px, 28.4px); } 45.00% { transform: translate(199.4px, 22.8px); } 46.67% { transform: translate(218.7px, 20.8px); } 48.33% { transform: translate(238.1px, 23.5px); } 50.00% { transform: translate(255.7px, 31.9px); } 51.67% { transform: translate(269.3px, 45.8px); } 53.33% { transform: translate(278.0px, 63.3px); } 55.00% { transform: translate(282.2px, 82.2px); } 56.67% { transform: translate(282.5px, 101.5px); } 58.33% { transform: translate(277.6px, 119.9px); } 60.00% { transform: translate(267.9px, 135.8px); } 61.67% { transform: translate(254.6px, 148.7px); } 63.33% { transform: translate(239.6px, 158.8px); } 65.00% { transform: translate(223.8px, 166.9px); } 66.67% { transform: translate(208.0px, 173.7px); } 68.33% { transform: translate(193.7px, 182.3px); } 70.00% { transform: translate(181.7px, 193.1px); } 71.67% { transform: translate(171.0px, 204.4px); } 73.33% { transform: translate(160.1px, 214.6px); } 75.00% { transform: translate(148.0px, 222.0px); } 76.67% { transform: translate(135.2px, 226.1px); } 78.33% { transform: translate(122.5px, 227.7px); } 80.00% { transform: translate(110.6px, 227.5px); } 81.67% { transform: translate(99.7px, 225.5px); } 83.33% { transform: translate(90.1px, 221.8px); } 85.00% { transform: translate(82.1px, 217.1px); } 86.67% { transform: translate(75.4px, 211.9px); } 88.33% { transform: translate(70.1px, 206.6px); } 90.00% { transform: translate(65.8px, 201.7px); } 91.67% { transform: translate(62.4px, 197.3px); } 93.33% { transform: translate(59.7px, 193.5px); } 95.00% { transform: translate(57.8px, 190.5px); } 96.67% { transform: translate(56.4px, 188.4px); } 98.33% { transform: translate(55.6px, 187.0px); } 100.00% { transform: translate(55.3px, 186.6px); } }
       @media (prefers-reduced-motion: reduce) {
-        #intro .sg, #intro .glow { animation: none; opacity: 1; }
-        #intro .dot, #intro .start, #intro .loop { animation: none; }
-        #intro .dot { display: none; }
-        #intro .word { animation: none; opacity: 1; transform: none; }
-        #intro.out .ib { transform: none; }
+        #intro *, #intro *::before, #intro *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+        #intro .comet, #intro .ring, #intro .sp { display: none; }
+        #intro.out .bg, #intro.out .stage, #intro.out .city, #intro.out .stats, #intro.out .word { animation: ib-out 300ms ease forwards !important; -webkit-mask: none; mask: none; }
       }
     </style>
+    <!-- /INTRO -->
   </head>
   <body>
     <div id="app"></div>
+    <!-- INTRO-BODY (scripts/intro.py) -->
     <div id="intro" aria-hidden="true">
-      <div class="ib">
-        <div class="loop">
-          <svg class="glow" viewBox="0 0 200 160" width="200" height="160"><polyline points="36.9,124.4 32.3,120.4 28.2,115.9 24.7,110.9 21.8,105.5 19.4,99.8 17.6,93.7 16.3,87.5 15.6,81.1 15.5,74.6 16.0,68.1 17.1,61.6 18.7,55.3 21.0,49.1 23.9,43.2 27.3,37.6 31.4,32.5 36.1,27.7 41.3,23.5 47.3,19.9 53.8,16.9 58.0,15.5 62.0,14.5 65.9,13.9 69.6,13.7 73.1,13.8 76.6,14.1 79.9,14.6 83.2,15.3 86.4,16.1 89.6,16.9 92.8,17.8 95.9,18.6 99.1,19.3 102.3,19.9 105.5,20.3 108.8,20.5 112.2,20.5 115.7,20.1 119.3,19.3 123.1,18.1 127.4,16.7 131.7,15.5 136.0,14.7 140.3,14.1 144.4,13.9 148.5,13.9 152.5,14.3 156.4,15.1 160.1,16.1 163.7,17.5 167.2,19.2 170.4,21.2 173.4,23.7 176.3,26.4 178.8,29.5 181.1,33.0 183.2,36.8 184.9,41.0 186.4,45.6 187.5,50.6 188.3,56.0 188.6,61.1 188.5,65.9 187.9,70.4 186.9,74.7 185.6,78.7 183.9,82.4 181.9,86.0 179.6,89.3 176.9,92.4 174.1,95.4 171.0,98.1 167.7,100.7 164.2,103.1 160.5,105.4 156.7,107.5 152.8,109.6 148.8,111.5 144.7,113.3 140.6,115.0 136.8,116.7 133.3,118.7 130.2,120.7 127.3,123.0 124.7,125.3 122.2,127.6 119.8,130.1 117.6,132.5 115.3,134.9 113.1,137.3 110.8,139.6 108.3,141.7 105.8,143.8 103.0,145.7 100.0,147.4 96.6,148.8 93.0,150.1 88.9,151.0 84.4,151.6 79.4,151.9 76.7,151.9 74.1,151.7 71.5,151.4 69.1,151.0 66.7,150.4 64.3,149.6 62.0,148.8 59.8,147.7 57.6,146.6 55.5,145.3 53.5,143.8 51.5,142.2 49.5,140.5 47.6,138.6 45.7,136.6 43.9,134.5 42.1,132.2 40.3,129.7 38.6,127.1 36.9,124.4 36.9,124.4" /></svg>
-          <svg class="sg" style="--i: 0" viewBox="0 0 200 160" width="200" height="160"><polyline points="36.9,124.4 34.9,122.8 32.9,121.0 31.1,119.2 29.3,117.3 27.7,115.2 26.2,113.1 24.8,111.0 23.4,108.7" /></svg>
-          <svg class="sg" style="--i: 1" viewBox="0 0 200 160" width="200" height="160"><polyline points="23.4,108.7 22.2,106.4 21.1,104.1 20.1,101.7 19.2,99.2 18.4,96.7 17.7,94.2 17.1,91.7 16.6,89.2" /></svg>
-          <svg class="sg" style="--i: 2" viewBox="0 0 200 160" width="200" height="160"><polyline points="16.6,89.2 16.2,86.6 15.9,84.0 15.7,81.4 15.5,78.8 15.5,76.2 15.6,73.6 15.7,71.0 16.0,68.4" /></svg>
-          <svg class="sg" style="--i: 3" viewBox="0 0 200 160" width="200" height="160"><polyline points="16.0,68.4 16.3,65.8 16.8,63.3 17.3,60.7 17.9,58.2 18.6,55.7 19.4,53.2 20.3,50.8 21.3,48.4" /></svg>
-          <svg class="sg" style="--i: 4" viewBox="0 0 200 160" width="200" height="160"><polyline points="21.3,48.4 22.4,46.0 23.6,43.7 24.9,41.4 26.3,39.2 27.7,37.1 29.3,35.0 30.9,33.0 32.7,31.0" /></svg>
-          <svg class="sg" style="--i: 5" viewBox="0 0 200 160" width="200" height="160"><polyline points="32.7,31.0 34.5,29.2 36.4,27.4 38.4,25.7 40.5,24.2 42.6,22.7 44.8,21.3 47.0,20.0 49.4,18.8" /></svg>
-          <svg class="sg" style="--i: 6" viewBox="0 0 200 160" width="200" height="160"><polyline points="49.4,18.8 51.7,17.7 54.1,16.8 56.6,15.9 59.1,15.2 61.6,14.6 64.2,14.1 66.8,13.9 69.4,13.7" /></svg>
-          <svg class="sg" style="--i: 7" viewBox="0 0 200 160" width="200" height="160"><polyline points="69.4,13.7 72.0,13.7 74.6,13.9 77.2,14.2 79.7,14.6 82.3,15.1 84.8,15.7 87.3,16.3 89.9,17.0" /></svg>
-          <svg class="sg" style="--i: 8" viewBox="0 0 200 160" width="200" height="160"><polyline points="89.9,17.0 92.4,17.6 94.9,18.3 97.4,18.9 100.0,19.5 102.5,19.9 105.1,20.3 107.7,20.5 110.3,20.5" /></svg>
-          <svg class="sg" style="--i: 9" viewBox="0 0 200 160" width="200" height="160"><polyline points="110.3,20.5 112.9,20.4 115.5,20.1 118.0,19.6 120.6,18.9 123.0,18.1 125.5,17.3 128.0,16.5 130.5,15.8" /></svg>
-          <svg class="sg" style="--i: 10" viewBox="0 0 200 160" width="200" height="160"><polyline points="130.5,15.8 133.0,15.2 135.6,14.7 138.1,14.3 140.7,14.1 143.3,13.9 145.9,13.9 148.5,13.9 151.1,14.2" /></svg>
-          <svg class="sg" style="--i: 11" viewBox="0 0 200 160" width="200" height="160"><polyline points="151.1,14.2 153.7,14.5 156.2,15.0 158.8,15.7 161.2,16.5 163.7,17.4 166.0,18.6 168.3,19.8 170.4,21.3" /></svg>
-          <svg class="sg" style="--i: 12" viewBox="0 0 200 160" width="200" height="160"><polyline points="170.4,21.3 172.5,22.9 174.5,24.6 176.3,26.4 178.0,28.4 179.5,30.5 180.9,32.7 182.2,34.9 183.4,37.3" /></svg>
-          <svg class="sg" style="--i: 13" viewBox="0 0 200 160" width="200" height="160"><polyline points="183.4,37.3 184.4,39.7 185.3,42.1 186.1,44.6 186.8,47.1 187.3,49.6 187.8,52.2 188.1,54.8 188.4,57.4" /></svg>
-          <svg class="sg" style="--i: 14" viewBox="0 0 200 160" width="200" height="160"><polyline points="188.4,57.4 188.6,60.0 188.6,62.6 188.5,65.2 188.3,67.8 187.9,70.3 187.4,72.9 186.7,75.4 185.9,77.9" /></svg>
-          <svg class="sg" style="--i: 15" viewBox="0 0 200 160" width="200" height="160"><polyline points="185.9,77.9 184.9,80.3 183.8,82.6 182.6,84.9 181.2,87.1 179.6,89.2 178.0,91.2 176.3,93.2 174.4,95.0" /></svg>
-          <svg class="sg" style="--i: 16" viewBox="0 0 200 160" width="200" height="160"><polyline points="174.4,95.0 172.5,96.8 170.5,98.5 168.5,100.1 166.4,101.6 164.2,103.1 162.1,104.5 159.8,105.8 157.6,107.1" /></svg>
-          <svg class="sg" style="--i: 17" viewBox="0 0 200 160" width="200" height="160"><polyline points="157.6,107.1 155.3,108.3 152.9,109.5 150.6,110.6 148.2,111.7 145.9,112.8 143.5,113.8 141.1,114.8 138.7,115.8" /></svg>
-          <svg class="sg" style="--i: 18" viewBox="0 0 200 160" width="200" height="160"><polyline points="138.7,115.8 136.3,117.0 134.1,118.2 131.8,119.6 129.7,121.1 127.7,122.7 125.7,124.4 123.7,126.1 121.9,127.9" /></svg>
-          <svg class="sg" style="--i: 19" viewBox="0 0 200 160" width="200" height="160"><polyline points="121.9,127.9 120.1,129.8 118.3,131.7 116.5,133.6 114.8,135.5 113.0,137.4 111.1,139.2 109.2,141.0 107.2,142.7" /></svg>
-          <svg class="sg" style="--i: 20" viewBox="0 0 200 160" width="200" height="160"><polyline points="107.2,142.7 105.1,144.2 103.0,145.7 100.7,147.0 98.4,148.1 96.0,149.1 93.5,149.9 91.0,150.6 88.4,151.1" /></svg>
-          <svg class="sg" style="--i: 21" viewBox="0 0 200 160" width="200" height="160"><polyline points="88.4,151.1 85.9,151.5 83.3,151.7 80.7,151.9 78.1,151.9 75.5,151.8 72.9,151.6 70.3,151.2 67.8,150.6" /></svg>
-          <svg class="sg" style="--i: 22" viewBox="0 0 200 160" width="200" height="160"><polyline points="67.8,150.6 65.3,149.9 62.8,149.1 60.4,148.0 58.1,146.8 55.9,145.5 53.7,144.0 51.7,142.4 49.7,140.7" /></svg>
-          <svg class="sg" style="--i: 23" viewBox="0 0 200 160" width="200" height="160"><polyline points="49.7,140.7 47.8,138.9 46.1,137.0 44.4,135.0 42.7,133.0 41.2,130.9 39.7,128.8 38.3,126.6 36.9,124.4" /></svg>
-          <span class="start"></span>
-          <span class="dot"></span>
-        </div>
-        <p class="word">Boucle</p>
+      <div class="bg">
+        <svg class="city" viewBox="0 0 800 800" width="820" height="820">
+          <path class="river" d="M-40 610 C 120 560 220 640 360 590 S 600 520 840 560" />
+            <line x1="76" y1="-20" x2="-30" y2="820" stroke-width="2.4" />
+            <line x1="159" y1="-20" x2="30" y2="820" stroke-width="1.2" />
+            <line x1="173" y1="-20" x2="133" y2="820" stroke-width="1.2" />
+            <line x1="200" y1="-20" x2="203" y2="820" stroke-width="2.4" />
+            <line x1="273" y1="-20" x2="253" y2="820" stroke-width="1.2" />
+            <line x1="388" y1="-20" x2="264" y2="820" stroke-width="1.2" />
+            <line x1="348" y1="-20" x2="447" y2="820" stroke-width="2.4" />
+            <line x1="493" y1="-20" x2="410" y2="820" stroke-width="1.2" />
+            <line x1="460" y1="-20" x2="595" y2="820" stroke-width="1.2" />
+            <line x1="604" y1="-20" x2="573" y2="820" stroke-width="2.4" />
+            <line x1="730" y1="-20" x2="593" y2="820" stroke-width="1.2" />
+            <line x1="752" y1="-20" x2="688" y2="820" stroke-width="1.2" />
+            <line x1="820" y1="-20" x2="704" y2="820" stroke-width="2.4" />
+            <line x1="-20" y1="-8" x2="820" y2="77" stroke-width="2.4" />
+            <line x1="-20" y1="80" x2="820" y2="102" stroke-width="1.2" />
+            <line x1="-20" y1="181" x2="820" y2="147" stroke-width="1.2" />
+            <line x1="-20" y1="280" x2="820" y2="163" stroke-width="2.4" />
+            <line x1="-20" y1="307" x2="820" y2="228" stroke-width="1.2" />
+            <line x1="-20" y1="355" x2="820" y2="335" stroke-width="1.2" />
+            <line x1="-20" y1="383" x2="820" y2="406" stroke-width="2.4" />
+            <line x1="-20" y1="486" x2="820" y2="432" stroke-width="1.2" />
+            <line x1="-20" y1="501" x2="820" y2="555" stroke-width="1.2" />
+            <line x1="-20" y1="563" x2="820" y2="583" stroke-width="2.4" />
+            <line x1="-20" y1="590" x2="820" y2="691" stroke-width="1.2" />
+            <line x1="-20" y1="735" x2="820" y2="678" stroke-width="1.2" />
+            <line x1="-20" y1="825" x2="820" y2="722" stroke-width="2.4" />
+            <line x1="348" y1="565" x2="350" y2="637" stroke-width="1" />
+            <line x1="105" y1="508" x2="78" y2="626" stroke-width="1" />
+            <line x1="640" y1="281" x2="607" y2="391" stroke-width="1" />
+            <line x1="451" y1="372" x2="326" y2="394" stroke-width="1" />
+            <line x1="383" y1="505" x2="345" y2="557" stroke-width="1" />
+            <line x1="494" y1="716" x2="573" y2="814" stroke-width="1" />
+            <line x1="327" y1="508" x2="334" y2="569" stroke-width="1" />
+            <line x1="188" y1="155" x2="139" y2="198" stroke-width="1" />
+            <line x1="163" y1="238" x2="79" y2="274" stroke-width="1" />
+            <line x1="132" y1="367" x2="35" y2="405" stroke-width="1" />
+        </svg>
+      </div>
+      <p class="word"><span style="--i: 0">B</span><span style="--i: 1">o</span><span style="--i: 2">u</span><span style="--i: 3">c</span><span style="--i: 4">l</span><span style="--i: 5">e</span></p>
+      <div class="stage">
+        <svg class="glow" viewBox="0 0 300 240" width="300" height="240"><polyline points="55.3,186.6 48.4,180.7 42.4,173.9 37.1,166.4 32.7,158.3 29.1,149.7 26.4,140.6 24.5,131.2 23.5,121.6 23.3,111.9 24.0,102.1 25.6,92.4 28.1,82.9 31.5,73.7 35.8,64.8 41.0,56.5 47.1,48.7 54.1,41.6 62.0,35.3 70.9,29.8 80.7,25.3 87.0,23.2 93.0,21.8 98.8,20.9 104.4,20.6 109.7,20.7 114.9,21.1 119.9,21.9 124.8,22.9 129.7,24.1 134.4,25.3 139.1,26.6 143.9,27.9 148.6,29.0 153.4,29.9 158.3,30.5 163.2,30.8 168.3,30.7 173.6,30.1 179.0,28.9 184.6,27.2 191.1,25.0 197.6,23.3 204.0,22.0 210.4,21.2 216.6,20.8 222.8,20.9 228.8,21.5 234.6,22.6 240.2,24.1 245.6,26.2 250.7,28.8 255.6,31.9 260.2,35.5 264.4,39.6 268.2,44.3 271.7,49.5 274.8,55.2 277.4,61.6 279.6,68.4 281.2,75.9 282.4,84.0 282.9,91.6 282.7,98.8 281.9,105.6 280.4,112.0 278.4,118.0 275.9,123.7 272.8,129.0 269.3,134.0 265.4,138.7 261.1,143.1 256.5,147.2 251.5,151.1 246.2,154.7 240.8,158.1 235.0,161.3 229.2,164.3 223.2,167.2 217.1,169.9 210.9,172.5 205.2,175.1 200.0,178.0 195.3,181.1 191.0,184.4 187.0,187.9 183.3,191.5 179.7,195.1 176.3,198.7 173.0,202.4 169.6,205.9 166.1,209.3 162.5,212.6 158.7,215.7 154.5,218.5 149.9,221.1 144.9,223.3 139.4,225.1 133.3,226.5 126.6,227.4 119.1,227.9 115.1,227.8 111.1,227.6 107.3,227.1 103.6,226.4 100.0,225.5 96.5,224.4 93.0,223.1 89.7,221.6 86.5,219.9 83.3,217.9 80.2,215.7 77.2,213.4 74.2,210.8 71.4,208.0 68.6,204.9 65.8,201.7 63.1,198.3 60.5,194.6 57.9,190.7 55.3,186.6 55.3,186.6" /></svg>
+          <svg class="sg" style="--d: 350ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="55.3,186.6 52.9,184.7 50.5,182.6 48.3,180.5 46.1,178.2 44.0,175.9 42.0,173.5" /></svg>
+          <svg class="sg" style="--d: 532ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="42.0,173.5 40.2,171.0 38.4,168.4 36.7,165.8 35.2,163.1 33.7,160.3 32.3,157.5" /></svg>
+          <svg class="sg" style="--d: 608ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="32.3,157.5 31.1,154.7 29.9,151.8 28.8,148.8 27.9,145.9 27.0,142.9 26.2,139.8" /></svg>
+          <svg class="sg" style="--d: 668ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="26.2,139.8 25.5,136.8 24.9,133.7 24.4,130.7 24.0,127.6 23.7,124.5 23.5,121.3" /></svg>
+          <svg class="sg" style="--d: 719ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="23.5,121.3 23.3,118.2 23.3,115.1 23.3,112.0 23.5,108.9 23.7,105.7 24.0,102.6" /></svg>
+          <svg class="sg" style="--d: 764ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="24.0,102.6 24.4,99.5 24.9,96.5 25.4,93.4 26.1,90.3 26.9,87.3 27.7,84.3" /></svg>
+          <svg class="sg" style="--d: 806ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="27.7,84.3 28.6,81.3 29.7,78.4 30.8,75.4 32.0,72.6 33.3,69.7 34.7,66.9" /></svg>
+          <svg class="sg" style="--d: 845ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="34.7,66.9 36.2,64.2 37.7,61.5 39.4,58.8 41.1,56.2 43.0,53.7 44.9,51.3" /></svg>
+          <svg class="sg" style="--d: 881ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="44.9,51.3 46.9,48.9 49.0,46.6 51.2,44.3 53.4,42.2 55.8,40.1 58.2,38.1" /></svg>
+          <svg class="sg" style="--d: 916ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="58.2,38.1 60.7,36.2 63.2,34.4 65.8,32.7 68.5,31.1 71.3,29.6 74.0,28.2" /></svg>
+          <svg class="sg" style="--d: 950ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="74.0,28.2 76.9,26.9 79.8,25.7 82.7,24.6 85.7,23.6 88.7,22.8 91.7,22.0" /></svg>
+          <svg class="sg" style="--d: 983ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="91.7,22.0 94.8,21.5 97.8,21.0 101.0,20.7 104.1,20.6 107.2,20.6 110.3,20.7" /></svg>
+          <svg class="sg" style="--d: 1014ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="110.3,20.7 113.4,21.0 116.5,21.4 119.6,21.9 122.7,22.4 125.7,23.1 128.8,23.9" /></svg>
+          <svg class="sg" style="--d: 1045ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="128.8,23.9 131.8,24.6 134.8,25.5 137.8,26.3 140.8,27.1 143.8,27.9 146.9,28.6" /></svg>
+          <svg class="sg" style="--d: 1075ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="146.9,28.6 149.9,29.2 153.0,29.8 156.1,30.3 159.2,30.6 162.3,30.8 165.4,30.8" /></svg>
+          <svg class="sg" style="--d: 1105ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="165.4,30.8 168.6,30.7 171.7,30.4 174.8,29.9 177.8,29.2 180.8,28.4 183.8,27.5" /></svg>
+          <svg class="sg" style="--d: 1135ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="183.8,27.5 186.7,26.4 189.7,25.4 192.7,24.5 195.7,23.7 198.7,23.0 201.8,22.4" /></svg>
+          <svg class="sg" style="--d: 1164ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="201.8,22.4 204.9,21.8 208.0,21.4 211.1,21.1 214.2,20.9 217.3,20.8 220.4,20.8" /></svg>
+          <svg class="sg" style="--d: 1193ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="220.4,20.8 223.6,21.0 226.7,21.2 229.8,21.7 232.8,22.2 235.9,22.9 238.9,23.7" /></svg>
+          <svg class="sg" style="--d: 1221ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="238.9,23.7 241.9,24.7 244.8,25.9 247.6,27.1 250.4,28.6 253.1,30.2 255.7,31.9" /></svg>
+          <svg class="sg" style="--d: 1250ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="255.7,31.9 258.1,33.8 260.5,35.8 262.8,38.0 264.9,40.2 267.0,42.6 268.8,45.1" /></svg>
+          <svg class="sg" style="--d: 1279ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="268.8,45.1 270.6,47.7 272.2,50.3 273.7,53.1 275.1,55.9 276.3,58.8 277.5,61.7" /></svg>
+          <svg class="sg" style="--d: 1307ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="277.5,61.7 278.5,64.6 279.3,67.6 280.1,70.6 280.8,73.7 281.4,76.8 281.9,79.8" /></svg>
+          <svg class="sg" style="--d: 1336ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="281.9,79.8 282.3,82.9 282.6,86.0 282.8,89.2 282.9,92.3 282.9,95.4 282.7,98.5" /></svg>
+          <svg class="sg" style="--d: 1365ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="282.7,98.5 282.4,101.6 282.0,104.7 281.4,107.8 280.7,110.8 279.9,113.8 278.9,116.8" /></svg>
+          <svg class="sg" style="--d: 1395ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="278.9,116.8 277.7,119.7 276.4,122.5 275.0,125.3 273.4,128.0 271.7,130.6 269.9,133.2" /></svg>
+          <svg class="sg" style="--d: 1425ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="269.9,133.2 268.0,135.6 266.0,138.0 263.9,140.3 261.7,142.5 259.4,144.7 257.0,146.7" /></svg>
+          <svg class="sg" style="--d: 1455ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="257.0,146.7 254.6,148.7 252.1,150.6 249.6,152.4 247.0,154.2 244.4,155.9 241.7,157.5" /></svg>
+          <svg class="sg" style="--d: 1486ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="241.7,157.5 239.1,159.1 236.3,160.6 233.6,162.1 230.8,163.5 228.0,164.9 225.2,166.3" /></svg>
+          <svg class="sg" style="--d: 1517ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="225.2,166.3 222.4,167.6 219.5,168.9 216.6,170.1 213.8,171.3 210.9,172.5 208.0,173.7" /></svg>
+          <svg class="sg" style="--d: 1550ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="208.0,173.7 205.2,175.1 202.4,176.6 199.7,178.1 197.1,179.8 194.6,181.6 192.1,183.5" /></svg>
+          <svg class="sg" style="--d: 1584ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="192.1,183.5 189.7,185.5 187.3,187.6 185.1,189.7 182.8,191.9 180.7,194.1 178.5,196.4" /></svg>
+          <svg class="sg" style="--d: 1619ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="178.5,196.4 176.4,198.7 174.3,201.0 172.1,203.3 170.0,205.5 167.8,207.8 165.5,209.9" /></svg>
+          <svg class="sg" style="--d: 1655ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="165.5,209.9 163.2,212.0 160.8,214.0 158.3,215.9 155.8,217.7 153.1,219.3 150.4,220.8" /></svg>
+          <svg class="sg" style="--d: 1694ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="150.4,220.8 147.6,222.2 144.7,223.4 141.7,224.4 138.7,225.3 135.7,226.0 132.6,226.6" /></svg>
+          <svg class="sg" style="--d: 1736ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="132.6,226.6 129.6,227.1 126.4,227.4 123.3,227.7 120.2,227.8 117.1,227.9 114.0,227.8" /></svg>
+          <svg class="sg" style="--d: 1781ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="114.0,227.8 110.9,227.5 107.8,227.2 104.7,226.6 101.6,226.0 98.6,225.1 95.7,224.2" /></svg>
+          <svg class="sg" style="--d: 1832ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="95.7,224.2 92.8,223.0 89.9,221.7 87.2,220.3 84.5,218.7 81.9,216.9 79.3,215.1" /></svg>
+          <svg class="sg" style="--d: 1892ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="79.3,215.1 76.9,213.1 74.6,211.1 72.3,208.9 70.1,206.7 68.0,204.4 66.0,202.0" /></svg>
+          <svg class="sg" style="--d: 1968ms" viewBox="0 0 300 240" width="300" height="240"><polyline points="66.0,202.0 64.1,199.5 62.2,197.0 60.4,194.5 58.7,191.9 57.0,189.3 55.3,186.6" /></svg>
+          <span class="km" style="left: 105.9px; top: 20.5px; --d: 1007ms"><b>3</b></span>
+          <span class="km" style="left: 282.9px; top: 89.7px; --d: 1352ms"><b>6</b></span>
+          <span class="km" style="left: 127.2px; top: 227.4px; --d: 1749ms"><b>9</b></span>
+        <span class="start"></span>
+        <span class="ring"></span>
+        <span class="sp" style="--x: 73px; --y: 7px; --s: 0.74"></span><span class="sp" style="--x: 50px; --y: 27px; --s: 1.04"></span><span class="sp" style="--x: 19px; --y: 47px; --s: 0.69"></span><span class="sp" style="--x: 4px; --y: 53px; --s: 0.84"></span><span class="sp" style="--x: -28px; --y: 46px; --s: 0.60"></span><span class="sp" style="--x: -49px; --y: 30px; --s: 0.88"></span><span class="sp" style="--x: -67px; --y: -9px; --s: 0.86"></span><span class="sp" style="--x: -57px; --y: -36px; --s: 0.63"></span><span class="sp" style="--x: -28px; --y: -65px; --s: 1.04"></span><span class="sp" style="--x: 5px; --y: -58px; --s: 0.80"></span><span class="sp" style="--x: 26px; --y: -61px; --s: 0.63"></span><span class="sp" style="--x: 42px; --y: -32px; --s: 0.68"></span>
+        <span class="comet"></span>
+      </div>
+      <div class="stats">
+          <div class="st" style="--i: 0">
+            <span class="sk">Distance</span>
+            <span class="sv"><span class="col"><span class="strip" style="--to: -40em; --d: 520ms; --t: 1730ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>1</span></span></span><span class="col"><span class="strip" style="--to: -30em; --d: 520ms; --t: 1730ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span></span></span><span class="sep">,</span><span class="col"><span class="strip" style="--to: -20em; --d: 520ms; --t: 1730ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>2</span></span></span><small>km</small></span>
+          </div>
+          <div class="st" style="--i: 1">
+            <span class="sk">Temps</span>
+            <span class="sv"><span class="col"><span class="strip" style="--to: -40em; --d: 610ms; --t: 1640ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>5</span></span></span><span class="col"><span class="strip" style="--to: -30em; --d: 610ms; --t: 1640ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>1</span></span></span><span class="sep">:</span><span class="col"><span class="strip" style="--to: -20em; --d: 610ms; --t: 1640ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>2</span></span></span><span class="col"><span class="strip" style="--to: -10em; --d: 610ms; --t: 1640ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>4</span></span></span></span>
+          </div>
+          <div class="st" style="--i: 2">
+            <span class="sk">Dénivelé</span>
+            <span class="sv"><span class="col"><span class="strip" style="--to: -30em; --d: 700ms; --t: 1550ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>1</span></span></span><span class="col"><span class="strip" style="--to: -20em; --d: 700ms; --t: 1550ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>2</span></span></span><span class="col"><span class="strip" style="--to: -10em; --d: 700ms; --t: 1550ms"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>8</span></span></span><small>m</small></span>
+          </div>
       </div>
     </div>
+    <!-- /INTRO-BODY -->
 
     <script type="module" src="/src/main.ts"></script>
   </body>

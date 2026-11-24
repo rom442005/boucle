@@ -1235,3 +1235,45 @@ textarea {
   content: '© OpenStreetMap';
 }
 
+/*
+ * Arrivée après l'ouverture (main.ts pose html.arrive) : la carte se pose, puis l'interface arrive élément par
+ * élément, du haut et du bas, avec un ressort doux. En transform (les éléments centrés gardent leur translate).
+ */
+html.arrive [data-arrive] {
+  animation: arrive-up 820ms cubic-bezier(0.16, 1, 0.3, 1) var(--arrive-delay, 300ms) backwards;
+}
+html.arrive [data-arrive='down'] {
+  animation-name: arrive-down;
+}
+html.arrive [data-arrive='side'] {
+  animation-name: arrive-side;
+}
+@keyframes arrive-up {
+  from {
+    opacity: 0;
+    transform: translateY(34px) scale(0.94);
+  }
+}
+@keyframes arrive-down {
+  from {
+    opacity: 0;
+    transform: translateY(-26px) scale(0.96);
+  }
+}
+@keyframes arrive-side {
+  from {
+    opacity: 0;
+    transform: translateX(22px) scale(0.96);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.arrive [data-arrive] {
+    animation: arrive-fade 300ms ease backwards;
+  }
+  @keyframes arrive-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+

@@ -39,6 +39,9 @@
     const area = Math.max(1, innerWidth * innerHeight);
     return Math.max(1, Math.min(dpr, 2, Math.sqrt(8.3e6 / area)));
   }
+  /** Ouverture en cours (index.html) : la carte se posera à sa fin. */
+  const landing = !!document.getElementById('intro') && !navigator.webdriver && !location.hash;
+  const LANDING_DZ = 1.1;
   /** Mes lieux se voient à partir d'ici (vue d'une agglomération), et s'effacent au-delà. */
   const SAVED_MINZOOM = 9.6;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1681,7 +1684,8 @@
       pixelRatio: mapPixelRatio(),
       style: buildStyle(theme, paysage),
       center: app.start?.coord ?? view?.center ?? NANTES,
-      zoom: Math.min(view?.zoom ?? LAUNCH_ZOOM, LAUNCH_ZOOM),
+      // Pendant l'ouverture, la carte attend un peu plus haut : elle se pose ensuite d'un léger zoom.
+      zoom: Math.min(view?.zoom ?? LAUNCH_ZOOM, LAUNCH_ZOOM) - (landing ? LANDING_DZ : 0),
       attributionControl: false,
       maxPitch: 72,
       fadeDuration: 120,
@@ -1713,6 +1717,24 @@
     lastZoom = map.getZoom();
     updateOrbit();
     map.on('style.load', onStyleLoad);
+    if (landing) {
+      // Fin de l'ouverture : la carte descend se poser, sauf si l'on a déjà bougé ou si un cadrage a eu lieu.
+      let moved = false;
+      const touched = (e: { originalEvent?: unknown }) => {
+        if (e.originalEvent) moved = true;
+      };
+      map.on('movestart', touched);
+      addEventListener(
+        'boucle:intro-out',
+        () => {
+          map?.off('movestart', touched);
+          // Déplacée à la main, ou déjà en route vers ma position : elle a son propre mouvement.
+          if (!map || moved || map.isMoving()) return;
+          map.easeTo({ zoom: map.getZoom() + LANDING_DZ, duration: reduce ? 0 : 1800, easing: (t) => 1 - (1 - t) ** 3 });
+        },
+        { once: true },
+      );
+    }
     // Première image complète de la carte : l'ouverture (index.html) peut s'effacer dessus.
     map.once('load', () => dispatchEvent(new Event('boucle:ready')));
     map.on('rotate', () => {

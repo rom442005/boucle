@@ -282,7 +282,7 @@
     Mac : le menu (quatre sections, Enregistrer un lieu) reste toujours à la même place, en haut au centre, quel que
     soit l'onglet ; les panneaux commencent dessous (Romain : « qu'il ne bouge pas dans tous les sens »).
   -->
-  <header class="menu glass glass-panel" aria-label="Menu">
+  <header class="menu glass glass-panel" data-arrive="down" style="--arrive-delay: 300ms" aria-label="Menu">
           <nav class="tabs" aria-label="Sections" style:--at={TABS.indexOf(tab)} use:liquidTabs={{ active: TABS.indexOf(tab), pick: (i) => goTab(TABS[i]) }}>
             <span class="tab-on" aria-hidden="true"></span>
             {#each TABS as t (t)}
@@ -307,7 +307,7 @@
   {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
     <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
     <!-- iPhone : la barre des lieux seule, tout en haut (la météo se lit dans les propositions). -->
-    <div class="widgets" class:full={macHome}>
+    <div class="widgets" data-arrive="down" style="--arrive-delay: 380ms" class:full={macHome}>
       {#if app.wide}<TodayCard />{/if}
       <ZonesCard />
     </div>
@@ -327,7 +327,7 @@
   {:else if macHome}
     {#if !welcome && !app.pickOnMap && !app.search && !saved.draft}
       <!-- Mac : la carte seule ; les réglages du parcours s'ouvrent à gauche, au clic. -->
-      <button use:tactile type="button" class="make" onclick={() => app.openComposer()}><Icon name="path" size={20} />Créer un parcours</button>
+      <button use:tactile type="button" class="make" data-arrive="up" style="--arrive-delay: 640ms" onclick={() => app.openComposer()}><Icon name="path" size={20} />Créer un parcours</button>
     {/if}
   {:else if !welcome}
   <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
