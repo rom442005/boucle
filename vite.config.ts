@@ -25,7 +25,7 @@ export default defineConfig(({ command, isPreview, mode }) => ({
         start_url: '.',
         scope: '.',
         theme_color: '#28312C',
-        background_color: '#28312C',
+        background_color: '#090C0B',
         categories: ['sports', 'health', 'navigation'],
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
@@ -40,6 +40,8 @@ export default defineConfig(({ command, isPreview, mode }) => ({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,mjs,css,html,svg,png,webmanifest}'],
+        // Images de démarrage de l'iPhone : iOS les lit à l'installation, inutile de les garder hors ligne.
+        globIgnores: ['**/splash/**'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
         runtimeCaching: [

@@ -9,6 +9,7 @@
   import MapControls from './components/MapControls.svelte';
   import PlaceField from './components/PlaceField.svelte';
   import SearchOverlay from './components/SearchOverlay.svelte';
+  import AddPlace from './components/AddPlace.svelte';
   import FollowHUD from './components/FollowHUD.svelte';
   import ElevationProfile from './components/ElevationProfile.svelte';
   import Icon from './components/Icon.svelte';
@@ -198,6 +199,7 @@
       (app.phase !== 'follow' &&
         !app.pickOnMap &&
         ((!app.wide && app.phase === 'compose' && !app.home) ||
+          (!app.wide && app.search === 'save') ||
           app.phase === 'library' ||
           app.phase === 'community' ||
           community.sheet?.kind === 'auth')),
@@ -243,7 +245,7 @@
   /** La bulle « Faire une boucle », à côté des onglets : sur la carte d'accueil et les onglets principaux. */
   const showAction = $derived(app.phase === 'compose' || app.phase === 'library' || app.phase === 'community');
   /** iPhone : les onglets du bas, sauf pendant les réglages (plein écran), le suivi ou un choix sur la carte. */
-  const showTabs = $derived(!app.wide && app.phase !== 'follow' && !welcome && !app.pickOnMap && !(app.phase === 'compose' && !app.home));
+  const showTabs = $derived(!app.wide && app.phase !== 'follow' && !welcome && !app.pickOnMap && app.search !== 'save' && !(app.phase === 'compose' && !app.home));
   const backLabel = $derived(
     app.phase === 'detail' ? (app.detailFrom?.kind === 'communaute' ? 'Retour à la Communauté' : 'Retour à mes parcours') : 'Retour aux réglages',
   );
@@ -304,7 +306,7 @@
 
 {#if app.phase !== 'follow'}
   {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
-  {#if !scene && !app.pickOnMap && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
+  {#if !scene && !app.pickOnMap && app.search !== 'save' && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
     <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
     <!-- iPhone : la barre des lieux seule, tout en haut (la météo se lit dans les propositions). -->
     <div class="widgets" data-arrive="down" style="--arrive-delay: 380ms" class:full={macHome}>
@@ -485,7 +487,9 @@
   </div>
 {/if}
 
-{#if app.search}
+{#if app.search === 'save'}
+  <AddPlace />
+{:else if app.search}
   <SearchOverlay />
 {/if}
 {#if saved.draft}<SaveSheet />{/if}

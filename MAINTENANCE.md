@@ -32,6 +32,11 @@ Tout est dans Supabase, accessible depuis Chrome :
 - **Android** (fait, testé sur émulateur) : `LiveTrackPlugin.java` + `LiveTrackService.java` (service au premier plan de type position, notification « Suivi en direct », silencieuse, visible écran verrouillé, chrono qui tourne seul, boutons Pause/Terminer), enregistré dans `MainActivity.java` ; droits `FOREGROUND_SERVICE_LOCATION` et `POST_NOTIFICATIONS` dans le manifeste.
 - **iPhone** (code prêt, à finir dans Xcode, pas encore compilé) : `ios/App/App/LiveTrackPlugin.swift` (Activité en direct + GPS en arrière-plan, `UIBackgroundModes = location`, `NSSupportsLiveActivities`), enregistré par `BoucleViewController.swift` (classe de la vue dans `Main.storyboard`). Reste une fois dans Xcode : File › New › Target › Widget Extension, nom « BoucleLive », cocher « Include Live Activity » ; remplacer le fichier créé par `ios/App/BoucleLive/BoucleLiveWidget.swift` ; cocher la cible BoucleLive pour `App/BoucleLiveAttributes.swift` ; iOS 16.2 au moins pour l'extension.
 
+## Communauté d'aperçu (fictive)
+
+- 24/11/2026 : 10 membres fictifs (Léa, Hugo, Inès, Malik, Chloé, Thomas, Sarah, Julien, Emma, Nicolas), 14 parcours réels autour de Nantes (tracés par le moteur de l'app : course, trail, vélo, gravel), 59 j'aime, 16 commentaires, abonnements ; Romain en suit 4 et 3 le suivent. Comptes sans mot de passe, adresses `@boucle.invalid` : personne ne peut s'y connecter.
+- **Avant d'ouvrir l'app au public, tout effacer** (éditeur SQL) : `delete from auth.users where email like '%@boucle.invalid';` (profils, parcours, j'aime, commentaires et abonnements suivent).
+
 ## Données Santé simulées
 
 - 24/11/2026 : 28 jours (27/10 au 24/11) insérés dans `health_days` pour le compte de Romain (source `ios`, sorties « Strava » du plan marathon), depuis l'éditeur SQL. Les vraies données de Santé les remplacent jour par jour. Pour les effacer : `delete from public.health_days where user_id = (select id from public.profiles where first_name ilike 'romain%' limit 1);`
@@ -127,6 +132,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **24/11/2026** : plus d'écran blanc au lancement (images de démarrage de l'iPhone dans public/splash, exclues du cache hors ligne ; écrans de démarrage natifs sombres) ; « Enregistrer un lieu » refait en blocs (AddPlace) ; communauté d'aperçu insérée dans Supabase (voir « Communauté d'aperçu »).
 - **24/11/2026** : nouvelle ouverture (3,3 à 5 s, `scripts/intro.py` la régénère dans index.html) : une sortie se trace sur un plan de ville, chiffres en compteur, éclat, « Boucle », puis plongée dans la boucle ; la carte se pose d'un zoom (MapView, `boucle:intro-out`) et l'interface arrive élément par élément (`data-arrive`, `html.arrive` dans app.css).
 - **24/11/2026** : fluidité, 2e passe. Mesures (Chromium) : le code de l'app ne prend que 4 à 14 ms par appui, le style et la mise en page 2 ms au plus ; le coût est dans la carte graphique (jusqu'à 26 blocs de verre floutés sur Communauté). Donc : carte rendue à 2× au plus (iPhone 3×) et 8,3 Mpx au plus, dérive de la photo en pause dès qu'on agit (1,5 s), lignes hors écran non dessinées dans Mes parcours.
 - **24/11/2026** : animation d'ouverture (boucle qui se trace, dans index.html, retirée par main.ts quand la carte est prête) ; détail de chaque donnée de Santé (feuille HealthDetail, 7 ou 28 jours) ; fluidité : plus de flou animé en plein écran (photo de fond, propositions), dérive de la photo en pause pendant un défilement ; parcours toujours cadré même avec un panneau haut (marges réduites au lieu de « Map cannot fit »).

@@ -16,7 +16,8 @@ function placeFromPhoton(f: PhotonFeature, kind: Place['kind']): Place {
     .filter(Boolean)
     .filter((x, i, a) => a.indexOf(x) === i && x !== name)
     .join(', ');
-  return { name, detail: detail || undefined, coord: f.geometry.coordinates, kind };
+  const tag = p.osm_key && p.osm_value ? `${p.osm_key}:${p.osm_value}` : undefined;
+  return { name, detail: detail || undefined, coord: f.geometry.coordinates, kind, ...(tag ? { tag } : {}) };
 }
 
 export async function searchPlaces(q: string, near: LngLat | null, signal?: AbortSignal): Promise<Place[]> {

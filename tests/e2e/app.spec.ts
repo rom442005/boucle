@@ -250,6 +250,12 @@ test('onglets au doigt (iPhone) : chaque toucher change d’onglet', async ({ pa
 test('enregistrer un lieu depuis Créer : bouton de la carte, adresse, Mes lieux', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Enregistrer un lieu' }).click();
+  // La fiche « Nouveau lieu », en blocs : la question, ma position, la carte, la liste où le ranger.
+  const add = page.getByRole('dialog', { name: 'Enregistrer un lieu' });
+  await expect(add.getByRole('heading', { name: 'Où est-ce ?' })).toBeVisible();
+  await expect(add.getByRole('button', { name: /Ma position/ })).toBeVisible();
+  await expect(add.getByRole('button', { name: /Sur la carte/ })).toBeVisible();
+  await expect(add.getByRole('radio', { name: /Favoris/ })).toBeVisible();
   await page.getByRole('searchbox').fill('Place Royale Nantes');
   await page.getByRole('button', { name: /Place Royale/ }).first().click();
   const sheet = page.getByRole('dialog', { name: 'Enregistrer le lieu' });

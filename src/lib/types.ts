@@ -11,6 +11,8 @@ export interface Place {
   detail?: string;
   coord: LngLat;
   kind: 'gps' | 'search' | 'map';
+  /** genre du lieu d'après OpenStreetMap (« amenity:school », « leisure:park »…), pour son émoji */
+  tag?: string;
 }
 
 export interface Params {

@@ -582,3 +582,8 @@ On a photo, everything switches to **smoked glass**: the `.on-photo` token set (
 - **Arrival on the map**: a hole opens at the centre of the loop and grows until it swallows the screen (the real map shows through the loop first), the loop pushes past the camera, the stats and title sink away; the map, waiting 1.1 zoom levels higher, lands with a 1.8 s ease-out; then the interface arrives piece by piece (menu and widgets from above, map buttons from the side, tab bar and « Créer un parcours » from below, 300 to 640 ms apart).
 - Only opacity and transform are animated while the app loads (masks and blurs are static), so the film stays smooth on the phone. Reduced motion: a still frame, then a 300 ms fade.
 
+## Update 24/11/2026 (démarrage sans blanc, « Nouveau lieu », communauté d'aperçu)
+
+- **No white flash at launch**: the installed iPhone app now has startup images (public/splash, one per iPhone size) showing the intro's first frame (night background with a soft pink glow); the native apps' launch screens use the same dark background; the manifest background is #090C0B.
+- **« Nouveau lieu »** (AddPlace.svelte, the pin-plus button): on iPhone a full screen of glass blocks on the landscape photo, like Communauté or Profil; on Mac a glass column on the left with the map still clickable. Blocks: a header card « 📍 Nouveau lieu » with the hero question « Où est-ce ? », a hint line and a large pill search field; two tiles « Ma position · 🧭 Ici » and « Sur la carte · 🗺️ Toucher »; « Lieux trouvés » with an emoji per kind of place (🎓 school, 🚉 station, 🌳 park, 🏟️ stadium, 🏋️ gym, 🏠 address…) and the distance; « Ranger dans » with the lists as chips (the chosen one is preselected in the save sheet). The tab bar hides during this flow.
+
