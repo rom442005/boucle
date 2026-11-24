@@ -34,8 +34,14 @@
 	<string>Boucle lit tes pas, ta fréquence cardiaque au repos, ta VO2 max et tes entraînements de course et de vélo pour les afficher sur ton profil. Rien n'est envoyé ni partagé.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Boucle n'écrit rien dans Santé.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Boucle utilise ta position pour créer des parcours autour de toi et te guider pendant le suivi en direct.</string>
+	<string>Boucle utilise ta position pour créer des parcours autour de toi et te guider pendant le suivi en direct, écran verrouillé compris.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

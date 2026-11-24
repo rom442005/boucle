@@ -125,10 +125,12 @@
     prompt = t;
     asked = t;
     askNote = null;
-    ideas = localIdeas(t);
     haptic('tap');
     asking = true;
     try {
+      const mine = await localIdeas(t);
+      if (asked !== t) return;
+      ideas = mine;
       const ai = await community.drawIdeas(t);
       if (asked !== t) return;
       if (ai?.length) ideas = [...ai.map((i) => ({ name: i.name, drawing: { strokes: i.strokes }, ai: true })), ...ideas].slice(0, 6);

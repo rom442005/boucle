@@ -29,7 +29,8 @@ import { reverseRoute } from './routegeo';
 import { elevationStats } from './elevation';
 import { cumulative } from './geo';
 import { findRetraces } from './retrace';
-import { Follower, type FollowState } from './follow';
+import { ascentProfile, followStats, Follower, movingSeconds, type FollowState } from './follow';
+import { live, liveCard } from './live';
 import { slug } from './format';
 import { ELEV_STEP, heights } from './valhalla';
 import { haptic } from './haptics';
@@ -486,21 +487,23 @@ class AppState {
     this.pickPrevDetent = null;
   }
 
-  async placeFromMap(kind: PlaceKind, c: LngLat) {
+  /** Un point posé sur la carte ; name : le lieu mis en valeur où il s'est aimanté (fontaine, piste…). */
+  async placeFromMap(kind: PlaceKind, c: LngLat, name?: string) {
     if (kind === 'save') {
       this.pickOnMap = null;
       this.restoreDetent();
       const r = await reverse(c).catch(() => null);
-      this.setPlace('save', { name: 'Point choisi', coord: c, kind: 'map', detail: r ? (r.detail ? `${r.name}, ${r.detail}` : r.name) : undefined });
+      this.setPlace('save', { name: name ?? 'Point choisi', coord: c, kind: 'map', detail: r ? (r.detail ? `${r.name}, ${r.detail}` : r.name) : undefined });
       return;
     }
-    const place: Place = { name: 'Point choisi', coord: c, kind: 'map' };
+    const place: Place = { name: name ?? 'Point choisi', coord: c, kind: 'map' };
     this.setPlace(kind, place);
     this.pickOnMap = null;
     this.restoreDetent();
     const r = await reverse(c);
     const cur = this.placeOf(kind);
-    if (r && cur && same(cur.coord, c)) this.setPlace(kind, { ...place, name: r.name, detail: r.detail });
+    // Aimanté à un lieu : son nom reste, l'adresse vient dessous.
+    if (r && cur && same(cur.coord, c)) this.setPlace(kind, name ? { ...place, detail: r.detail ? `${r.name}, ${r.detail}` : r.name } : { ...place, name: r.name, detail: r.detail });
   }
 
   /* ------------------------------ Génération ------------------------------ */
@@ -1006,26 +1009,49 @@ class AppState {
     this.beforeFollow = this.phase === 'detail' ? 'detail' : 'results';
     this.scrub = null;
     this.follower?.stop();
+    const bike = SPORTS[r.sport].bike;
+    const cum = ascentProfile(r);
+    const title = `${SPORTS[r.sport].label} · ${r.name}`;
+    const card = (s: FollowState) => liveCard(followStats(r, s, cum, bike), title, s.startedAt, s.pausedMs);
     this.follower = new Follower(r, (s) => {
       this.follow = s;
       if (s.position) this.userPos = s.position;
+      void live.update(card(s));
     });
     this.follow = this.follower.state;
     this.followCamera = true;
     this.phase = 'follow';
     this.follower.start();
+    // Écran verrouillé (app du téléphone) : ses boutons Pause, Reprendre et Terminer pilotent le suivi.
+    const f = this.follower;
+    void live.start(
+      card(f.state),
+      (a) => (a === 'pause' ? this.pauseFollow() : a === 'resume' ? this.resumeFollow() : this.stopFollow()),
+      // Positions lues par l'app native, qui continuent écran verrouillé.
+      (p) => this.follower === f && f.update([p.lon, p.lat], p.accuracy ?? null, p.heading ?? null, p.speed ?? null, p.time),
+    );
+  }
+
+  /** Pause : le chrono s'arrête, le GPS reste suivi. */
+  pauseFollow() {
+    this.follower?.pause();
+  }
+
+  resumeFollow() {
+    this.follower?.resume();
   }
 
   stopFollow() {
     const r = this.route;
     const f = this.follow;
     if (r && f && f.progress >= 300) {
-      const e = this.addHistory(r, { date: f.startedAt, durationS: Math.round((Date.now() - f.startedAt) / 1000), distanceM: f.progress, source: 'follow' });
+      const e = this.addHistory(r, { date: f.startedAt, durationS: Math.round(movingSeconds(f)), distanceM: f.progress, source: 'follow' });
       if (e) this.showToast(`Sortie ajoutée à l’historique : ${(e.distanceM / 1000).toFixed(1).replace('.', ',')} km`);
     }
     this.follower?.stop();
     this.follower = null;
     this.follow = null;
+    void live.end();
     this.phase = this.beforeFollow;
   }
 }

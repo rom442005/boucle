@@ -36,6 +36,7 @@ import download from '@phosphor-icons/core/assets/regular/download-simple.svg?ra
 import link from '@phosphor-icons/core/assets/regular/link-simple.svg?raw';
 import play from '@phosphor-icons/core/assets/fill/play-fill.svg?raw';
 import stop from '@phosphor-icons/core/assets/fill/stop-fill.svg?raw';
+import pause from '@phosphor-icons/core/assets/fill/pause-fill.svg?raw';
 import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
 import pencil from '@phosphor-icons/core/assets/regular/pencil-simple.svg?raw';
 import check from '@phosphor-icons/core/assets/bold/check-bold.svg?raw';
@@ -133,7 +134,7 @@ export const ICONS = {
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
   heart, chat, users, user, signout, report, send, prohibit, lock, key, eye, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
-  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp, pinPlus,
+  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp, pinPlus, pause,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {

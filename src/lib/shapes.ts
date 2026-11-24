@@ -231,6 +231,173 @@ export function lettering(text: string): Stroke[] | null {
   return fit(out, 0.08);
 }
 
+
+/* ------------------------------ Silhouettes (Phosphor) ------------------------------ */
+
+/*
+ * Les silhouettes des icônes Phosphor (licence MIT), tirées par scripts/silhouettes.mjs : animaux, véhicules,
+ * objets, nourriture… « vache » donne une vache, et non le mot écrit. Chargées à la demande (silhouettes.json).
+ */
+const SILHOUETTES: [icon: string, name: string, words: string[]][] = [
+  ['cow', 'Vache', ['vache', 'veau', 'taureau', 'boeuf', 'cow', 'meuh', 'bovin', 'vachette']],
+  ['horse', 'Cheval', ['cheval', 'chevaux', 'poney', 'jument', 'etalon', 'horse', 'equitation', 'cavalier']],
+  ['dog', 'Chien', ['chien', 'chienne', 'chiot', 'toutou', 'dog', 'puppy', 'wouf']],
+  ['cat', 'Chat', ['chat', 'chatte', 'chaton', 'minou', 'cat', 'miaou']],
+  ['bird', 'Oiseau', ['oiseau', 'bird', 'mouette', 'hirondelle', 'pigeon', 'moineau', 'merle', 'mesange']],
+  ['fish', 'Poisson', ['poisson', 'fish', 'poisson d avril', 'truite', 'saumon']],
+  ['fish-simple', 'Poisson', ['poisson', 'fish']],
+  ['butterfly', 'Papillon', ['papillon', 'butterfly']],
+  ['rabbit', 'Lapin', ['lapin', 'lievre', 'rabbit', 'paques', 'bunny']],
+  ['shrimp', 'Crevette', ['crevette', 'shrimp', 'gambas']],
+  ['bug-beetle', 'Scarabée', ['scarabee', 'insecte', 'coccinelle', 'beetle']],
+  ['bug', 'Insecte', ['insecte', 'bug', 'punaise', 'fourmi']],
+  ['paw-print', 'Patte', ['patte', 'empreinte', 'paw', 'animal']],
+  ['piggy-bank', 'Cochon', ['cochon', 'porc', 'cochonnet', 'tirelire', 'pig', 'truie']],
+  ['alien', 'Extraterrestre', ['extraterrestre', 'alien', 'martien', 'ovni']],
+  ['ghost', 'Fantôme', ['fantome', 'ghost', 'halloween', 'spectre']],
+  ['skull', 'Tête de mort', ['crane', 'tete de mort', 'skull', 'pirate']],
+  ['rocket', 'Fusée', ['fusee', 'rocket', 'espace', 'spatial', 'decollage']],
+  ['airplane', 'Avion', ['avion', 'plane', 'aeroport', 'airplane', 'vol']],
+  ['airplane-tilt', 'Avion', ['avion', 'plane', 'voyage']],
+  ['car-profile', 'Voiture', ['voiture', 'auto', 'car', 'automobile', 'bagnole']],
+  ['boat', 'Bateau', ['bateau', 'boat', 'navire', 'paquebot', 'peniche']],
+  ['sailboat', 'Voilier', ['voilier', 'voile', 'sailboat', 'bateau', 'regate']],
+  ['anchor', 'Ancre', ['ancre', 'marin', 'anchor', 'port', 'marine']],
+  ['bicycle', 'Vélo', ['velo', 'bike', 'bicyclette', 'cyclisme']],
+  ['motorcycle', 'Moto', ['moto', 'motocyclette', 'motorbike', 'motard']],
+  ['scooter', 'Trottinette', ['trottinette', 'trotinette']],
+  ['tractor', 'Tracteur', ['tracteur', 'tractor', 'ferme', 'agriculteur']],
+  ['train', 'Train', ['train', 'tgv', 'locomotive', 'metro', 'tram', 'tramway']],
+  ['bus', 'Bus', ['bus', 'autobus', 'autocar']],
+  ['truck', 'Camion', ['camion', 'truck', 'poids lourd', 'livraison']],
+  ['van', 'Van', ['van', 'camionnette', 'combi', 'fourgon']],
+  ['tree', 'Arbre', ['arbre', 'tree', 'chene', 'foret', 'bois']],
+  ['tree-palm', 'Palmier', ['palmier', 'palm', 'plage', 'tropiques', 'vacances']],
+  ['tree-evergreen', 'Sapin', ['sapin', 'noel', 'pin', 'conifere']],
+  ['flower-tulip', 'Tulipe', ['tulipe', 'fleur', 'tulip', 'bouquet']],
+  ['flower-lotus', 'Lotus', ['lotus', 'nenuphar', 'yoga', 'zen']],
+  ['cactus', 'Cactus', ['cactus', 'desert', 'mexique']],
+  ['plant', 'Pousse', ['plante', 'pousse', 'plant', 'jardin', 'graine']],
+  ['acorn', 'Gland', ['gland', 'ecureuil', 'acorn']],
+  ['leaf', 'Feuille', ['feuille', 'leaf', 'automne', 'nature']],
+  ['carrot', 'Carotte', ['carotte', 'carrot', 'legume', 'potager']],
+  ['avocado', 'Avocat', ['avocat', 'avocado', 'guacamole']],
+  ['pepper', 'Piment', ['piment', 'poivron', 'pepper', 'chili']],
+  ['orange', 'Orange', ['orange', 'mandarine', 'clementine', 'agrume', 'fruit']],
+  ['cherries', 'Cerises', ['cerise', 'cherry', 'fruit']],
+  ['pizza', 'Pizza', ['pizza', 'italie']],
+  ['ice-cream', 'Glace', ['glace', 'cornet', 'ice cream', 'creme glacee', 'sorbet']],
+  ['popsicle', 'Esquimau', ['esquimau', 'glace a l eau', 'popsicle']],
+  ['coffee', 'Café', ['cafe', 'tasse', 'coffee', 'the', 'expresso']],
+  ['beer-stein', 'Bière', ['biere', 'beer', 'chope', 'pinte']],
+  ['wine', 'Verre de vin', ['vin', 'verre', 'wine', 'apero']],
+  ['cake', 'Gâteau', ['gateau', 'anniversaire', 'cake', 'bougie']],
+  ['cookie', 'Cookie', ['cookie', 'biscuit', 'gouter']],
+  ['bread', 'Pain', ['pain', 'tartine', 'bread', 'boulangerie', 'toast']],
+  ['hamburger', 'Burger', ['burger', 'hamburger', 'cheeseburger']],
+  ['egg', 'Œuf', ['oeuf', 'egg']],
+  ['cheese', 'Fromage', ['fromage', 'cheese', 'gruyere', 'emmental']],
+  ['guitar', 'Guitare', ['guitare', 'guitar', 'rock', 'concert']],
+  ['music-notes', 'Notes de musique', ['note', 'musique', 'music', 'melodie', 'chanson']],
+  ['headphones', 'Casque audio', ['casque', 'ecouteurs', 'headphones', 'musique']],
+  ['crown', 'Couronne', ['couronne', 'crown', 'roi', 'reine', 'king', 'queen', 'princesse', 'prince']],
+  ['key', 'Clé', ['cle', 'clef', 'key', 'serrure']],
+  ['bell', 'Cloche', ['cloche', 'bell', 'sonnette', 'clocher']],
+  ['umbrella', 'Parapluie', ['parapluie', 'umbrella', 'pluie', 'ombrelle']],
+  ['snowflake', 'Flocon', ['flocon', 'neige', 'snowflake', 'hiver', 'ski']],
+  ['lighthouse', 'Phare', ['phare', 'lighthouse', 'bretagne']],
+  ['castle-turret', 'Château', ['chateau', 'castle', 'forteresse', 'donjon', 'chateau fort']],
+  ['tent', 'Tente', ['tente', 'camping', 'tent', 'bivouac']],
+  ['tipi', 'Tipi', ['tipi', 'teepee']],
+  ['windmill', 'Moulin', ['moulin', 'eolienne', 'windmill']],
+  ['house', 'Maison', ['maison', 'house', 'home', 'cabane', 'chez moi']],
+  ['barn', 'Grange', ['grange', 'ferme', 'barn', 'etable']],
+  ['trophy', 'Trophée', ['trophee', 'coupe', 'victoire', 'champion', 'trophy', 'gagner']],
+  ['medal', 'Médaille', ['medaille', 'medal', 'podium', 'finisher']],
+  ['boot', 'Botte', ['botte', 'boot', 'bottine']],
+  ['t-shirt', 'T-shirt', ['tshirt', 't shirt', 'tee shirt', 'maillot']],
+  ['dress', 'Robe', ['robe', 'dress', 'mariage']],
+  ['sunglasses', 'Lunettes de soleil', ['lunettes', 'sunglasses', 'lunettes de soleil']],
+  ['game-controller', 'Manette', ['manette', 'jeu video', 'console', 'gaming', 'jeux video']],
+  ['basketball', 'Ballon de basket', ['basketball', 'basket ball', 'ballon de basket', 'nba']],
+  ['tennis-ball', 'Balle de tennis', ['tennis', 'balle de tennis', 'roland garros']],
+  ['volleyball', 'Ballon de volley', ['volley', 'volleyball', 'beach volley']],
+  ['barbell', 'Haltères', ['haltere', 'musculation', 'muscu', 'barbell', 'crossfit', 'salle de sport']],
+  ['bone', 'Os', ['os', 'bone']],
+  ['tooth', 'Dent', ['dent', 'tooth', 'dentiste']],
+  ['brain', 'Cerveau', ['cerveau', 'brain', 'intelligence']],
+  ['hand', 'Main', ['main', 'hand', 'coucou', 'salut']],
+  ['hand-peace', 'Main en V', ['peace and love', 'v de la victoire', 'signe v']],
+  ['thumbs-up', 'Pouce levé', ['pouce', 'like', 'top', 'thumbs up', 'bravo']],
+  ['puzzle-piece', 'Pièce de puzzle', ['puzzle', 'piece de puzzle']],
+  ['lightbulb', 'Ampoule', ['ampoule', 'idee', 'lampe', 'lumiere']],
+  ['magnet', 'Aimant', ['aimant', 'magnet']],
+  ['scissors', 'Ciseaux', ['ciseaux', 'scissors', 'coiffeur']],
+  ['paper-plane', 'Avion en papier', ['avion en papier', 'paper plane', 'message']],
+  ['planet', 'Planète', ['planete', 'saturne', 'planet', 'univers']],
+  ['moon-stars', 'Lune et étoiles', ['nuit', 'lune', 'etoiles', 'reve']],
+  ['cloud-lightning', 'Orage', ['orage', 'storm', 'tempete']],
+  ['rainbow', 'Arc-en-ciel', ['arc en ciel', 'rainbow']],
+  ['flame', 'Flamme', ['flamme', 'feu', 'fire', 'flame']],
+  ['campfire', 'Feu de camp', ['feu de camp', 'campfire', 'bivouac', 'feu']],
+  ['hourglass', 'Sablier', ['sablier', 'hourglass']],
+  ['watch', 'Montre', ['montre', 'watch', 'chrono', 'chronometre']],
+  ['compass-rose', 'Rose des vents', ['boussole', 'rose des vents', 'compass', 'orientation']],
+  ['shield', 'Bouclier', ['bouclier', 'shield', 'blason']],
+  ['sword', 'Épée', ['epee', 'sword', 'chevalier', 'escrime']],
+  ['axe', 'Hache', ['hache', 'axe', 'bucheron']],
+  ['spade', 'Pique', ['pique', 'cartes', 'poker']],
+  ['club', 'Trèfle', ['trefle', 'chance', 'cartes']],
+  ['person-simple-run', 'Coureur', ['coureur', 'coureuse', 'runner', 'courir', 'running', 'jogging', 'marathon']],
+  ['footprints', 'Empreintes de pas', ['empreintes', 'empreintes de pas', 'pieds', 'footprints']],
+  ['balloon', 'Ballon', ['baudruche', 'ballon de baudruche', 'balloon', 'fete']],
+  ['gift', 'Cadeau', ['cadeau', 'gift', 'paquet', 'present', 'surprise']],
+  ['heartbeat', 'Cœur qui bat', ['cardio', 'pouls', 'battement', 'heartbeat', 'frequence cardiaque']],
+  ['flag', 'Drapeau', ['drapeau', 'flag', 'fanion', 'arrivee']],
+  ['drop', 'Goutte', ['goutte', 'drop', 'eau']],
+  ['sun', 'Soleil', ['soleil', 'sun', 'ete']],
+  ['moon', 'Lune', ['lune', 'croissant', 'moon']],
+  ['cloud', 'Nuage', ['nuage', 'cloud']],
+  ['lightning', 'Éclair', ['eclair', 'foudre', 'lightning', 'flash']],
+  ['star', 'Étoile', ['etoile', 'star']],
+  ['heart', 'Cœur', ['coeur', 'heart', 'amour', 'love']],
+  ['diamond', 'Losange', ['losange', 'diamant']],
+  ['mountains', 'Montagnes', ['montagne', 'mountain', 'sommet', 'alpes']],
+];
+
+let silLoad: Promise<Record<string, Stroke[]>> | null = null;
+const silhouettes = () => (silLoad ??= import('./silhouettes.json').then((m) => m.default as unknown as Record<string, Stroke[]>));
+
+/** Une faute de frappe (une lettre de plus, de moins ou changée) dans un mot d'au moins 5 lettres. */
+function near(a: string, b: string): boolean {
+  if (a.length < 5 || b.length < 5 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else {
+      i++;
+      j++;
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** Le mot (ou l'expression) est-il dans la phrase ? Pluriels et petites fautes compris. */
+function says(t: string, words: string[], w: string, fuzzy: boolean): boolean {
+  if (w.includes(' ')) return ` ${t} `.includes(` ${w} `);
+  if (words.includes(w) || words.includes(w + 's') || words.includes(w + 'x')) return true;
+  return fuzzy && words.some((x) => near(x, w));
+}
+
 /* ------------------------------------ Idées ------------------------------------ */
 
 export const normalize = (s: string) =>
@@ -244,15 +411,33 @@ export const normalize = (s: string) =>
 
 const STOP = new Set(['un', 'une', 'le', 'la', 'les', 'des', 'du', 'de', 'd', 'l', 'mon', 'ma', 'en', 'forme', 'dessin', 'dessine', 'dessiner', 'fais', 'moi', 'je', 'veux', 'voudrais', 'a', 'the', 'an']);
 
-/** Idées de dessins pour une phrase : formes de la bibliothèque, puis le nombre ou le mot écrit au trait. */
-export function localIdeas(text: string): Idea[] {
+/**
+ * Idées de dessins pour une phrase : d'abord les silhouettes (« vache » donne une vache), puis les formes de la
+ * bibliothèque, puis le nombre ou le mot écrit au trait, seulement si rien d'autre ne correspond.
+ */
+export async function localIdeas(text: string): Promise<Idea[]> {
   const t = normalize(text);
   if (!t) return [];
   const words = t.split(' ').filter((w) => w && !STOP.has(w));
   const ideas: Idea[] = [];
-  for (const e of LIBRARY) {
-    if (!e.words.some((w) => (w.includes(' ') ? t.includes(w) : words.includes(w) || words.includes(w + 's')))) continue;
-    for (const i of e.ideas()) ideas.push({ name: i.name, drawing: { strokes: fit(i.strokes) } });
+  const seen = new Set<string>();
+  const add = (name: string, strokes: Stroke[]) => {
+    if (seen.has(name) && ideas.length >= 2) return;
+    seen.add(name);
+    ideas.push({ name, drawing: { strokes: fit(strokes) } });
+  };
+  // Mot exact d'abord ; à défaut, une petite faute de frappe.
+  for (const fuzzy of [false, true]) {
+    if (ideas.length) break;
+    const sil = SILHOUETTES.filter(([, , ws]) => ws.some((w) => says(t, words, w, fuzzy)));
+    if (sil.length) {
+      const all = await silhouettes();
+      for (const [icon, name] of sil) if (all[icon]) add(name, all[icon]);
+    }
+    for (const e of LIBRARY) {
+      if (!e.words.some((w) => says(t, words, w, fuzzy))) continue;
+      for (const i of e.ideas()) add(i.name, i.strokes);
+    }
   }
   // Un nombre (une année, une distance), sinon un mot court : écrit au trait.
   const num = t.match(/\d[\d ]{0,9}/)?.[0].replace(/ /g, '');
@@ -272,4 +457,4 @@ export function localIdeas(text: string): Idea[] {
 }
 
 /** Pour montrer des exemples quand on ouvre la discussion. */
-export const EXAMPLES = ['un diamant', '2027', 'un éclair', 'un chat'];
+export const EXAMPLES = ['une vache', 'une fusée', '2027', 'un cœur'];

@@ -25,6 +25,12 @@
 
         </activity>
 
+        <!-- Suivi en direct : notification sur l'écran verrouillé, GPS gardé actif écran éteint. -->
+        <service
+            android:name=".LiveTrackService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -42,6 +48,10 @@
     <!-- Position : créer des parcours autour de soi et les suivre en direct. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Suivi en direct sur l'écran verrouillé (service au premier plan de type position, notification). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Health Connect : lecture seule de ce que le profil affiche ; tout le reste déclaré par le module est retiré. -->
     <uses-permission android:name="android.permission.health.READ_BASAL_BODY_TEMPERATURE" tools:node="remove" />

@@ -100,12 +100,14 @@
   // Aperçu au survol (souris) : le point se prépare sous le curseur avant le clic.
   const hoverable = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const aimKind = $derived(hoverable && ready ? placing : null);
-  let aim = $state<{ x: number; y: number; ll: LngLat } | null>(null);
+  /** snap : nom du lieu mis en valeur où le point s'aimante (fontaine, piste, lieu enregistré…) */
+  let aim = $state<{ x: number; y: number; ll: LngLat; snap?: string } | null>(null);
   /** Juste après un clic : aperçu masqué jusqu'au prochain mouvement. */
   let aimHold: { x: number; y: number } | null = null;
   let dragging = false;
   const aimLabel = $derived.by(() => {
     if (!aim || !aimKind) return '';
+    if (aim.snap) return `${aimKind === 'start' ? 'Départ' : aimKind === 'via' ? 'Passer par' : aimKind === 'save' ? 'Enregistrer' : 'Arrivée'} : ${aim.snap}`;
     if (aimKind === 'start') return 'Départ ici';
     if (aimKind === 'via') return 'Passer par ici';
     if (aimKind === 'save') return 'Enregistrer ce lieu';
@@ -954,6 +956,52 @@
     return !!t;
   }
 
+  /**
+   * Magnétisme : en plaçant un point (départ, passage, arrivée, lieu à enregistrer), un lieu mis en valeur à
+   * moins de 34 px (fontaine, toilettes, piste, parc, lieu enregistré) attire le point sur lui, avec son nom.
+   */
+  const SNAP_PX = 34;
+  function snapAt(pt: { x: number; y: number }): { ll: LngLat; x: number; y: number; name: string } | null {
+    const m = map;
+    if (!m) return null;
+    const layers = ['saved-pins', 'zone-focus-pin', 'zone-track-pin', 'zone-pins', 'zone-track-hit'].filter((id) => m.getLayer(id));
+    if (!layers.length) return null;
+    const hits = m.queryRenderedFeatures(
+      [
+        [pt.x - SNAP_PX, pt.y - SNAP_PX],
+        [pt.x + SNAP_PX, pt.y + SNAP_PX],
+      ],
+      { layers },
+    );
+    let best: { ll: LngLat; x: number; y: number; name: string } | null = null;
+    let bd = Infinity;
+    for (const f of hits) {
+      const props = f.properties ?? {};
+      let c: { ll: LngLat; name: string } | null = null;
+      if (f.layer.id === 'saved-pins') {
+        const p = saved.places.find((x) => x.id === String(props.id));
+        if (p) c = { ll: p.coord, name: p.name };
+      } else if (f.layer.id === 'zone-focus-pin') {
+        if (focused) c = { ll: focused.coord, name: focused.name ?? ZONES[focused.kind].one };
+      } else if (f.layer.id === 'zone-pins') {
+        const p = pinPlaces.get(String(props.key));
+        if (p) c = { ll: p.coord, name: p.name ?? ZONES[p.kind].one };
+      } else {
+        const t = trackOf(Number(props.id));
+        if (t) c = { ll: t.c, name: t.name ?? ZONES.track.one };
+      }
+      if (!c) continue;
+      const q = m.project(c.ll);
+      // Une piste se vise sur toute sa surface : le point va en son centre.
+      const d = f.layer.id === 'zone-track-hit' ? SNAP_PX - 1 : Math.hypot(q.x - pt.x, q.y - pt.y);
+      if (d <= SNAP_PX && d < bd) {
+        bd = d;
+        best = { ...c, x: q.x, y: q.y };
+      }
+    }
+    return best;
+  }
+
   /** Halo qui bat sous le lieu mis au point ou montré (une onde toutes les 1,6 s), et sa pastille en grand. */
   let pulse = 0;
   function setFocusPoint(c: LngLat | null, kind?: ZoneKind) {
@@ -1733,10 +1781,11 @@
       if (app.phase === 'follow') app.followCamera = false;
     });
     let longPressAt = 0;
-    const place = (kind: PlaceKind, c: LngLat, pt: { x: number; y: number }) => {
+    const place = (kind: PlaceKind, c: LngLat, pt: { x: number; y: number }, name?: string) => {
       haptic('tap');
-      void app.placeFromMap(kind, c);
-      if (kind !== 'save') app.showToast(kind === 'start' ? 'Départ placé ici' : kind === 'via' ? 'Point de passage placé ici' : 'Arrivée placée ici');
+      void app.placeFromMap(kind, c, name);
+      const what = kind === 'start' ? 'Départ placé' : kind === 'via' ? 'Point de passage placé' : 'Arrivée placée';
+      if (kind !== 'save') app.showToast(name ? `${what} : ${name}` : `${what} ici`);
       landed(kind, pt);
     };
     // Un clic place un point : « Choisir sur la carte », recherche ouverte sur Mac (la carte reste visible),
@@ -1752,7 +1801,10 @@
         return;
       }
       if (app.search) app.search = null;
-      place(kind, [e.lngLat.lng, e.lngLat.lat], e.point);
+      // Près d'un lieu mis en valeur (fontaine, piste, lieu enregistré…), le point s'y aimante.
+      const s = snapAt(e.point);
+      if (s) place(kind, s.ll, { x: s.x, y: s.y }, s.name);
+      else place(kind, [e.lngLat.lng, e.lngLat.lat], e.point);
     });
     map.on('mousemove', (e) => {
       if (!aimKind || dragging || (e.originalEvent.target as HTMLElement | null)?.closest?.('.maplibregl-marker')) {
@@ -1763,7 +1815,8 @@
         if (Math.hypot(e.point.x - aimHold.x, e.point.y - aimHold.y) < 8) return;
         aimHold = null;
       }
-      aim = { x: e.point.x, y: e.point.y, ll: [e.lngLat.lng, e.lngLat.lat] };
+      const s = snapAt(e.point);
+      aim = s ? { x: s.x, y: s.y, ll: s.ll, snap: s.name } : { x: e.point.x, y: e.point.y, ll: [e.lngLat.lng, e.lngLat.lat] };
     });
     map.on('mouseout', () => (aim = null));
     map.on('dragstart', () => {
@@ -1777,6 +1830,12 @@
     // Zoom à la molette : le point visé change sous le curseur immobile.
     map.on('move', () => {
       if (!aim || !map) return;
+      // Aimanté : le point reste sur le lieu ; sinon, le lieu visé change sous le curseur.
+      if (aim.snap) {
+        const p = map.project(aim.ll);
+        aim = { ...aim, x: p.x, y: p.y };
+        return;
+      }
       const ll = map.unproject([aim.x, aim.y]);
       aim = { ...aim, ll: [ll.lng, ll.lat] };
     });
@@ -2410,7 +2469,8 @@
       map.easeTo({
         center: f.position,
         zoom: Math.max(untrack(() => map!.getZoom()), 15.5),
-        padding: { top: 200, bottom: 120, left: 24, right: 24 },
+        // Le panneau du suivi occupe le bas de l'écran ; la bulle d'alerte, le haut.
+        padding: { top: 90, bottom: app.wide ? 320 : 350, left: 24, right: 24 },
         duration: reduce ? 0 : 700,
       });
     }
@@ -2472,7 +2532,7 @@
 
 {#if aimKind && aim}
   <!-- Aperçu sous le curseur : le marqueur flotte au-dessus du point, prêt à s'y poser au clic. -->
-  <div class="aim" style:transform="translate({aim.x}px, {aim.y}px)" aria-hidden="true">
+  <div class="aim" class:snapped={!!aim.snap} style:transform="translate({aim.x}px, {aim.y}px)" aria-hidden="true">
     <span class="aim-pulse"></span>
     <span class="aim-shadow"></span>
     <span class="aim-pin" class:start={aimKind === 'start'} class:via={aimKind === 'via'}><span></span></span>
@@ -2901,6 +2961,13 @@
   }
   .aim {
     will-change: transform;
+  }
+  /* Aimanté à un lieu : le point y glisse d'un ressort et son halo s'élargit. */
+  .aim.snapped {
+    transition: transform 220ms var(--spring);
+  }
+  .aim.snapped .aim-pulse {
+    scale: 1.5;
   }
   .aim > span,
   .ripple > span {

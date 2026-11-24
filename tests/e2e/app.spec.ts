@@ -329,8 +329,15 @@ test('suivre le parcours en direct', async ({ page }) => {
   await open(page);
   await createLoop(page);
   await page.getByRole('button', { name: /Suivre ce parcours/ }).click();
-  await expect(page.getByText('restants')).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible();
+  const hud = page.getByRole('region', { name: 'Suivi en direct' });
+  await expect(hud).toBeVisible({ timeout: 20_000 });
+  // Distance, chrono, allure, moyenne, restant, D+, arrivée.
+  for (const k of ['Distance', 'Durée', 'Allure', 'Moyenne', 'Restant', 'D+', 'Arrivée']) await expect(hud.getByText(k, { exact: true })).toBeVisible();
+  // Pause : le chrono s'arrête ; Reprendre le relance.
+  await hud.getByRole('button', { name: 'Pause' }).click();
+  await expect(hud.getByText('En pause')).toBeVisible();
+  await hud.getByRole('button', { name: 'Reprendre' }).click();
+  await expect(hud.getByText('Durée', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Terminer' }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible();
 });
@@ -346,7 +353,7 @@ test('une sortie suivie en direct rejoint l’historique', async ({ page, contex
   const pts = [...gpx.matchAll(/<trkpt lat="([\d.-]+)" lon="([\d.-]+)"/g)].map((m) => ({ latitude: +m[1], longitude: +m[2] }));
   expect(pts.length).toBeGreaterThan(20);
   await page.getByRole('button', { name: /Suivre ce parcours/ }).click();
-  await expect(page.getByText('restants')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('region', { name: 'Suivi en direct' })).toBeVisible({ timeout: 20_000 });
   // On avance pas à pas jusqu'au quart du parcours (environ 2,5 km).
   const quarter = Math.floor(pts.length / 4);
   for (let i = 0; i <= quarter; i += Math.max(1, Math.floor(quarter / 12))) {
@@ -354,7 +361,7 @@ test('une sortie suivie en direct rejoint l’historique', async ({ page, contex
     await page.waitForTimeout(250);
   }
   await context.setGeolocation(pts[quarter]);
-  await expect(page.getByText(/faits/)).toContainText(/[1-9],\d\s?km/, { timeout: 15_000 });
+  await expect(page.getByRole('region', { name: 'Suivi en direct' }).locator('.roll .visually-hidden').first()).toHaveText(/^[1-9],\d$/, { timeout: 15_000 });
   await page.getByRole('button', { name: 'Terminer' }).click();
   await expect(page.getByText(/Sortie ajoutée à l’historique/)).toBeVisible();
 });

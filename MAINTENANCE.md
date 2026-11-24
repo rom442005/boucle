@@ -26,6 +26,16 @@ Tout est dans Supabase, accessible depuis Chrome :
 - **Les mots de passe ne se lisent nulle part**, ni par Romain ni par Claude : Supabase n'en garde qu'une empreinte (bcrypt). C'est voulu : une fuite de la base ne livrerait aucun mot de passe.
 - Le schéma `admin` n'est pas publié par l'API : l'app et les visiteurs n'y ont pas accès (vérifié : « Invalid schema: admin »).
 
+## Écran verrouillé pendant le suivi (app du téléphone)
+
+- **Côté page** : `src/lib/live.ts` envoie les chiffres de la sortie (au plus toutes les 5 s, tout de suite à la pause) au module natif `BoucleLive`, et reçoit ses boutons (pause, reprise, fin) et ses positions GPS (qui continuent écran éteint). Sur le site, rien.
+- **Android** (fait, testé sur émulateur) : `LiveTrackPlugin.java` + `LiveTrackService.java` (service au premier plan de type position, notification « Suivi en direct », silencieuse, visible écran verrouillé, chrono qui tourne seul, boutons Pause/Terminer), enregistré dans `MainActivity.java` ; droits `FOREGROUND_SERVICE_LOCATION` et `POST_NOTIFICATIONS` dans le manifeste.
+- **iPhone** (code prêt, à finir dans Xcode, pas encore compilé) : `ios/App/App/LiveTrackPlugin.swift` (Activité en direct + GPS en arrière-plan, `UIBackgroundModes = location`, `NSSupportsLiveActivities`), enregistré par `BoucleViewController.swift` (classe de la vue dans `Main.storyboard`). Reste une fois dans Xcode : File › New › Target › Widget Extension, nom « BoucleLive », cocher « Include Live Activity » ; remplacer le fichier créé par `ios/App/BoucleLive/BoucleLiveWidget.swift` ; cocher la cible BoucleLive pour `App/BoucleLiveAttributes.swift` ; iOS 16.2 au moins pour l'extension.
+
+## Données Santé simulées
+
+- 24/11/2026 : 28 jours (27/10 au 24/11) insérés dans `health_days` pour le compte de Romain (source `ios`, sorties « Strava » du plan marathon), depuis l'éditeur SQL. Les vraies données de Santé les remplacent jour par jour. Pour les effacer : `delete from public.health_days where user_id = (select id from public.profiles where first_name ilike 'romain%' limit 1);`
+
 ## Connexion par Santé (app du téléphone)
 
 - Dans l'app iPhone ou Android, « Continuer avec Apple Santé / Health Connect » demande l'accord de Santé, puis ouvre un **compte anonyme de Supabase** (`signInAnonymously`) : pas d'e-mail ni de mot de passe, la session reste sur le téléphone. Le profil (prénom, année, sport) reste demandé.
@@ -117,6 +127,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **24/11/2026** : suivi en direct refait (panneau du bas : distance, chrono, allure ou vitesse, moyenne, restant, D+, heure d'arrivée, Pause) ; écran verrouillé dans l'app du téléphone (Android : notification permanente testée sur émulateur ; iPhone : Activité en direct à finir dans Xcode) ; magnétisme des points posés vers les lieux mis en valeur ; idées de dessins en silhouettes (124 formes) ; données Santé simulées (28 jours) sur le compte de Romain.
 - **23/11/2026** : fiche « Enregistrer le lieu » réduite au nom et aux listes (l'émoji d'une liste se change par sa pastille crayon, les lieux prennent l'émoji de leur liste) ; Mes lieux s'effacent de la carte vue de loin ; voile du haut de la carte allégé ; dans l'app du téléphone, connexion par l'accord d'Apple Santé ou de Health Connect (compte du téléphone, sans e-mail ni mot de passe, compte anonyme de Supabase : réglage « Allow anonymous sign-ins » à activer).
 - **23/11/2026** : Mac : réglages fermés par défaut, ouverts par « Créer un parcours » en bas de la carte ; menu sans logo ni bouton iPhone, avec « Enregistrer un lieu ».
 - **23/11/2026** : bande vide en bas de l'app installée sur iPhone (iOS 26, bug WebKit 301108) corrigée par une page aussi haute que l'écran en mode app ; bouton « Enregistrer un lieu » dans la barre d'onglets, 3D sous la flèche, haut des écrans un peu plus bas.
