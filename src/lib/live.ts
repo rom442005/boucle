@@ -1,5 +1,5 @@
 import { registerPlugin } from '@capacitor/core';
-import { isNativeApp } from './platform';
+import { isAndroid, isIOS, isNativeApp } from './platform';
 import { chrono, clock, paceValue, speedValue, type FollowStats } from './follow';
 import { kmValue, NNBSP } from './format';
 
@@ -8,7 +8,9 @@ import { kmValue, NNBSP } from './format';
  * Android : une notification permanente (service au premier plan, qui garde aussi le GPS actif), avec le chrono
  * qui tourne, la distance, l'allure, le restant, une barre de progression et les boutons Pause et Terminer.
  * iPhone : une Activité en direct (écran verrouillé et Dynamic Island), voir ios/App/BoucleLive.
- * Sur le site, rien : un navigateur ne peut rien afficher sur l'écran verrouillé.
+ * App installée depuis Safari (ou Chrome sur Android) : iOS endort une page web écran éteint, le suivi s'y
+ * arrête et rien ne peut s'y mettre à jour. Au moment où l'écran s'éteint, une notification (une seule,
+ * remplacée à chaque fois) montre la sortie sur l'écran verrouillé ; elle s'efface au retour dans l'app.
  */
 
 export interface LiveCard {
@@ -68,11 +70,55 @@ export function liveCard(s: FollowStats, title: string, startedAt: number, pause
   };
 }
 
+/* ------------------------- App web : notification sur l'écran verrouillé ------------------------- */
+
+const webLock = !isNativeApp && (isIOS || isAndroid) && typeof Notification !== 'undefined' && 'serviceWorker' in navigator;
+const TAG = 'boucle-suivi';
+
+async function closeNotice() {
+  if (!webLock) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    for (const n of (await reg?.getNotifications({ tag: TAG })) ?? []) n.close();
+  } catch {
+    /* rien à fermer */
+  }
+}
+
+async function showNotice(card: LiveCard) {
+  if (!webLock || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    await reg?.showNotification(`${card.paused ? 'Sortie en pause' : 'Sortie en cours'} · ${card.distance}`, {
+      body: `${card.elapsed} · ${card.metricLabel.toLowerCase()} ${card.metric} · reste ${card.left}. Le suivi reprend dès que tu rouvres Boucle.`,
+      tag: TAG,
+      silent: true,
+      icon: `${import.meta.env.BASE_URL}icons/icon-192.png`,
+    } as NotificationOptions);
+  } catch {
+    /* notifications indisponibles : rien sur l'écran verrouillé */
+  }
+}
+
 let lastSent = 0;
 let lastPaused = false;
 let subs: { remove(): Promise<void> }[] = [];
 
 export const live = {
+  /**
+   * À appeler dans le geste qui lance le suivi (iOS ne demande l'accord qu'au toucher) : l'app web demande
+   * une fois de pouvoir afficher la sortie sur l'écran verrouillé.
+   */
+  ask() {
+    if (webLock && Notification.permission === 'default') void Notification.requestPermission().catch(() => {});
+  },
+  /** L'écran s'éteint ou l'app passe en arrière-plan (app web) : la sortie s'affiche en notification. */
+  hidden(card: LiveCard) {
+    void showNotice(card);
+  },
+  shown() {
+    void closeNotice();
+  },
   async start(card: LiveCard, onAction: (a: 'pause' | 'resume' | 'stop') => void, onPosition: (p: LivePosition) => void) {
     const p = Live;
     if (!p) return;
@@ -96,6 +142,7 @@ export const live = {
     await Live?.update(card).catch(() => {});
   },
   async end() {
+    void closeNotice();
     if (!Live) return;
     await Promise.all(subs.map((x) => x.remove().catch(() => {})));
     subs = [];

@@ -199,7 +199,6 @@
       (app.phase !== 'follow' &&
         !app.pickOnMap &&
         ((!app.wide && app.phase === 'compose' && !app.home) ||
-          (!app.wide && app.search === 'save') ||
           app.phase === 'library' ||
           app.phase === 'community' ||
           community.sheet?.kind === 'auth')),
@@ -305,7 +304,7 @@
 {/if}
 
 {#if app.phase !== 'follow'}
-  {#if !welcome && !fullsheet && !scene}<MapControls minimal={athome && !app.wide} />{/if}
+  {#if !welcome && !fullsheet && !scene && app.search !== 'save'}<MapControls minimal={athome && !app.wide} />{/if}
   {#if !scene && !app.pickOnMap && app.search !== 'save' && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
     <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
     <!-- iPhone : la barre des lieux seule, tout en haut (la météo se lit dans les propositions). -->

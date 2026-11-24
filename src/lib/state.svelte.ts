@@ -156,6 +156,11 @@ class AppState {
 
   /** Ajouter un lieu à Mes lieux : recherche d'adresse (nom, émoji et liste proposés : « Domicile »…). */
   saveHint: { name?: string; emoji?: string; list?: string } = {};
+  /** « Nouveau lieu » : les lieux trouvés, en pastilles sur la carte (MapView), et ce qu'un toucher en fait */
+  addPins = $state.raw<{ coord: LngLat; emoji: string; name: string }[]>([]);
+  addPick: ((i: number) => void) | null = null;
+  /** place prise en haut et en bas par les blocs de « Nouveau lieu » (pour cadrer les pastilles) */
+  addInsets = $state.raw({ top: 0, bottom: 0, left: 0 });
   addSavedPlace(hint: { name?: string; emoji?: string; list?: string } = {}) {
     this.saveHint = hint;
     this.search = 'save';
@@ -291,6 +296,7 @@ class AppState {
   }
 
   private follower: Follower | null = null;
+  private onHide: (() => void) | null = null;
   private abort: AbortController | null = null;
   private seed = Math.floor(Math.random() * 1e9);
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1024,6 +1030,14 @@ class AppState {
     this.follower.start();
     // Écran verrouillé (app du téléphone) : ses boutons Pause, Reprendre et Terminer pilotent le suivi.
     const f = this.follower;
+    // App web : écran éteint, la sortie en notification sur l'écran verrouillé (l'accord se demande ici, au toucher).
+    live.ask();
+    this.onHide = () => {
+      if (this.follower !== f) return;
+      if (document.visibilityState === 'hidden') live.hidden(card(f.state));
+      else live.shown();
+    };
+    document.addEventListener('visibilitychange', this.onHide);
     void live.start(
       card(f.state),
       (a) => (a === 'pause' ? this.pauseFollow() : a === 'resume' ? this.resumeFollow() : this.stopFollow()),
@@ -1051,6 +1065,8 @@ class AppState {
     this.follower?.stop();
     this.follower = null;
     this.follow = null;
+    if (this.onHide) document.removeEventListener('visibilitychange', this.onHide);
+    this.onHide = null;
     void live.end();
     this.phase = this.beforeFollow;
   }

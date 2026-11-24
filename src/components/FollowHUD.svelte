@@ -40,7 +40,26 @@
   const meters = (d: number) => (d < 1000 ? `${Math.max(10, Math.round(d / 10) * 10)}${NNBSP}m` : km(d));
 
   /** hauteur du panneau : le bouton Recentrer se pose juste au-dessus */
-  let sheetH = $state(330);
+  let sheetH = $state(220);
+  /**
+   * Écran de poche : la sortie continue (l'écran reste allumé, donc le GPS suit), mais tout est noir avec les
+   * chiffres atténués, comme un écran verrouillé. Un appui maintenu d'une seconde ramène au suivi.
+   */
+  let pocket = $state(false);
+  let holding = $state(false);
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  function holdStart() {
+    holding = true;
+    holdTimer = setTimeout(() => {
+      holding = false;
+      pocket = false;
+      haptic('success');
+    }, 900);
+  }
+  function holdEnd() {
+    holding = false;
+    clearTimeout(holdTimer);
+  }
 
   function togglePause() {
     haptic(st?.paused ? 'success' : 'tap');
@@ -78,61 +97,47 @@
   </button>
 {/if}
 
+{#if st && pocket}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="pocket-screen" role="dialog" aria-label="Écran de poche (Échap pour revenir)" tabindex="-1" onkeydown={(e) => e.key === 'Escape' && (pocket = false)} onpointerdown={holdStart} onpointerup={holdEnd} onpointercancel={holdEnd} onpointerleave={holdEnd}>
+    <span class="p-clock tabular">{clock(now)}</span>
+    <div class="p-main">
+      <b class="p-big rounded tabular">{kmValue(st.done)}<small>km</small></b>
+      <span class="p-row tabular">{chrono(st.moving)} · {bike ? `${speedValue(st.speed)} km/h` : `${paceValue(st.speed)} /km`}</span>
+      <span class="p-row dim tabular">Reste {km(st.left)}</span>
+    </div>
+    <span class="p-hold" class:on={holding}>Maintiens pour revenir</span>
+  </div>
+{/if}
+
 {#if st}
+  <!-- Condensé : trois chiffres en grand, une ligne pour la suite, les boutons. -->
   <section class="sheet glass glass-panel modal-glass" class:paused={st.paused} aria-label="Suivi en direct" bind:clientHeight={sheetH}>
     <div class="prog" aria-hidden="true"><span style:transform="scaleX({st.ratio})"></span></div>
-
-    <div class="hero">
+    <dl class="hero">
       <div>
-        <span class="k">{st.finished ? 'Arrivée !' : 'Distance'}</span>
-        <b class="big rounded tabular"><RollingNumber value={kmValue(st.done)} /><small>{NNBSP}km</small></b>
-        <span class="cap tabular">faits sur {km(r!.lengthM)}</span>
+        <dd class="big rounded tabular"><RollingNumber value={kmValue(st.done)} /><small>km</small></dd>
+        <dt class="k">{st.finished ? 'Arrivée !' : 'Distance'}</dt>
       </div>
-      <div class="time">
-        <span class="k">{st.paused ? 'En pause' : 'Durée'}</span>
-        <b class="big rounded tabular" aria-label="Durée {chrono(st.moving)}">{chrono(st.moving)}</b>
-        <span class="cap">{st.paused ? 'chrono arrêté' : 'en mouvement'}</span>
+      <div class="mid">
+        <dd class="big rounded tabular" aria-label="Durée {chrono(st.moving)}">{chrono(st.moving)}</dd>
+        <dt class="k">{st.paused ? 'En pause' : 'Durée'}</dt>
       </div>
-    </div>
-
-    <dl class="tiles">
-      <div class="tile">
+      <div class="end">
+        <dd class="big rounded tabular">{bike ? speedValue(st.speed) : paceValue(st.speed)}<small>{bike ? 'km/h' : '/km'}</small></dd>
         <dt class="k">{bike ? 'Vitesse' : 'Allure'}</dt>
-        <dd class="tabular">{bike ? speedValue(st.speed) : paceValue(st.speed)}<small>{bike ? 'km/h' : '/km'}</small></dd>
-      </div>
-      <div class="tile">
-        <dt class="k">Moyenne</dt>
-        <dd class="tabular">{bike ? speedValue(st.avg) : paceValue(st.avg)}<small>{bike ? 'km/h' : '/km'}</small></dd>
-      </div>
-      <div class="tile">
-        <dt class="k">Restant</dt>
-        <dd class="tabular">{kmValue(st.left)}<small>km</small></dd>
-      </div>
-      <div class="tile">
-        <dt class="k">D+</dt>
-        <dd class="tabular">{st.climbed}<small>/{NNBSP}{st.climb}{NNBSP}m</small></dd>
-      </div>
-      <div class="tile">
-        <dt class="k">Arrivée</dt>
-        <dd class="tabular">{st.eta ? clock(st.eta) : '–'}</dd>
-      </div>
-      <div class="tile">
-        {#if bike}
-          <dt class="k">Max</dt>
-          <dd class="tabular">{st.maxSpeed ? speedValue(st.maxSpeed) : '–'}<small>km/h</small></dd>
-        {:else}
-          <dt class="k">Fait</dt>
-          <dd class="tabular">{Math.round(st.ratio * 100)}<small>%</small></dd>
-        {/if}
       </div>
     </dl>
-
+    <p class="line tabular">Reste <b>{km(st.left)}</b>{#if st.eta}{' · arrivée '}<b>{clock(st.eta)}</b>{/if}</p>
     <div class="acts">
       <button use:tactile type="button" class="pause" class:on={st.paused} onclick={togglePause}>
-        <Icon name={st.paused ? 'play' : 'pause'} size={18} />{st.paused ? 'Reprendre' : 'Pause'}
+        <Icon name={st.paused ? 'play' : 'pause'} size={17} />{st.paused ? 'Reprendre' : 'Pause'}
       </button>
       <button use:tactile type="button" class="stop" onclick={() => app.stopFollow()}>
-        <Icon name="stop" size={16} />Terminer
+        <Icon name="stop" size={15} />Terminer
+      </button>
+      <button use:tactile type="button" class="pocket" aria-label="Écran de poche : la sortie continue, écran noir" title="Écran de poche" onclick={() => (pocket = true)}>
+        <Icon name="moon" size={18} />
       </button>
     </div>
   </section>
@@ -210,10 +215,10 @@
     bottom: calc(max(10px, env(safe-area-inset-bottom) - 14px));
     max-width: 520px;
     margin: 0 auto;
-    padding: 14px 16px 14px;
-    border-radius: 32px;
+    padding: 14px 14px 12px;
+    border-radius: 30px;
     display: grid;
-    gap: 12px;
+    gap: 10px;
     overflow: hidden;
     animation: up 640ms var(--spring) backwards;
   }
@@ -240,82 +245,74 @@
   }
   .k {
     display: block;
-    font-size: 0.75rem;
+    margin-top: 1px;
+    font-size: 0.6875rem;
     font-weight: 600;
+    letter-spacing: 0.02em;
     color: var(--label-2);
   }
   .hero {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 12px;
+    margin: 0;
     padding-top: 2px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: end;
+    gap: 8px;
   }
-  .time {
+  .hero dd {
+    margin: 0;
+  }
+  .mid {
+    text-align: center;
+  }
+  .end {
     text-align: right;
   }
   .big {
     display: block;
-    font-size: 2.75rem;
+    font-size: 2rem;
     font-weight: 700;
     letter-spacing: -0.035em;
     line-height: 1.02;
+    white-space: nowrap;
   }
   .big small {
-    font-size: 1.0625rem;
+    margin-left: 2px;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: var(--label-2);
     letter-spacing: 0;
   }
-  .cap {
-    display: block;
-    margin-top: 2px;
-    font-size: 0.8125rem;
-    color: var(--label-2);
-  }
-  .paused .time .big {
+  .paused .mid .big {
     color: var(--label-2);
     animation: blink 1.6s ease-in-out infinite;
   }
-  .tiles {
+  .line {
     margin: 0;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-  .tile {
-    min-width: 0;
-    padding: 9px 11px 10px;
-    border-radius: 18px;
-    background: var(--fill-2);
-  }
-  .tile dt {
-    margin-bottom: 2px;
-  }
-  .tile dd {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 680;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .tile small {
-    margin-left: 2px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.875rem;
     color: var(--label-2);
-    letter-spacing: 0;
+  }
+  .line b {
+    font-weight: 650;
+    color: var(--label);
   }
   .acts {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr auto;
     gap: 8px;
+  }
+  .pocket {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--label);
+    background: var(--fill);
   }
   .pause,
   .stop {
-    min-height: 50px;
+    min-height: 46px;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
@@ -338,11 +335,78 @@
     color: var(--tint);
     background: var(--fill);
   }
+  /* Écran de poche : noir (l'écran OLED s'éteint presque), chiffres gris, aucun bouton à toucher par erreur. */
+  .pocket-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    justify-items: center;
+    padding: calc(var(--safe-top) + 18px) 24px calc(env(safe-area-inset-bottom, 0px) + 28px);
+    background: #000;
+    color: #7c7c80;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    animation: fade-in 420ms ease-out;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  .p-clock {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+  .p-main {
+    align-self: center;
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+  }
+  .p-big {
+    font-size: 5rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: #a1a1a6;
+  }
+  .p-big small {
+    margin-left: 6px;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  .p-row {
+    font-size: 1.375rem;
+    font-weight: 600;
+  }
+  .p-row.dim {
+    font-size: 1rem;
+    color: #55555a;
+  }
+  .p-hold {
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-size: 0.9375rem;
+    color: #8e8e93;
+    background: #111;
+    box-shadow: inset 0 0 0 1px #222;
+    transition:
+      background-color 900ms linear,
+      color 300ms;
+  }
+  .p-hold.on {
+    color: #fff;
+    background: #ff2d55;
+  }
   @media (prefers-reduced-motion: reduce) {
+    .pocket-screen,
     .sheet,
     .note,
     .dot,
-    .paused .time .big {
+    .paused .mid .big {
       animation: none;
     }
   }

@@ -582,6 +582,28 @@
       },
       before,
     );
+    // « Nouveau lieu » : les lieux trouvés, en pastilles à leur émoji, leur nom dessous.
+    if (!m.getSource('add-pins')) m.addSource('add-pins', { type: 'geojson', data: EMPTY });
+    m.addLayer({
+      id: 'add-pins',
+      type: 'symbol',
+      source: 'add-pins',
+      layout: {
+        'icon-image': ['concat', 'sv-', ['get', 'emoji']],
+        'icon-size': 1.15,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'symbol-sort-key': ['get', 'i'],
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 12,
+        'text-offset': [0, 1.7],
+        'text-anchor': 'top',
+        'text-max-width': 10,
+        'text-optional': true,
+      },
+      paint: { 'text-color': '#FFFFFF', 'text-halo-color': 'rgba(0,0,0,0.8)', 'text-halo-width': 1.5 },
+    });
     showSaved();
     void addPinImages();
     showZones(app.zones);
@@ -1848,6 +1870,8 @@
       // Ignoré : fin d'un appui long (départ déjà placé) ou clic sur un marqueur.
       if (Date.now() - longPressAt < 800) return;
       if ((e.originalEvent.target as HTMLElement | null)?.closest?.('.maplibregl-marker')) return;
+      // Une pastille de « Nouveau lieu » touchée : elle est choisie (calque add-pins), rien d'autre à faire.
+      if (map!.getLayer('add-pins') && map!.queryRenderedFeatures(e.point, { layers: ['add-pins'] }).length) return;
       const kind = clickKind();
       if (!kind) {
         // Rien à placer : un lieu touché ouvre sa fiche ; ailleurs, la fiche ouverte se ferme.
@@ -1892,6 +1916,13 @@
       }
       const ll = map.unproject([aim.x, aim.y]);
       aim = { ...aim, ll: [ll.lng, ll.lat] };
+    });
+    map.on('click', 'add-pins', (e) => {
+      const i = e.features?.[0]?.properties?.i;
+      if (typeof i === 'number') {
+        haptic('tap');
+        app.addPick?.(i);
+      }
     });
     map.on('click', 'alt-hit', (e) => {
       const idx = e.features?.[0]?.properties?.idx;
@@ -2492,6 +2523,32 @@
     if (!ready || !map || p) return;
     untrack(() => setFocusPoint(focused ? focused.coord : null, focused?.kind));
   });
+  // « Nouveau lieu » : les lieux trouvés sur la carte, cadrés dans ce que les blocs laissent voir.
+  $effect(() => {
+    const pins = app.addPins;
+    if (!ready || !map) return;
+    setData('add-pins', { type: 'FeatureCollection', features: pins.map((p, i) => ({ type: 'Feature', properties: { i, emoji: p.emoji, name: p.name }, geometry: { type: 'Point', coordinates: p.coord } })) });
+    if (!pins.length) return;
+    const pts: LngLat[] = pins.map((p) => p.coord);
+    // Recadré aussi quand les blocs changent de hauteur (la liste des lieux trouvés arrive après les pastilles).
+    const ins = app.addInsets;
+    const cv = map.getCanvas();
+    // MapLibre ajoute sa propre marge (onglets, panneau) à celle qu'on lui passe : on ne passe que la différence.
+    const { top = 0, bottom = 0, left = 0, right = 0 } = map.getPadding();
+    const want = { top: ins.top + 52, bottom: ins.bottom + 46, left: ins.left + 40, right: 40 };
+    const pad = { top: Math.max(0, want.top - top), bottom: Math.max(0, want.bottom - bottom), left: Math.max(0, want.left - left), right: Math.max(0, want.right - right) };
+    // Les blocs prennent presque tout : on garde au moins 100 px de carte.
+    const H = cv.clientHeight - top - bottom;
+    if (pad.top + pad.bottom > H - 100) {
+      const k = Math.max(0, H - 100) / (pad.top + pad.bottom);
+      pad.top = Math.floor(pad.top * k);
+      pad.bottom = Math.floor(pad.bottom * k);
+    }
+    const [w, s2, e, n] = bbox(pts.length === 1 ? [pts[0], pts[0]] : pts);
+    const cam = map.cameraForBounds([[w, s2], [e, n]], { padding: pad, maxZoom: pts.length === 1 ? 16 : 15.5 });
+    if (cam) map.easeTo({ center: cam.center, zoom: cam.zoom, duration: reduce ? 0 : 850 });
+  });
+
   // Mes lieux : la carte suit les ajouts, changements et retraits (pas pendant le suivi).
   $effect(() => {
     void saved.places;

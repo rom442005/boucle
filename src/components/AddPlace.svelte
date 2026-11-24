@@ -9,10 +9,10 @@
   import type { Place } from '../lib/types';
 
   /*
-   * « Enregistrer un lieu », dans le fil rouge : sur la photo (iPhone) ou en colonne de verre (Mac), des blocs
-   * comme ailleurs dans l'app. En tête, la question et le champ ; puis deux tuiles (ma position, sur la carte) ;
-   * la liste où le ranger (préchoisie dans la fiche qui suit) ; enfin les lieux trouvés, chacun avec son émoji et
-   * sa distance. Un lieu choisi ouvre la fiche « Enregistrer le lieu » (nom et liste).
+   * « Enregistrer un lieu », dans le fil rouge, sur la carte : des blocs de verre en haut (la question et le
+   * champ) et en bas (ma position, sur la carte, la liste où le ranger ; ou les lieux trouvés), la carte au milieu
+   * avec les lieux trouvés en pastilles à leur émoji. Sur Mac, une colonne à gauche, la carte à droite. Un lieu
+   * choisi (dans la liste ou sur la carte) ouvre la fiche « Enregistrer le lieu » (nom et liste).
    */
   let q = $state('');
   let results = $state<Place[]>([]);
@@ -30,6 +30,26 @@
   });
 
   const near = $derived(app.userPos ?? app.start?.coord ?? null);
+  const searching = $derived(q.trim().length >= 3);
+
+  // Les lieux trouvés, en pastilles sur la carte ; un toucher sur l'une d'elles la choisit.
+  $effect(() => {
+    app.addPins = searching ? results.map((p) => ({ coord: p.coord, emoji: emojiOf(p), name: p.name })) : [];
+  });
+  $effect(() => {
+    app.addPick = (i) => results[i] && choose(results[i]);
+    return () => {
+      app.addPins = [];
+      app.addPick = null;
+      app.addInsets = { top: 0, bottom: 0, left: 0 };
+    };
+  });
+  // Place prise par les blocs : la carte cadre les pastilles dans ce qui reste visible.
+  let topH = $state(0);
+  let botH = $state(0);
+  $effect(() => {
+    app.addInsets = app.wide ? { top: 0, bottom: 0, left: 420 } : { top: topH + 24, bottom: botH + 24, left: 0 };
+  });
   const counts = $derived(new Map(saved.lists.map((l) => [l.id, saved.placesIn(l.id).length])));
 
   function onInput() {
@@ -118,78 +138,98 @@
 
 {#if app.wide}<div class="scrim" onclick={close} aria-hidden="true"></div>{/if}
 <div class="add" class:wide={app.wide} role="dialog" aria-modal="true" aria-label="Enregistrer un lieu">
-  <div class="col">
-    <!-- En tête : la question, comme le gros chiffre d'un bloc santé. -->
+  <div class="zone top-zone" bind:clientHeight={topH}>
+    <!-- En tête : la question et le champ. -->
     <section class="card glass photo-card head" style:--i={0}>
       <div class="top">
         <span class="k">📍 Nouveau lieu</span>
         <button use:tactile type="button" class="x" aria-label="Fermer" onclick={close}><Icon name="close" size={15} /></button>
       </div>
       <h2 class="big rounded">Où est-ce ?</h2>
-      <p class="sub">Domicile, école, salle de sport, chez un proche…</p>
       <label class="field">
         <Icon name="search" size={18} />
         <span class="visually-hidden">Adresse ou nom du lieu</span>
-        <input bind:this={input} bind:value={q} oninput={onInput} type="search" enterkeyhint="search" autocomplete="off" placeholder="Adresse, lieu, nom…" />
+        <input bind:this={input} bind:value={q} oninput={onInput} type="search" enterkeyhint="search" autocomplete="off" placeholder="Adresse, école, salle, chez un proche…" />
       </label>
     </section>
-
-    <!-- Deux façons rapides : ici, ou un point de la carte. -->
-    <div class="pair">
-      <button use:tactile type="button" class="card glass photo-card tile" style:--i={1} onclick={here}>
-        <span class="k">Ma position</span>
-        <span class="nrow"><span class="emo" aria-hidden="true">🧭</span><b class="n rounded">Ici</b></span>
-      </button>
-      <button use:tactile type="button" class="card glass photo-card tile" style:--i={2} onclick={onMap}>
-        <span class="k">Sur la carte</span>
-        <span class="nrow"><span class="emo" aria-hidden="true">🗺️</span><b class="n rounded">Toucher</b></span>
-      </button>
-    </div>
-
-    {#if q.trim().length >= 3}
-      <section class="card glass photo-card found" style:--i={3} aria-live="polite">
-        <div class="top">
-          <span class="k">Lieux trouvés</span>
-          {#if results.length && !loading}<span class="k">{results.length}</span>{/if}
-        </div>
-        {#if loading}
-          <p class="state">Recherche…</p>
-        {:else if failed}
-          <p class="state">Recherche indisponible pour le moment. Vérifie ta connexion.</p>
-        {:else if !results.length}
-          <p class="state">Aucun lieu trouvé pour « {q.trim()} ».</p>
-        {:else}
-          <ul class="rows">
-            {#each results as p, i (i)}
-              <li style:--i={i}>
-                <button use:tactile type="button" class="row" onclick={() => choose(p)}>
-                  <span class="pemo" aria-hidden="true">{emojiOf(p)}</span>
-                  <span class="rt"><span class="rn">{p.name}</span>{#if p.detail}<span class="rd">{p.detail}</span>{/if}</span>
-                  {#if near}<span class="dist tabular">{km(haversine(near, p.coord))}</span>{/if}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
+    {#if app.wide}
+      <!-- Mac : tout dans la colonne. -->
+      {@render quick()}
+      {@render lists()}
+      {#if searching}{@render found()}{/if}
     {/if}
-
-    <!-- La liste où le ranger : préchoisie dans la fiche qui suit. -->
-    <section class="card glass photo-card lists" style:--i={4}>
-      <div class="top">
-        <span class="k">Ranger dans</span>
-        {#if list}<span class="k">{saved.listOf(list).emoji} {saved.listOf(list).name}</span>{/if}
-      </div>
-      <div class="chips" role="radiogroup" aria-label="Liste du lieu">
-        {#each saved.lists as l (l.id)}
-          <button use:tactile type="button" class="chip" class:on={list === l.id} role="radio" aria-checked={list === l.id} onclick={() => pickList(l.id)}>
-            <span aria-hidden="true">{l.emoji}</span>{l.name}<small class="tabular">{counts.get(l.id) ?? 0}</small>
-          </button>
-        {/each}
-      </div>
-    </section>
   </div>
+
+  {#if !app.wide}
+    <!-- iPhone : la carte au milieu ; en bas, les lieux trouvés, sinon les raccourcis et la liste. -->
+    <div class="zone bottom-zone" bind:clientHeight={botH}>
+      {#if searching}
+        {@render found()}
+      {:else}
+        {@render quick()}
+        {@render lists()}
+      {/if}
+    </div>
+  {/if}
 </div>
+
+{#snippet quick()}
+  <div class="pair">
+    <button use:tactile type="button" class="card glass photo-card tile" style:--i={1} onclick={here}>
+      <span class="k">Ma position</span>
+      <span class="nrow"><span class="emo" aria-hidden="true">🧭</span><b class="n rounded">Ici</b></span>
+    </button>
+    <button use:tactile type="button" class="card glass photo-card tile" style:--i={2} onclick={onMap}>
+      <span class="k">Sur la carte</span>
+      <span class="nrow"><span class="emo" aria-hidden="true">🗺️</span><b class="n rounded">Toucher</b></span>
+    </button>
+  </div>
+{/snippet}
+
+{#snippet lists()}
+  <!-- La liste où le ranger : préchoisie dans la fiche qui suit. -->
+  <section class="card glass photo-card lists" style:--i={3}>
+    <div class="top">
+      <span class="k">Ranger dans</span>
+      {#if list}<span class="k">{saved.listOf(list).emoji} {saved.listOf(list).name}</span>{/if}
+    </div>
+    <div class="chips" role="radiogroup" aria-label="Liste du lieu">
+      {#each saved.lists as l (l.id)}
+        <button use:tactile type="button" class="chip" class:on={list === l.id} role="radio" aria-checked={list === l.id} onclick={() => pickList(l.id)}>
+          <span aria-hidden="true">{l.emoji}</span>{l.name}<small class="tabular">{counts.get(l.id) ?? 0}</small>
+        </button>
+      {/each}
+    </div>
+  </section>
+{/snippet}
+
+{#snippet found()}
+  <section class="card glass photo-card found" style:--i={1} aria-live="polite">
+    <div class="top">
+      <span class="k">Lieux trouvés</span>
+      {#if results.length && !loading}<span class="k">{results.length} sur la carte</span>{/if}
+    </div>
+    {#if loading}
+      <p class="state">Recherche…</p>
+    {:else if failed}
+      <p class="state">Recherche indisponible pour le moment. Vérifie ta connexion.</p>
+    {:else if !results.length}
+      <p class="state">Aucun lieu trouvé pour « {q.trim()} ».</p>
+    {:else}
+      <ul class="rows">
+        {#each results as p, i (i)}
+          <li style:--i={i}>
+            <button use:tactile type="button" class="row" onclick={() => choose(p)}>
+              <span class="pemo" aria-hidden="true">{emojiOf(p)}</span>
+              <span class="rt"><span class="rn">{p.name}</span>{#if p.detail}<span class="rd">{p.detail}</span>{/if}</span>
+              {#if near}<span class="dist tabular">{km(haversine(near, p.coord))}</span>{/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
+{/snippet}
 
 <style>
   .scrim {
@@ -205,28 +245,38 @@
       opacity: 0;
     }
   }
-  /* iPhone : tout l'écran, sur la photo, sous l'heure. */
+  /* iPhone : des blocs en haut et en bas, la carte reste visible (et touchable) au milieu. */
   .add {
     position: fixed;
     z-index: 40;
     inset: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: calc(var(--safe-top) + 22px) var(--gutter) calc(env(safe-area-inset-bottom, 0px) + 24px);
+    pointer-events: none;
     color: #fff;
+  }
+  .zone {
+    position: absolute;
+    left: var(--gutter);
+    right: var(--gutter);
+    display: grid;
+    gap: 10px;
+    pointer-events: auto;
+  }
+  .top-zone {
+    top: calc(var(--safe-top) + 14px);
+  }
+  .bottom-zone {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   }
   /* Mac : une colonne de verre à gauche, la carte reste visible et cliquable à droite. */
   .add.wide {
     inset: 12px auto 12px 12px;
     width: 396px;
-    padding: 0;
-    border-radius: 30px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
   }
-  .col {
-    display: grid;
-    gap: 10px;
-    max-width: 520px;
-    margin: 0 auto;
+  .wide .zone {
+    position: static;
   }
   .card {
     display: grid;
@@ -243,18 +293,17 @@
       scale: 0.97;
     }
   }
-  .wide .card {
-    --g-bg: rgba(22, 23, 25, 0.82);
+  /* Sur la carte : un verre dense, pour que le texte reste lisible quoi qu'il y ait dessous. */
+  .card {
+    --g-bg: rgba(22, 23, 25, 0.84);
   }
-  /* Mac : la liste où le ranger avant les lieux trouvés (la colonne a la hauteur pour tout voir). */
-  .wide .lists {
-    order: 3;
+  .found .rows {
+    max-height: min(34dvh, 300px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
-  .wide .found {
-    order: 4;
-  }
-  .wide .col {
-    padding-bottom: 12px;
+  .wide .found .rows {
+    max-height: none;
   }
   .top {
     display: flex;
@@ -278,16 +327,11 @@
     background: rgba(255, 255, 255, 0.16);
   }
   .big {
-    margin: 2px 0 0;
-    font-size: 2.125rem;
+    margin: 0 0 4px;
+    font-size: 1.75rem;
     font-weight: 700;
     letter-spacing: -0.03em;
     line-height: 1.05;
-  }
-  .sub {
-    margin: 0 0 6px;
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.72);
   }
   .field {
     display: flex;

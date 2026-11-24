@@ -132,6 +132,7 @@ Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatc
 
 ## Journal
 
+- **24/11/2026** : panneau du suivi condensé (3 chiffres + une ligne) ; écran de poche (noir, maintenir pour revenir) ; app web : notification « Sortie en cours » sur l'écran verrouillé quand l'écran s'éteint (iOS endort la page : le suivi y reprend au retour) ; « Nouveau lieu » sur la carte avec les lieux trouvés en pastilles (`app.addPins`, calque `add-pins`).
 - **24/11/2026** : plus d'écran blanc au lancement (images de démarrage de l'iPhone dans public/splash, exclues du cache hors ligne ; écrans de démarrage natifs sombres) ; « Enregistrer un lieu » refait en blocs (AddPlace) ; communauté d'aperçu insérée dans Supabase (voir « Communauté d'aperçu »).
 - **24/11/2026** : nouvelle ouverture (3,3 à 5 s, `scripts/intro.py` la régénère dans index.html) : une sortie se trace sur un plan de ville, chiffres en compteur, éclat, « Boucle », puis plongée dans la boucle ; la carte se pose d'un zoom (MapView, `boucle:intro-out`) et l'interface arrive élément par élément (`data-arrive`, `html.arrive` dans app.css).
 - **24/11/2026** : fluidité, 2e passe. Mesures (Chromium) : le code de l'app ne prend que 4 à 14 ms par appui, le style et la mise en page 2 ms au plus ; le coût est dans la carte graphique (jusqu'à 26 blocs de verre floutés sur Communauté). Donc : carte rendue à 2× au plus (iPhone 3×) et 8,3 Mpx au plus, dérive de la photo en pause dès qu'on agit (1,5 s), lignes hors écran non dessinées dans Mes parcours.

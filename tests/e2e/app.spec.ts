@@ -337,8 +337,14 @@ test('suivre le parcours en direct', async ({ page }) => {
   await page.getByRole('button', { name: /Suivre ce parcours/ }).click();
   const hud = page.getByRole('region', { name: 'Suivi en direct' });
   await expect(hud).toBeVisible({ timeout: 20_000 });
-  // Distance, chrono, allure, moyenne, restant, D+, arrivée.
-  for (const k of ['Distance', 'Durée', 'Allure', 'Moyenne', 'Restant', 'D+', 'Arrivée']) await expect(hud.getByText(k, { exact: true })).toBeVisible();
+  // Condensé : distance, durée, allure, puis le restant ; l'écran de poche se quitte en maintenant le doigt.
+  for (const k of ['Distance', 'Durée', 'Allure']) await expect(hud.getByText(k, { exact: true })).toBeVisible();
+  await expect(hud.getByText(/^Reste/)).toBeVisible();
+  await hud.getByRole('button', { name: /Écran de poche/ }).click();
+  const pocket = page.getByRole('dialog', { name: /Écran de poche/ });
+  await expect(pocket.getByText('Maintiens pour revenir')).toBeVisible();
+  await pocket.press('Escape');
+  await expect(pocket).toHaveCount(0);
   // Pause : le chrono s'arrête ; Reprendre le relance.
   await hud.getByRole('button', { name: 'Pause' }).click();
   await expect(hud.getByText('En pause')).toBeVisible();
