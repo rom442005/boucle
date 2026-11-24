@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { SCENES, SCENE_MS, sceneAt, sceneUrl, warmScene } from '../lib/scenes';
+  import { app } from '../lib/state.svelte';
 
   /*
    * Un paysage en plein écran sous le verre. Toujours là, il apparaît et s'efface en fondu quand on passe
@@ -66,20 +67,33 @@
     };
   });
 
-  // Défilement en cours (n'importe quelle zone) : la dérive s'arrête, puis reprend 600 ms après.
+  /*
+   * La dérive s'arrête dès qu'on agit (défilement, toucher, clic, molette, clavier, changement d'écran) et
+   * reprend 1,5 s après : sous la photo qui bouge, chaque bloc de verre recalcule son flou à chaque image ;
+   * immobile, il n'y a plus rien à recalculer et le geste a toute la carte graphique pour lui.
+   */
   let still = $state(false);
+  let stillTimer: ReturnType<typeof setTimeout>;
+  function hold(ms = 1500) {
+    if (!still) still = true;
+    clearTimeout(stillTimer);
+    stillTimer = setTimeout(() => (still = false), ms);
+  }
   onMount(() => {
-    let t: ReturnType<typeof setTimeout>;
-    const onScroll = () => {
-      if (!still) still = true;
-      clearTimeout(t);
-      t = setTimeout(() => (still = false), 600);
-    };
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    const onAct = () => hold();
+    const opts = { capture: true, passive: true } as const;
+    const kinds = ['scroll', 'pointerdown', 'wheel', 'keydown', 'touchstart'] as const;
+    for (const k of kinds) document.addEventListener(k, onAct, opts);
     return () => {
-      clearTimeout(t);
-      document.removeEventListener('scroll', onScroll, { capture: true });
+      clearTimeout(stillTimer);
+      for (const k of kinds) document.removeEventListener(k, onAct, opts);
     };
+  });
+  // Changement d'écran : les blocs arrivent sur une photo immobile.
+  $effect(() => {
+    void app.phase;
+    void app.libTab;
+    hold();
   });
   function loaded(key: number) {
     layers = layers.map((l) => (l.key === key ? { ...l, ready: true } : l));

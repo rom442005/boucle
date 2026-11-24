@@ -29,6 +29,16 @@
   const dark = matchMedia('(prefers-color-scheme: dark)');
   /** Zoom du lancement : la ville et ses environs, jamais un gros plan sur la position. */
   const LAUNCH_ZOOM = 12;
+  /**
+   * Finesse de rendu de la carte : celle de l'écran, mais 2 au plus (un iPhone à 3× dessinerait 2,25 fois plus
+   * de points pour une différence invisible sur une carte qui bouge) et 8,3 millions de points au plus (un écran
+   * 4K) : sur un très grand écran Retina, la carte reste fluide.
+   */
+  function mapPixelRatio(): number {
+    const dpr = devicePixelRatio || 1;
+    const area = Math.max(1, innerWidth * innerHeight);
+    return Math.max(1, Math.min(dpr, 2, Math.sqrt(8.3e6 / area)));
+  }
   /** Mes lieux se voient à partir d'ici (vue d'une agglomération), et s'effacent au-delà. */
   const SAVED_MINZOOM = 9.6;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1668,6 +1678,7 @@
     registerEarth((name, load) => maplibregl.addProtocol(name, load));
     map = new maplibregl.Map({
       container: el,
+      pixelRatio: mapPixelRatio(),
       style: buildStyle(theme, paysage),
       center: app.start?.coord ?? view?.center ?? NANTES,
       zoom: Math.min(view?.zoom ?? LAUNCH_ZOOM, LAUNCH_ZOOM),
@@ -1686,6 +1697,9 @@
     placeAttribution();
     fitMinZoom();
     map.on('resize', () => {
+      // Fenêtre agrandie ou passée sur un autre écran : la finesse de rendu suit.
+      const pr = mapPixelRatio();
+      if (Math.abs(map!.getPixelRatio() - pr) > 0.01) map!.setPixelRatio(pr);
       const was = orbit;
       fitMinZoom();
       if (was) toOrbit(true);

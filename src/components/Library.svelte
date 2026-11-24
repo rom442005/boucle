@@ -405,6 +405,9 @@
   .li {
     display: flex;
     align-items: center;
+    /* Longues listes (historique) : les lignes hors de l'écran ne se dessinent pas. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 64px;
   }
   .li + .li {
     border-top: 0.5px solid var(--separator);
