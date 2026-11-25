@@ -276,11 +276,12 @@ test.describe(() => {
   // Le service hors ligne de l'app passerait avant les réponses enregistrées (WebKit) : il est coupé ici.
   test.use({ serviceWorkers: 'block' });
   test('Découverte : lieux emblématiques en cartes, aux flèches, ajoutés au parcours', async ({ page, isMobile }) => {
-    // Réponses enregistrées d'OpenStreetMap et de Wikipédia (Nantes) : le test ne dépend pas du réseau.
+    // Réponses enregistrées d'OpenStreetMap, de Wikidata et de Wikipédia (Nantes) : le test ne dépend pas du réseau.
     const fs = await import('node:fs/promises');
     const op = await fs.readFile('tests/e2e/fixtures/overpass-nantes.json', 'utf8');
     const wp = await fs.readFile('tests/e2e/fixtures/wikipedia-nantes.json', 'utf8');
-    const calls = { op: 0, wp: 0 };
+    const wd = await fs.readFile('tests/e2e/fixtures/wikidata-nantes.json', 'utf8');
+    const calls = { op: 0, wd: 0, wp: 0 };
     const cors = { 'access-control-allow-origin': '*' };
     await page.route(/\/api\/interpreter/, (r) => {
       calls.op++;
@@ -290,6 +291,10 @@ test.describe(() => {
       calls.wp++;
       return r.fulfill({ contentType: 'application/json', body: wp, headers: cors });
     });
+    await page.route(/www\.wikidata\.org\/w\/api\.php/, (r) => {
+      calls.wd++;
+      return r.fulfill({ contentType: 'application/json', body: wd, headers: cors });
+    });
     await open(page);
     await compose(page);
     // Le parcours d'un seul bloc : forme, distance, dénivelé, milieu.
@@ -298,7 +303,7 @@ test.describe(() => {
     // Découverte, repliée par défaut : rien n'est demandé tant qu'elle est fermée.
     const head = page.getByRole('button', { name: /Découverte/ });
     await expect(head).toHaveAttribute('aria-expanded', 'false');
-    expect(calls).toEqual({ op: 0, wp: 0 });
+    expect(calls).toEqual({ op: 0, wd: 0, wp: 0 });
     await head.click();
     const list = page.getByRole('list', { name: 'Lieux emblématiques' });
     await expect(list).toBeVisible({ timeout: 20_000 });
@@ -306,6 +311,8 @@ test.describe(() => {
     await expect(list.getByRole('listitem').first()).toContainText('Château des Ducs de Bretagne');
     await expect(list).not.toContainText('Pierre Cambronne');
     await expect(list).not.toContainText('Immeuble');
+    // La Tour LU n'a pas d'article français : sa fiche Wikidata la fait venir, avec sa photo.
+    await expect(list.getByRole('listitem').filter({ hasText: 'Tour LU' }).locator('img')).toHaveCount(1);
     // Les horaires quand OpenStreetMap les connaît (le Jardin de la Psalette, le Musée Dobrée…).
     await expect(list.locator('.hours').first()).toBeVisible();
     // Aux flèches, deux par deux.
@@ -329,7 +336,7 @@ test.describe(() => {
     await head.click();
     await head.click();
     await expect(list).toBeVisible();
-    expect(calls).toEqual({ op: 1, wp: 1 });
+    expect(calls).toEqual({ op: 1, wd: 1, wp: 1 });
   });
 });
 
