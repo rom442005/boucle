@@ -37,6 +37,7 @@
   import PlaceCard from './components/PlaceCard.svelte';
   import SaveSheet from './components/SaveSheet.svelte';
   import HealthDetail from './components/HealthDetail.svelte';
+  import SpotView from './components/SpotView.svelte';
   import { saved } from './lib/saved.svelte';
   import HealthLink from './components/HealthLink.svelte';
   import { sceneAt, warmScene } from './lib/scenes';
@@ -198,6 +199,7 @@
     welcome ||
       (app.phase !== 'follow' &&
         !app.pickOnMap &&
+        !app.spotView &&
         ((!app.wide && app.phase === 'compose' && !app.home) ||
           app.phase === 'library' ||
           app.phase === 'community' ||
@@ -209,7 +211,11 @@
     if (scene) backdropOn = true;
   });
   /** Sur la photo, plus de feuille : des blocs de verre (réglages sur iPhone, Mes parcours, profils). */
-  const photo = $derived(!scene || welcome ? null : ('cards' as const));
+  /**
+   * Sur la photo, plus de feuille : des blocs de verre (réglages sur iPhone, Mes parcours, profils). Sur Mac, les
+   * réglages du parcours aussi, en blocs sur la carte, comme Profil et Communauté.
+   */
+  const photo = $derived(welcome ? null : scene || (app.wide && app.phase === 'compose' && !community.sheet) ? ('cards' as const) : null);
   // iPhone : les écrans sur la photo (Communauté, Mes parcours, profils, connexion) occupent tout l'écran, leurs
   // blocs flottent sur la photo ; même quand un onglet remet le panneau à mi-hauteur (passage Profil → Communauté).
   $effect(() => {
@@ -330,7 +336,7 @@
       <!-- Mac : la carte seule ; les réglages du parcours s'ouvrent à gauche, au clic. -->
       <button use:tactile type="button" class="make" data-arrive="up" style="--arrive-delay: 640ms" onclick={() => app.openComposer()}><Icon name="path" size={20} />Créer un parcours</button>
     {/if}
-  {:else if !welcome}
+  {:else if !welcome && !(app.spotView && !app.wide)}
   <!-- Premier lancement : seul l'accueil (rejoindre la Communauté) est à l'écran, le panneau vient après. -->
   <Panel solid={fullsheet && !photo} {photo} {headless} centered={app.phase === 'community' || app.phase === 'library' || community.sheet?.kind === 'auth'} label={headTitle} footer={app.phase === 'library' || app.phase === 'community' || community.sheet || (!app.wide && (app.phase === 'results' || app.phase === 'detail')) ? undefined : footer} onswipe={canSwipe && !community.sheet ? swipe : undefined}>
     {#snippet header()}
@@ -362,7 +368,8 @@
           <span class="navbtn-space" aria-hidden="true"></span>
         </div>
       {:else if app.phase === 'compose'}
-        <!-- Les réglages, montés du bas : un bouton pour redescendre vers la carte, puis le départ. -->
+        <!-- Les réglages, montés du bas : un bouton pour redescendre vers la carte, puis le départ. Sur Mac, en verre. -->
+        <div class="compose-head" class:glass={app.wide} class:photo-card={app.wide}>
         <div class="nav">
           {#if app.wide}
             <button use:tactile type="button" class="round navbtn" aria-label="Fermer les réglages" title="Fermer" onclick={() => app.closeComposer()}>
@@ -379,6 +386,7 @@
         <div class="start-wide">
           <PlaceField kind="start" place={app.start} busy={app.locating && !app.start} onclick={() => (app.search = 'start')} />
           {#if app.wide && !app.drawActive}<Stops />{/if}
+        </div>
         </div>
       {:else if !app.wide && (app.phase === 'results' || app.phase === 'detail') && app.route}
         <!-- iPhone : le parcours d'abord. Un résumé compact ; le détail en remontant le panneau. -->
@@ -493,6 +501,7 @@
 {/if}
 {#if saved.draft}<SaveSheet />{/if}
 {#if links.detail}<HealthDetail />{/if}
+{#if app.spotView && !app.wide}<SpotView />{/if}
 
 {#if welcome}<Welcome onclose={closeWelcome} />{/if}
 {#if community.lightbox}<Lightbox />{/if}
@@ -603,6 +612,13 @@
     display: grid;
     gap: 8px;
     padding-bottom: 10px;
+  }
+  /* Mac : l'en-tête des réglages (fermer, départ, points de passage) est un bloc de verre sur la carte. */
+  .compose-head.glass {
+    --g-bg: rgba(22, 23, 25, 0.8);
+    padding: 10px 12px 2px;
+    margin-bottom: 10px;
+    border-radius: 26px;
   }
   .nav {
     display: flex;

@@ -272,6 +272,67 @@ test('enregistrer un lieu depuis Créer : bouton de la carte, adresse, Mes lieux
   await expect(page.getByRole('button', { name: 'Enregistrer un lieu' })).toBeVisible();
 });
 
+test.describe(() => {
+  // Le service hors ligne de l'app passerait avant les réponses enregistrées (WebKit) : il est coupé ici.
+  test.use({ serviceWorkers: 'block' });
+  test('Découverte : lieux emblématiques en cartes, aux flèches, ajoutés au parcours', async ({ page, isMobile }) => {
+    // Réponses enregistrées d'OpenStreetMap et de Wikipédia (Nantes) : le test ne dépend pas du réseau.
+    const fs = await import('node:fs/promises');
+    const op = await fs.readFile('tests/e2e/fixtures/overpass-nantes.json', 'utf8');
+    const wp = await fs.readFile('tests/e2e/fixtures/wikipedia-nantes.json', 'utf8');
+    const calls = { op: 0, wp: 0 };
+    const cors = { 'access-control-allow-origin': '*' };
+    await page.route(/\/api\/interpreter/, (r) => {
+      calls.op++;
+      return r.fulfill({ contentType: 'application/json', body: op, headers: cors });
+    });
+    await page.route(/fr\.wikipedia\.org\/w\/api\.php/, (r) => {
+      calls.wp++;
+      return r.fulfill({ contentType: 'application/json', body: wp, headers: cors });
+    });
+    await open(page);
+    await compose(page);
+    // Le parcours d'un seul bloc : forme, distance, dénivelé, milieu.
+    const course = page.getByRole('region', { name: 'Le parcours' });
+    for (const k of ['Forme', 'Distance', 'Dénivelé +', 'Milieu']) await expect(course.getByText(k, { exact: true }).first()).toBeVisible();
+    // Découverte, repliée par défaut : rien n'est demandé tant qu'elle est fermée.
+    const head = page.getByRole('button', { name: /Découverte/ });
+    await expect(head).toHaveAttribute('aria-expanded', 'false');
+    expect(calls).toEqual({ op: 0, wp: 0 });
+    await head.click();
+    const list = page.getByRole('list', { name: 'Lieux emblématiques' });
+    await expect(list).toBeVisible({ timeout: 20_000 });
+    // Le plus emblématique en tête ; ni tombe ni immeuble.
+    await expect(list.getByRole('listitem').first()).toContainText('Château des Ducs de Bretagne');
+    await expect(list).not.toContainText('Pierre Cambronne');
+    await expect(list).not.toContainText('Immeuble');
+    // Les horaires quand OpenStreetMap les connaît (le Jardin de la Psalette, le Musée Dobrée…).
+    await expect(list.locator('.hours').first()).toBeVisible();
+    // Aux flèches, deux par deux.
+    await page.getByRole('button', { name: 'Lieux suivants' }).click();
+    await expect(page.getByText(/^3–4 sur \d+/)).toBeVisible();
+    await page.getByRole('button', { name: 'Lieux précédents' }).click();
+    await expect(page.getByText(/^1–2 sur \d+/)).toBeVisible();
+    // « + » : le château devient un point de passage.
+    await list.getByRole('button', { name: 'Passer par Château des Ducs de Bretagne' }).click();
+    await expect(page.getByText(/Le parcours passera par Château des Ducs de Bretagne/)).toBeVisible();
+    await expect(list.getByRole('button', { name: 'Ne plus passer par Château des Ducs de Bretagne' })).toHaveAttribute('aria-pressed', 'true');
+    if (isMobile) {
+      // iPhone : « Voir sur la carte », la fiche du lieu, puis retour aux réglages.
+      await list.getByRole('listitem').nth(1).getByRole('button', { name: 'Voir sur la carte' }).click();
+      const view = page.getByRole('region', { name: /Cathédrale|Machines|Passage|Musée|Tour|Grue/ });
+      await expect(view.getByRole('button', { name: /Passer par ici|Sur le parcours/ })).toBeVisible();
+      await view.getByRole('button', { name: 'Réglages' }).click();
+      await expect(list).toBeVisible();
+    }
+    // Fermer et rouvrir : tout vient de l'appareil, aucune requête de plus.
+    await head.click();
+    await head.click();
+    await expect(list).toBeVisible();
+    expect(calls).toEqual({ op: 1, wp: 1 });
+  });
+});
+
 test('chercher un point de départ par adresse', async ({ page }) => {
   await open(page);
   await compose(page);

@@ -1,4 +1,5 @@
 import type { GenProgress, LngLat, Params, Place, Route, Settings, Sport } from './types';
+import type { Spot } from './discover';
 import { defaultParams, DEFAULT_SETTINGS, estimateDuration, SPORTS } from './sports';
 import {
   deserialize,
@@ -27,7 +28,7 @@ import { hasDrawing, packDrawing, type Drawing } from './drawing';
 import type { MapType } from './mapstyle';
 import { reverseRoute } from './routegeo';
 import { elevationStats } from './elevation';
-import { cumulative } from './geo';
+import { cumulative, haversine } from './geo';
 import { findRetraces } from './retrace';
 import { ascentProfile, followStats, Follower, movingSeconds, type FollowState } from './follow';
 import { live, liveCard } from './live';
@@ -156,6 +157,26 @@ class AppState {
 
   /** Ajouter un lieu à Mes lieux : recherche d'adresse (nom, émoji et liste proposés : « Domicile »…). */
   saveHint: { name?: string; emoji?: string; list?: string } = {};
+  /** Découverte : la zone affichée sur la carte (o, s, e, n), relevée par MapView à chaque fin de mouvement */
+  viewBounds = $state.raw<[number, number, number, number] | null>(null);
+  /** un lieu de la Découverte montré sur la carte : survolé (Mac) ou « Voir sur la carte » (iPhone) */
+  spotFocus = $state.raw<{ coord: LngLat; bounds: [number, number, number, number] | null; emoji: string; name: string; fly: boolean } | null>(null);
+  /** iPhone : la carte et la fiche du lieu de la Découverte, à la place des réglages */
+  spotView = $state.raw<Spot | null>(null);
+
+  /** Un lieu de la Découverte en point de passage (5 au plus) ; false s'il n'y a plus de place. */
+  addVia(p: Place): boolean {
+    if (this.vias.length >= MAX_VIAS) return false;
+    this.vias.push(p);
+    this.editVia = null;
+    this.persist();
+    return true;
+  }
+  /** Le point de passage à moins de 40 m de ce lieu (sa place dans la liste), ou -1. */
+  viaNear(c: LngLat): number {
+    return this.vias.findIndex((v) => haversine(v.coord, c) < 40);
+  }
+
   /** « Nouveau lieu » : les lieux trouvés, en pastilles sur la carte (MapView), et ce qu'un toucher en fait */
   addPins = $state.raw<{ coord: LngLat; emoji: string; name: string }[]>([]);
   addPick: ((i: number) => void) | null = null;

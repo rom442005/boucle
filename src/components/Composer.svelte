@@ -6,6 +6,7 @@
   import InstallGuide from './InstallGuide.svelte';
   import Stops from './Stops.svelte';
   import DrawPad from './DrawPad.svelte';
+  import Discover from './Discover.svelte';
   import { app } from '../lib/state.svelte';
   import { isDesktop, isIOS, isStandalone } from '../lib/platform';
   import { asSwitch, haptic, nativeSwitch, tactile } from '../lib/haptics';
@@ -21,8 +22,11 @@
   // Sur Mac : bandeau qui affiche le QR code à scanner avec l'iPhone.
   const qrHint = $derived(isDesktop && !app.flags.qrVu);
 
-  /** iPhone : les réglages flottent en blocs de verre sur un paysage (le sport choisit la photo). */
-  const cards = $derived(!app.wide);
+  /**
+   * En blocs de verre partout, comme Profil et Communauté : sur le paysage (iPhone, le sport choisit la photo),
+   * sur la carte (Mac, un verre plus dense pour rester lisible).
+   */
+  const cards = true;
   const p = $derived(app.params);
   const def = $derived(SPORTS[p.sport]);
 
@@ -59,80 +63,98 @@
   }
 </script>
 
-<div class="composer" class:cards>
+<div class="composer" class:cards class:wide={app.wide}>
   {#if installHint}
     <InstallGuide mode="banner" />
   {:else if qrHint}
     <InstallGuide mode="mac" />
   {/if}
-  <div class="set" class:glass={cards} class:photo-card={cards}>
-  <Segmented
-    label="Sport"
-    tall
-    value={p.sport}
-    options={SPORT_ORDER.map((s) => ({ value: s, label: SPORTS[s].label, icon: SPORT_ICON[s] }))}
-    onchange={(s) => app.setSport(s)}
-  />
-
-  <Ruler
-    id="distance"
-    label="Distance"
-    value={p.distanceKm}
-    min={def.distance.min}
-    max={def.distance.max}
-    step={def.distance.step}
-    every={def.ruler.km.every}
-    display={kmSetting(p.distanceKm)}
-    unit="km"
-    valuetext="{kmSetting(p.distanceKm)} kilomètres"
-    onchange={setDistance}
-  />
-
-  <!-- Un dessin décide seul du chemin : le relief et le milieu ne comptent plus (grisés). -->
-  <div class="fold" class:muted={app.drawActive} inert={app.drawActive} data-fold>
-  <Ruler
-    id="elevation"
-    label="Dénivelé positif"
-    value={p.elevation ?? 0}
-    min={0}
-    max={def.elevation.max}
-    step={def.elevation.step}
-    every={def.ruler.dplus.every}
-    display={(p.elevation ?? 0).toLocaleString('fr-FR')}
-    unit="m"
-    off={p.elevation == null}
-    valuetext="{p.elevation ?? 0} mètres de dénivelé positif"
-    onchange={(v) => setElevation(v)}
-    onreset={() => setElevation(null)}
-  />
-  </div>
-  </div>
-
-  <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="env-l">
-    <h3 id="env-l" class="field-label">Milieu</h3>
-    <div class="fold" class:muted={app.drawActive} inert={app.drawActive}>
-      <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
-    </div>
+  <!-- Le sport d'abord : il règle tout le reste (distances, sols, vitesse). -->
+  <section class="block glass photo-card" aria-label="Sport">
+    <Segmented
+      label="Sport"
+      tall
+      value={p.sport}
+      options={SPORT_ORDER.map((s) => ({ value: s, label: SPORTS[s].label, icon: SPORT_ICON[s] }))}
+      onchange={(s) => app.setSport(s)}
+    />
   </section>
 
-  <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="shape-l">
-    <h3 id="shape-l" class="field-label">Forme</h3>
-    <Segmented
-      label="Forme du parcours"
-      value={p.shape}
-      options={(Object.keys(SHAPES) as Shape[]).map((s) => ({ value: s, label: SHAPES[s].label }))}
-      onchange={setShape}
-    />
-    {#if p.shape === 'loop'}
-      <DrawPad />
-    {/if}
+  <!--
+    Le parcours, d'un seul bloc et dans l'ordre où on le pense : sa forme, sa distance, son dénivelé, le milieu
+    traversé. Chaque rang a la même étiquette et le même filet.
+  -->
+  <section class="block glass photo-card course" aria-label="Le parcours">
+    <div class="sub">
+      <h3 id="shape-l" class="field-label">Forme</h3>
+      <Segmented
+        label="Forme du parcours"
+        value={p.shape}
+        options={(Object.keys(SHAPES) as Shape[]).map((s) => ({ value: s, label: SHAPES[s].label }))}
+        onchange={setShape}
+      />
+      {#if p.shape === 'loop'}
+        <DrawPad />
+      {/if}
+    </div>
+
+    <div class="sub">
+      <Ruler
+        id="distance"
+        label="Distance"
+        value={p.distanceKm}
+        min={def.distance.min}
+        max={def.distance.max}
+        step={def.distance.step}
+        every={def.ruler.km.every}
+        display={kmSetting(p.distanceKm)}
+        unit="km"
+        valuetext="{kmSetting(p.distanceKm)} kilomètres"
+        onchange={setDistance}
+      />
+    </div>
+
+    <!-- Un dessin décide seul du chemin : le relief et le milieu ne comptent plus (grisés). -->
+    <div class="sub fold" class:muted={app.drawActive} inert={app.drawActive} data-fold>
+      <Ruler
+        id="elevation"
+        label="Dénivelé +"
+        spoken="Dénivelé positif"
+        value={p.elevation ?? 0}
+        min={0}
+        max={def.elevation.max}
+        step={def.elevation.step}
+        every={def.ruler.dplus.every}
+        display={(p.elevation ?? 0).toLocaleString('fr-FR')}
+        unit="m"
+        off={p.elevation == null}
+        valuetext="{p.elevation ?? 0} mètres de dénivelé positif"
+        onchange={(v) => setElevation(v)}
+        onreset={() => setElevation(null)}
+      />
+    </div>
+
+    <div class="sub" aria-labelledby="env-l">
+      <h3 id="env-l" class="field-label">Milieu</h3>
+      <div class="fold" class:muted={app.drawActive} inert={app.drawActive}>
+        <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
+      </div>
+    </div>
+
     <!-- Sur Mac, ces lieux sont en haut de la colonne, sous le départ. Un dessin n'a pas de point de passage. -->
     {#if !app.wide && !app.drawActive}
-      <Stops />
+      <div class="sub"><Stops /></div>
     {/if}
   </section>
 
-  <section class="block" class:glass={cards} class:photo-card={cards} aria-labelledby="opt-l">
+  <!-- Découverte : les lieux emblématiques autour, à ajouter au parcours (pas pour un dessin). -->
+  {#if !app.drawActive}
+    <section class="block glass photo-card">
+      <Discover />
+    </section>
+  {/if}
+
+  <section class="block glass photo-card" aria-labelledby="opt-l">
     <h3 id="opt-l" class="field-label">Options</h3>
     <div class="group">
       <label class="row">
@@ -175,10 +197,10 @@
 <style>
   .composer {
     display: grid;
-    gap: 16px;
+    gap: 12px;
     padding-top: 4px;
   }
-  /* Les réglages arrivent l'un après l'autre, juste derrière le panneau qui monte. */
+  /* Les blocs arrivent l'un après l'autre, juste derrière le panneau qui monte. */
   .composer > :global(*) {
     animation: set-in 520ms var(--ease-out) backwards;
   }
@@ -186,39 +208,40 @@
   .composer > :global(*:nth-child(2)) { animation-delay: 190ms; }
   .composer > :global(*:nth-child(3)) { animation-delay: 240ms; }
   .composer > :global(*:nth-child(4)) { animation-delay: 290ms; }
-  .composer > :global(*:nth-child(5)) { animation-delay: 340ms; }
-  .composer > :global(*:nth-child(6)) { animation-delay: 390ms; }
-  .composer > :global(*:nth-child(n + 7)) { animation-delay: 440ms; }
+  .composer > :global(*:nth-child(n + 5)) { animation-delay: 340ms; }
   @keyframes set-in {
     from {
       opacity: 0;
       translate: 0 18px;
     }
   }
-  .block,
-  .set {
+  .block {
     display: grid;
     gap: 10px;
-  }
-  .set {
-    gap: 16px;
-  }
-  /* En blocs sur la photo : plus d'air entre eux, les listes se fondent dans leur bloc. */
-  .cards {
-    gap: 12px;
-  }
-  .cards .block,
-  .cards .set {
     padding: 14px 14px 16px;
   }
-  .cards .block :global(.group) {
+  /* Mac : les blocs flottent sur la carte ; un verre plus dense pour que le texte reste lisible. */
+  .wide .block {
+    --g-bg: rgba(22, 23, 25, 0.8);
+    border-radius: 26px;
+  }
+  /* Le parcours : quatre rangs alignés, séparés d'un même filet. */
+  .course {
+    gap: 0;
+    padding-top: 6px;
+    padding-bottom: 8px;
+  }
+  .sub {
+    display: grid;
+    gap: 10px;
+    padding: 12px 0;
+  }
+  .sub + .sub {
+    border-top: 0.5px solid rgba(255, 255, 255, 0.16);
+  }
+  .block :global(.group) {
     margin: 0 -6px -6px;
     background: transparent;
-  }
-  .cards .block h3 {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--label-2);
   }
   .block h3 {
     margin: 0;
@@ -257,11 +280,11 @@
   }
   @media (max-width: 859px) {
     .composer {
-      gap: 14px;
       padding-top: 2px;
     }
-    .block {
+    .sub {
       gap: 8px;
+      padding: 11px 0;
     }
     .stepper button {
       width: 32px;

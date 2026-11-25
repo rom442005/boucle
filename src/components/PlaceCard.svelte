@@ -6,6 +6,8 @@
   import { km } from '../lib/format';
   import { haversine } from '../lib/geo';
   import { aerialTiles, groundPhoto, hasAerial, type GroundPhoto } from '../lib/placephotos';
+  import { placeHours } from '../lib/services';
+  import { readHours, type Hours } from '../lib/hours';
 
   /*
    * Fiche d'un lieu touché sur la carte (piste, parc, fontaine, lieu enregistré) : deux photos côte à côte, la
@@ -32,6 +34,20 @@
   });
   $effect(() => {
     app.placeH = cardH;
+  });
+  // Horaires d'ouverture (piste, parc, point d'eau, toilettes), s'ils sont connus : une requête au plus par lieu.
+  let hours = $state<Hours | null>(null);
+  $effect(() => {
+    const cur = p;
+    hours = null;
+    if (!cur.zone) return;
+    const ctrl = new AbortController();
+    void placeHours(cur.coord, cur.zone, ctrl.signal)
+      .then((h) => {
+        if (app.place?.id === cur.id) hours = readHours(h);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
   });
   // Fiche retirée de l'écran (réglages ouverts, autre onglet) : elle se ferme pour de bon.
   $effect(() => () => {
@@ -123,6 +139,11 @@
     <span class="txt">
       <h3>{p.name}</h3>
       <small class="tabular">{[p.sub, dist != null && dist > 30 ? `à ${km(dist)}` : '', steps ? `${steps.i + 1}/${steps.n}` : ''].filter(Boolean).join(' · ')}</small>
+      {#if hours}
+        <small class="hours" class:is-open={hours.open === true} class:is-closed={hours.open === false} title={hours.today ? `Aujourd’hui : ${hours.today}` : undefined}>
+          <i aria-hidden="true"></i>{hours.label}
+        </small>
+      {/if}
     </span>
     {#if steps}
       <button use:tactile type="button" class="x" aria-label="Lieu précédent" onclick={() => app.stepZone(-1)}><Icon name="caretLeft" size={16} /></button>
@@ -293,6 +314,31 @@
     align-items: flex-start;
     gap: 8px;
     padding: 0 4px 0 8px;
+  }
+  .hours {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 2px;
+    font-weight: 600;
+  }
+  .hours i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #8e8e93;
+  }
+  .hours.is-open {
+    color: #30d158;
+  }
+  .hours.is-open i {
+    background: #30d158;
+  }
+  .hours.is-closed {
+    color: #ff9f0a;
+  }
+  .hours.is-closed i {
+    background: #ff9f0a;
   }
   .txt {
     flex: 1;

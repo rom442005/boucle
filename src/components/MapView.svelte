@@ -582,6 +582,30 @@
       },
       before,
     );
+    // Découverte : le lieu survolé (Mac) ou montré (iPhone) ; sa zone en halo rose, sa pastille au-dessus.
+    if (!m.getSource('spot-zone')) m.addSource('spot-zone', { type: 'geojson', data: EMPTY });
+    if (!m.getSource('spot-pin')) m.addSource('spot-pin', { type: 'geojson', data: EMPTY });
+    m.addLayer({ id: 'spot-zone-fill', type: 'fill', source: 'spot-zone', paint: { 'fill-color': tintOf(), 'fill-opacity': 0.16 } });
+    m.addLayer({ id: 'spot-zone-line', type: 'line', source: 'spot-zone', paint: { 'line-color': tintOf(), 'line-width': 2, 'line-opacity': 0.9, 'line-dasharray': [2, 1.5] } });
+    m.addLayer({
+      id: 'spot-pin',
+      type: 'symbol',
+      source: 'spot-pin',
+      layout: {
+        'icon-image': ['concat', 'sv-', ['get', 'emoji']],
+        'icon-size': 1.3,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 13,
+        'text-offset': [0, 1.9],
+        'text-anchor': 'top',
+        'text-max-width': 12,
+        'text-allow-overlap': true,
+      },
+      paint: { 'text-color': '#FFFFFF', 'text-halo-color': 'rgba(0,0,0,0.85)', 'text-halo-width': 1.6 },
+    });
     // « Nouveau lieu » : les lieux trouvés, en pastilles à leur émoji, leur nom dessous.
     if (!m.getSource('add-pins')) m.addSource('add-pins', { type: 'geojson', data: EMPTY });
     m.addLayer({
@@ -1842,6 +1866,18 @@
       if (id.startsWith('sv-') && map && !map.hasImage(id)) map.addImage(id, savedPin(id.slice(3)), { pixelRatio: 2 });
     });
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    // La zone affichée, pour la Découverte (arrondie : un petit glissement ne change rien).
+    const publishView = () => {
+      // Mouvement provoqué par l'aperçu d'un lieu de la Découverte : la liste ne doit pas changer sous la souris.
+      if (performance.now() < spotMoveUntil) return;
+      const b = map!.getBounds();
+      const r = (x: number) => Math.round(x * 500) / 500;
+      const v: [number, number, number, number] = [r(b.getWest()), r(b.getSouth()), r(b.getEast()), r(b.getNorth())];
+      const cur = app.viewBounds;
+      if (!cur || v.some((x, i) => x !== cur[i])) app.viewBounds = v;
+    };
+    map.once('load', publishView);
+    map.on('moveend', publishView);
     map.on('moveend', () => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
@@ -2523,6 +2559,44 @@
     if (!ready || !map || p) return;
     untrack(() => setFocusPoint(focused ? focused.coord : null, focused?.kind));
   });
+  /** jusqu'à quand la carte bouge pour montrer un lieu de la Découverte (la zone de la Découverte n'en tient pas compte) */
+  let spotMoveUntil = 0;
+  // Découverte : le lieu survolé ou montré, sa zone (un cercle qui couvre son emprise) et sa pastille.
+  $effect(() => {
+    const f = app.spotFocus;
+    if (!ready || !map) return;
+    if (!f) {
+      setData('spot-zone', EMPTY);
+      setData('spot-pin', EMPTY);
+      return;
+    }
+    const kx = 111320 * Math.cos((f.coord[1] * Math.PI) / 180);
+    const half = f.bounds ? Math.hypot((f.bounds[2] - f.bounds[0]) * kx, (f.bounds[3] - f.bounds[1]) * 110540) / 2 : 0;
+    const r = Math.min(1500, Math.max(90, half * 1.1));
+    const ring: LngLat[] = Array.from({ length: 49 }, (_, i) => {
+      const a = (i / 48) * 2 * Math.PI;
+      return [f.coord[0] + (Math.cos(a) * r) / kx, f.coord[1] + (Math.sin(a) * r) / 110540] as LngLat;
+    });
+    setData('spot-zone', { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }] });
+    setData('spot-pin', { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { emoji: f.emoji, name: f.name }, geometry: { type: 'Point', coordinates: f.coord } }] });
+    const m = map;
+    const zoomTo = Math.max(untrack(() => m.getZoom()), r > 600 ? 13.5 : 15);
+    if (f.fly) {
+      // « Voir sur la carte » : le lieu au centre de ce qui reste visible (au-dessus de la fiche sur iPhone).
+      spotMoveUntil = performance.now() + 1300;
+      m.easeTo({ center: f.coord, zoom: zoomTo, padding: app.wide ? { top: 40, bottom: 40, left: 420, right: 40 } : { top: 60, bottom: 380, left: 20, right: 20 }, duration: reduce ? 0 : 900 });
+      return;
+    }
+    // Survol (Mac) : la carte s'approche si on la voit de trop loin pour lire la zone, ou va au lieu s'il n'est
+    // pas dans la partie visible ; sinon elle ne bouge pas.
+    const p = m.project(f.coord);
+    const cv = m.getCanvas();
+    const z = untrack(() => m.getZoom());
+    const out = p.x < 430 || p.x > cv.clientWidth - 40 || p.y < 40 || p.y > cv.clientHeight - 40;
+    if (out || z < 13) spotMoveUntil = performance.now() + 1000;
+    if (out || z < 13) m.easeTo({ center: f.coord, zoom: Math.max(z, r > 600 ? 13 : 14), padding: { top: 40, bottom: 40, left: 420, right: 40 }, duration: reduce ? 0 : 650 });
+  });
+
   // « Nouveau lieu » : les lieux trouvés sur la carte, cadrés dans ce que les blocs laissent voir.
   $effect(() => {
     const pins = app.addPins;

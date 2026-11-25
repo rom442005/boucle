@@ -13,6 +13,7 @@
   let {
     id,
     label,
+    spoken,
     value,
     min,
     max,
@@ -28,6 +29,8 @@
   }: {
     id: string;
     label: string;
+    /** nom lu par VoiceOver quand l'étiquette est abrégée (« Dénivelé + » → « Dénivelé positif ») */
+    spoken?: string;
     value: number;
     min: number;
     max: number;
@@ -229,7 +232,7 @@
       {:else}
         <span class="num rounded" aria-hidden="true"><RollingNumber value={display} /></span><span class="unit" aria-hidden="true">{unit}</span>
         {#if onreset}
-          <button use:tactile type="button" class="reset" onclick={onreset} aria-label="Remettre {label.toLowerCase()} sur indifférent">
+          <button use:tactile type="button" class="reset" onclick={onreset} aria-label="Remettre {(spoken ?? label).toLowerCase()} sur indifférent">
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor" opacity=".18" /><path d="M5.5 5.5l5 5m0-5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
           </button>
         {/if}
@@ -243,7 +246,8 @@
     class:grabbing
     role="slider"
     tabindex="0"
-    aria-labelledby="{id}-l"
+    aria-labelledby={spoken ? undefined : `${id}-l`}
+    aria-label={spoken}
     aria-valuemin={min}
     aria-valuemax={max}
     aria-valuenow={off ? undefined : value}

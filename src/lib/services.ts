@@ -75,25 +75,98 @@ export async function weather(p: LngLat, signal?: AbortSignal): Promise<Weather 
 
 /* ---------- Points d'eau potable (Overpass, OpenStreetMap) ---------- */
 
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+/*
+ * Overpass : le premier serveur qui répond (celui d'OpenStreetMap France, rapide et fiable, puis les deux
+ * serveurs publics, souvent saturés), chacun avec un délai maximal pour ne jamais faire attendre l'app.
+ */
+const OVERPASS = ['https://overpass.openstreetmap.fr/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 
-export async function drinkingWater(b: BBox, signal?: AbortSignal): Promise<LngLat[]> {
-  const [w, s, e, n] = b;
-  const q = `[out:json][timeout:12];node["amenity"="drinking_water"](${s.toFixed(5)},${w.toFixed(5)},${n.toFixed(5)},${e.toFixed(5)});out;`;
-  for (const base of OVERPASS) {
+/** serveur qui vient de refuser ou d'échouer : on passe au suivant pendant 10 minutes */
+const resting = new Map<string, number>();
+
+export async function overpass<T>(q: string, signal?: AbortSignal, timeoutMs = 15000): Promise<T | null> {
+  const now = Date.now();
+  const order = [...OVERPASS].sort((a, b) => Number((resting.get(a) ?? 0) > now) - Number((resting.get(b) ?? 0) > now));
+  for (const base of order) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const stop = () => ctrl.abort();
+    signal?.addEventListener('abort', stop);
     try {
       const r = await fetch(base, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'data=' + encodeURIComponent(q),
-        signal,
+        signal: ctrl.signal,
       });
-      if (!r.ok) continue;
-      const j: { elements: { lon: number; lat: number }[] } = await r.json();
-      return j.elements.map((el) => [el.lon, el.lat]);
+      if (r.ok) return (await r.json()) as T;
+      // Trop de demandes (429, 403), serveur saturé (5xx) : on le laisse se reposer.
+      resting.set(base, Date.now() + 10 * 60000);
     } catch (err) {
       if (signal?.aborted) throw err;
+      resting.set(base, Date.now() + 10 * 60000);
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
     }
   }
-  return [];
+  return null;
+}
+
+export async function drinkingWater(b: BBox, signal?: AbortSignal): Promise<LngLat[]> {
+  const [w, s, e, n] = b;
+  const q = `[out:json][timeout:12];node["amenity"="drinking_water"](${s.toFixed(5)},${w.toFixed(5)},${n.toFixed(5)},${e.toFixed(5)});out;`;
+  const j = await overpass<{ elements: { lon: number; lat: number }[] }>(q, signal, 12000);
+  return j ? j.elements.map((el) => [el.lon, el.lat]) : [];
+}
+
+/* ---------- Horaires d'un lieu de la carte (OpenStreetMap), à la demande ---------- */
+
+/** Ce qui porte les horaires, selon le genre du lieu touché (pistes, parcs, points d'eau, toilettes…). */
+const HOURS_OF: Record<string, { f: string; r: number }> = {
+  track: { f: '["leisure"~"^(track|sports_centre|stadium|pitch)$"]', r: 150 },
+  park: { f: '["leisure"~"^(park|garden|playground|dog_park)$"]', r: 400 },
+  wood: { f: '["leisure"~"^(park|nature_reserve)$"]', r: 400 },
+  water: { f: '["leisure"~"^(park|swimming_area|beach_resort|marina)$"]', r: 300 },
+  fountain: { f: '["amenity"="drinking_water"]', r: 40 },
+  toilets: { f: '["amenity"="toilets"]', r: 40 },
+};
+const HOURS_KEY = 'boucle.horaires.v1';
+const HOURS_TTL = 30 * 86400000;
+let hoursMem: Record<string, { t: number; h: string | null }> | null = null;
+function hoursStore() {
+  if (hoursMem) return hoursMem;
+  try {
+    hoursMem = JSON.parse(localStorage.getItem(HOURS_KEY) ?? '{}') ?? {};
+  } catch {
+    hoursMem = {};
+  }
+  return hoursMem!;
+}
+
+/**
+ * Les horaires d'ouverture (opening_hours) du lieu touché sur la carte, s'ils sont connus d'OpenStreetMap :
+ * une petite requête au plus par lieu, gardée 30 jours (sans horaires aussi, pour ne pas redemander).
+ */
+export async function placeHours(c: LngLat, kind: string, signal?: AbortSignal): Promise<string | null> {
+  const spec = HOURS_OF[kind];
+  if (!spec) return null;
+  const key = `${kind}:${c[0].toFixed(4)},${c[1].toFixed(4)}`;
+  const st = hoursStore();
+  const hit = st[key];
+  if (hit && Date.now() - hit.t < HOURS_TTL) return hit.h;
+  const q = `[out:json][timeout:10];nwr(around:${spec.r},${c[1].toFixed(5)},${c[0].toFixed(5)})${spec.f}["opening_hours"];out tags 1;`;
+  const j = await overpass<{ elements: { tags?: Record<string, string> }[] }>(q, signal, 10000);
+  if (!j) return null; // pas de réponse : on redemandera
+  const h = j.elements[0]?.tags?.opening_hours ?? null;
+  st[key] = { t: Date.now(), h };
+  // Au plus 400 lieux gardés.
+  const keys = Object.keys(st);
+  if (keys.length > 400) for (const k of keys.sort((a, b) => st[a].t - st[b].t).slice(0, keys.length - 400)) delete st[k];
+  try {
+    localStorage.setItem(HOURS_KEY, JSON.stringify(st));
+  } catch {
+    /* stockage plein */
+  }
+  return h;
 }

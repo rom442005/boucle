@@ -85,6 +85,16 @@ export default defineConfig(({ command, isPreview, mode }) => ({
             },
           },
           {
+            // Photos des lieux de la Découverte (vignettes Wikipédia) : gardées un mois, revues sans rien retélécharger.
+            urlPattern: /^https:\/\/(thumb|upload)\.wikimedia\.org\/.+/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'decouverte',
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/s3\.amazonaws\.com\/elevation-tiles-prod\/.+/,
             handler: 'CacheFirst',
             options: {
