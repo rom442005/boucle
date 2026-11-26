@@ -311,15 +311,22 @@ test.describe(() => {
     await expect(list.getByRole('listitem').first()).toContainText('Château des Ducs de Bretagne');
     await expect(list).not.toContainText('Pierre Cambronne');
     await expect(list).not.toContainText('Immeuble');
-    // La Tour LU n'a pas d'article français : sa fiche Wikidata la fait venir, avec sa photo.
-    await expect(list.getByRole('listitem').filter({ hasText: 'Tour LU' }).locator('img')).toHaveCount(1);
     // Les horaires quand OpenStreetMap les connaît (le Jardin de la Psalette, le Musée Dobrée…).
     await expect(list.locator('.hours').first()).toBeVisible();
-    // Aux flèches, deux par deux.
+    // Quatre par quatre, de haut en bas, aux flèches.
+    await expect(list.getByRole('listitem')).toHaveCount(4);
     await page.getByRole('button', { name: 'Lieux suivants' }).click();
-    await expect(page.getByText(/^3–4 sur \d+/)).toBeVisible();
+    await expect(page.getByText(/^5–8 sur \d+/)).toBeVisible();
     await page.getByRole('button', { name: 'Lieux précédents' }).click();
-    await expect(page.getByText(/^1–2 sur \d+/)).toBeVisible();
+    await expect(page.getByText(/^1–4 sur \d+/)).toBeVisible();
+    // Sur Mac, pas de « Voir sur la carte » : le survol suffit.
+    if (!isMobile) await expect(list.getByRole('button', { name: 'Voir sur la carte' })).toHaveCount(0);
+    // La Tour LU n'a pas d'article français : sa fiche Wikidata la fait venir, avec sa photo (pages suivantes).
+    const next = page.getByRole('button', { name: 'Lieux suivants' });
+    const tourLu = list.getByRole('listitem').filter({ hasText: 'Tour LU' });
+    for (let k = 0; k < 8 && !(await tourLu.count()); k++) await next.click();
+    await expect(tourLu.locator('img')).toHaveCount(1);
+    for (let k = 0; k < 8 && (await page.getByRole('button', { name: 'Lieux précédents' }).isEnabled()); k++) await page.getByRole('button', { name: 'Lieux précédents' }).click();
     // « + » : le château devient un point de passage.
     await list.getByRole('button', { name: 'Passer par Château des Ducs de Bretagne' }).click();
     await expect(page.getByText(/Le parcours passera par Château des Ducs de Bretagne/)).toBeVisible();

@@ -10,6 +10,7 @@
   import { elevationStats } from '../lib/elevation';
   import { SPORT_EMOJI } from '../lib/scenes';
   import ActivityBars from './ActivityBars.svelte';
+  import EmojiPicker from './EmojiPicker.svelte';
   import { LIST_EMOJIS, saved, SUGGESTED } from '../lib/saved.svelte';
   import { haversine } from '../lib/geo';
 
@@ -82,7 +83,8 @@
     saved.openList = l.id;
     newList = null;
   }
-  const nextEmoji = (e: string) => LIST_EMOJIS[(LIST_EMOJIS.indexOf(e) + 1) % LIST_EMOJIS.length];
+  /** le choix d'émoji ouvert : pour la nouvelle liste, ou la liste qu'on modifie */
+  let picking = $state<'new' | 'edit' | null>(null);
   let listName = $state('');
   $effect(() => {
     listName = openList.name;
@@ -134,20 +136,26 @@
   </div>
   {#if newList}
     <div class="lform">
-      <button use:tactile type="button" class="lemo" aria-label="Changer l’émoji ({newList.emoji})" onclick={() => newList && (newList.emoji = nextEmoji(newList.emoji))}>{newList.emoji}</button>
+      <button use:tactile type="button" class="lemo" class:open={picking === 'new'} aria-label="Changer l’émoji ({newList.emoji})" aria-expanded={picking === 'new'} onclick={() => (picking = picking === 'new' ? null : 'new')}>{newList.emoji}</button>
       <!-- svelte-ignore a11y_autofocus -->
       <input bind:value={newList.name} maxlength="30" placeholder="Nom de la nouvelle liste" aria-label="Nom de la nouvelle liste" autofocus enterkeyhint="done" onkeydown={(e) => e.key === 'Enter' && createList()} />
       <button use:tactile type="button" class="lok" aria-label="Créer la liste" disabled={!newList.name.trim()} onclick={createList}>Créer</button>
-      <button use:tactile type="button" class="lx" aria-label="Annuler" onclick={() => (newList = null)}><Icon name="close" size={14} /></button>
+      <button use:tactile type="button" class="lx" aria-label="Annuler" onclick={() => ((newList = null), (picking = null))}><Icon name="close" size={14} /></button>
     </div>
+    {#if picking === 'new'}
+      <EmojiPicker value={newList.emoji} label="Émoji de la nouvelle liste" onpick={(e) => newList && ((newList.emoji = e), (picking = null))} />
+    {/if}
   {:else if editing}
     <div class="lform">
-      <button use:tactile type="button" class="lemo" aria-label="Changer l’émoji de la liste ({openList.emoji})" onclick={() => saved.renameList(openList.id, listName, nextEmoji(openList.emoji))}>{openList.emoji}</button>
+      <button use:tactile type="button" class="lemo" class:open={picking === 'edit'} aria-label="Changer l’émoji de la liste ({openList.emoji})" aria-expanded={picking === 'edit'} onclick={() => (picking = picking === 'edit' ? null : 'edit')}>{openList.emoji}</button>
       <input bind:value={listName} maxlength="30" aria-label="Nom de la liste" onchange={() => saved.renameList(openList.id, listName, openList.emoji)} />
       {#if saved.lists.length > 1}
         <button use:tactile type="button" class="lx danger" aria-label="Supprimer la liste {openList.name} et ses lieux" onclick={() => saved.removeList(openList.id)}><Icon name="trash" size={15} /></button>
       {/if}
     </div>
+    {#if picking === 'edit'}
+      <EmojiPicker value={openList.emoji} label="Émoji de la liste {openList.name}" onpick={(e) => (saved.renameList(openList.id, listName, e), (picking = null))} />
+    {/if}
   {/if}
   {#if listPlaces.length || missing.length}
     <ul class="list" aria-label="Lieux de la liste {openList.name}">
@@ -546,6 +554,9 @@
     font-size: 0.9375rem;
     color: var(--label);
     background: var(--fill-2);
+  }
+  .lemo.open {
+    box-shadow: 0 0 0 2px var(--tint);
   }
   .lemo,
   .lx {

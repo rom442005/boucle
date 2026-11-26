@@ -160,9 +160,11 @@ class AppState {
   /** Découverte : la zone affichée sur la carte (o, s, e, n), relevée par MapView à chaque fin de mouvement */
   viewBounds = $state.raw<[number, number, number, number] | null>(null);
   /** un lieu de la Découverte montré sur la carte : survolé (Mac) ou « Voir sur la carte » (iPhone) */
-  spotFocus = $state.raw<{ coord: LngLat; bounds: [number, number, number, number] | null; emoji: string; name: string; fly: boolean } | null>(null);
+  spotFocus = $state.raw<{ id?: string; coord: LngLat; bounds: [number, number, number, number] | null; emoji: string; name: string; fly: boolean } | null>(null);
   /** iPhone : la carte et la fiche du lieu de la Découverte, à la place des réglages */
   spotView = $state.raw<Spot | null>(null);
+  /** les lieux de la Découverte ouverte, en pastilles sur la carte (vide quand elle est fermée) */
+  spots = $state.raw<Spot[]>([]);
 
   /** Un lieu de la Découverte en point de passage (5 au plus) ; false s'il n'y a plus de place. */
   addVia(p: Place): boolean {

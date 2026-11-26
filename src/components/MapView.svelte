@@ -3,7 +3,7 @@
   import * as maplibregl from 'maplibre-gl';
   // MapLibre 6 calcule les tuiles dans un fichier à part : servi avec l'app (sinon la carte reste vide).
   import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-  import type { GeoJSONSource, Map as MLMap, Marker } from 'maplibre-gl';
+  import type { GeoJSONSource, Map as MLMap, Marker, PaddingOptions } from 'maplibre-gl';
   import type { FeatureCollection, GeoJSON, LineString, Polygon } from 'geojson';
   import { app, type Padding, type PlaceInfo, type PlaceKind } from '../lib/state.svelte';
   import { buildStyle, PAYSAGE_BG, planValue, ROUTE_CASING, satelliteOverrides, SPACE_ZOOM, type Theme } from '../lib/mapstyle';
@@ -44,6 +44,8 @@
   const LANDING_DZ = 1.1;
   /** Mes lieux se voient à partir d'ici (vue d'une agglomération), et s'effacent au-delà. */
   const SAVED_MINZOOM = 9.6;
+  /** de plus loin (une ville entière et au-delà), les lieux de la Découverte s'effacent de la carte */
+  const SPOT_MINZOOM = 10.4;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /** Ciel étoilé autour du globe : deux motifs de tailles différentes, pour que la répétition ne se voie pas. */
@@ -587,6 +589,35 @@
     if (!m.getSource('spot-pin')) m.addSource('spot-pin', { type: 'geojson', data: EMPTY });
     m.addLayer({ id: 'spot-zone-fill', type: 'fill', source: 'spot-zone', paint: { 'fill-color': tintOf(), 'fill-opacity': 0.16 } });
     m.addLayer({ id: 'spot-zone-line', type: 'line', source: 'spot-zone', paint: { 'line-color': tintOf(), 'line-width': 2, 'line-opacity': 0.9, 'line-dasharray': [2, 1.5] } });
+    // Découverte ouverte : tous ses lieux en pastilles, comme Mes lieux ; effacés de trop loin, leur nom de près.
+    if (!m.getSource('spots')) m.addSource('spots', { type: 'geojson', data: EMPTY });
+    m.addLayer({
+      id: 'spot-pins',
+      type: 'symbol',
+      source: 'spots',
+      minzoom: SPOT_MINZOOM,
+      layout: {
+        'icon-image': ['concat', 'sv-', ['get', 'emoji']],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], SPOT_MINZOOM, 0.7, 15, 1] as unknown as number,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'symbol-sort-key': ['get', 'i'],
+        'text-field': ['step', ['zoom'], '', 13.6, ['get', 'name']] as unknown as string,
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 11.5,
+        'text-offset': [0, 1.55],
+        'text-anchor': 'top',
+        'text-max-width': 9,
+        'text-optional': true,
+      },
+      paint: {
+        'icon-opacity': ['interpolate', ['linear'], ['zoom'], SPOT_MINZOOM, 0, SPOT_MINZOOM + 0.6, 1] as unknown as number,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 13.6, 0, 14, 1] as unknown as number,
+        'text-color': theme === 'dark' ? '#FFFFFF' : '#1C1C1E',
+        'text-halo-color': theme === 'dark' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)',
+        'text-halo-width': 1.4,
+      },
+    });
     m.addLayer({
       id: 'spot-pin',
       type: 'symbol',
@@ -978,7 +1009,7 @@
   function tapPlace(pt: { x: number; y: number }): boolean {
     const m = map;
     if (!m) return false;
-    const layers = ['saved-pins', 'zone-track-cluster', 'zone-focus-pin', 'zone-track-pin', 'zone-pins', 'zone-track-hit'].filter((id) => m.getLayer(id));
+    const layers = ['spot-pins', 'saved-pins', 'zone-track-cluster', 'zone-focus-pin', 'zone-track-pin', 'zone-pins', 'zone-track-hit'].filter((id) => m.getLayer(id));
     const hits = m.queryRenderedFeatures(
       [
         [pt.x - 10, pt.y - 10],
@@ -993,6 +1024,14 @@
     haptic('tap');
     if (f.layer.id === 'saved-pins') {
       openSaved(String(props.id));
+      return true;
+    }
+    if (f.layer.id === 'spot-pins') {
+      // Un lieu de la Découverte : la carte va sur lui (iPhone : avec sa fiche, à la place des réglages).
+      const sp = app.spots.find((x) => x.id === String(props.id));
+      if (!sp) return false;
+      app.spotFocus = { id: sp.id, coord: sp.coord, bounds: sp.bounds, emoji: sp.emoji, name: sp.name, fly: true };
+      if (!app.wide) app.spotView = sp;
       return true;
     }
     if (f.layer.id === 'zone-track-cluster') {
@@ -1023,7 +1062,7 @@
   function snapAt(pt: { x: number; y: number }): { ll: LngLat; x: number; y: number; name: string } | null {
     const m = map;
     if (!m) return null;
-    const layers = ['saved-pins', 'zone-focus-pin', 'zone-track-pin', 'zone-pins', 'zone-track-hit'].filter((id) => m.getLayer(id));
+    const layers = ['spot-pins', 'saved-pins', 'zone-focus-pin', 'zone-track-pin', 'zone-pins', 'zone-track-hit'].filter((id) => m.getLayer(id));
     if (!layers.length) return null;
     const hits = m.queryRenderedFeatures(
       [
@@ -1039,6 +1078,9 @@
       let c: { ll: LngLat; name: string } | null = null;
       if (f.layer.id === 'saved-pins') {
         const p = saved.places.find((x) => x.id === String(props.id));
+        if (p) c = { ll: p.coord, name: p.name };
+      } else if (f.layer.id === 'spot-pins') {
+        const p = app.spots.find((x) => x.id === String(props.id));
         if (p) c = { ll: p.coord, name: p.name };
       } else if (f.layer.id === 'zone-focus-pin') {
         if (focused) c = { ll: focused.coord, name: focused.name ?? ZONES[focused.kind].one };
@@ -2561,13 +2603,36 @@
   });
   /** jusqu'à quand la carte bouge pour montrer un lieu de la Découverte (la zone de la Découverte n'en tient pas compte) */
   let spotMoveUntil = 0;
-  // Découverte : le lieu survolé ou montré, sa zone (un cercle qui couvre son emprise) et sa pastille.
+  /** la vue d'avant le premier lieu montré : la carte y revient quand plus aucun lieu ne l'est */
+  let spotHome: { center: LngLat; zoom: number; bearing: number; pitch: number; padding: PaddingOptions } | null = null;
+  let spotTimer: ReturnType<typeof setTimeout> | undefined;
+  // Découverte ouverte : ses lieux en pastilles.
+  $effect(() => {
+    const list = app.spots;
+    if (!ready || !map) return;
+    // Les pastilles d'émoji d'abord : demandées au moment du dessin, elles arriveraient trop tard pour la tuile.
+    for (const p of list) if (!map.hasImage(`sv-${p.emoji}`)) map.addImage(`sv-${p.emoji}`, savedPin(p.emoji), { pixelRatio: 2 });
+    setData('spots', {
+      type: 'FeatureCollection',
+      features: list.map((p, i) => ({ type: 'Feature', properties: { i, id: p.id, emoji: p.emoji, name: p.name }, geometry: { type: 'Point', coordinates: p.coord } })),
+    });
+  });
+  // Découverte : le lieu survolé ou montré, sa zone (un cercle qui couvre son emprise) et sa pastille ; la carte
+  // s'approche et se centre sur lui, puis revient à la vue d'avant quand on le quitte.
   $effect(() => {
     const f = app.spotFocus;
     if (!ready || !map) return;
+    const m = map;
+    clearTimeout(spotTimer);
     if (!f) {
       setData('spot-zone', EMPTY);
       setData('spot-pin', EMPTY);
+      const home = spotHome;
+      spotHome = null;
+      if (home) {
+        spotMoveUntil = performance.now() + 900;
+        m.easeTo({ ...home, duration: reduce ? 0 : 650 });
+      }
       return;
     }
     const kx = 111320 * Math.cos((f.coord[1] * Math.PI) / 180);
@@ -2579,22 +2644,21 @@
     });
     setData('spot-zone', { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }] });
     setData('spot-pin', { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { emoji: f.emoji, name: f.name }, geometry: { type: 'Point', coordinates: f.coord } }] });
-    const m = map;
-    const zoomTo = Math.max(untrack(() => m.getZoom()), r > 600 ? 13.5 : 15);
-    if (f.fly) {
-      // « Voir sur la carte » : le lieu au centre de ce qui reste visible (au-dessus de la fiche sur iPhone).
-      spotMoveUntil = performance.now() + 1300;
-      m.easeTo({ center: f.coord, zoom: zoomTo, padding: app.wide ? { top: 40, bottom: 40, left: 420, right: 40 } : { top: 60, bottom: 380, left: 20, right: 20 }, duration: reduce ? 0 : 900 });
-      return;
+    if (!spotHome) {
+      const c = m.getCenter();
+      spotHome = { center: [c.lng, c.lat], zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch(), padding: m.getPadding() };
     }
-    // Survol (Mac) : la carte s'approche si on la voit de trop loin pour lire la zone, ou va au lieu s'il n'est
-    // pas dans la partie visible ; sinon elle ne bouge pas.
-    const p = m.project(f.coord);
-    const cv = m.getCanvas();
-    const z = untrack(() => m.getZoom());
-    const out = p.x < 430 || p.x > cv.clientWidth - 40 || p.y < 40 || p.y > cv.clientHeight - 40;
-    if (out || z < 13) spotMoveUntil = performance.now() + 1000;
-    if (out || z < 13) m.easeTo({ center: f.coord, zoom: Math.max(z, r > 600 ? 13 : 14), padding: { top: 40, bottom: 40, left: 420, right: 40 }, duration: reduce ? 0 : 650 });
+    // Assez près pour lire le lieu et sa zone : tout un parc, ou la rue d'un monument.
+    const zoomTo = r > 900 ? 14 : r > 400 ? 15 : 16;
+    // Le lieu au centre de ce qui reste visible (à droite du panneau sur Mac, au-dessus de la fiche sur iPhone).
+    const padding = app.wide ? { top: 40, bottom: 40, left: 420, right: 40 } : { top: 60, bottom: 380, left: 20, right: 20 };
+    const go = () => {
+      spotMoveUntil = performance.now() + 1300;
+      m.easeTo({ center: f.coord, zoom: zoomTo, padding, duration: reduce ? 0 : f.fly ? 900 : 700 });
+    };
+    // Survol : un court temps de pose, pour qu'un passage rapide de la souris sur les cartes ne secoue pas la carte.
+    if (f.fly) go();
+    else spotTimer = setTimeout(go, 140);
   });
 
   // « Nouveau lieu » : les lieux trouvés sur la carte, cadrés dans ce que les blocs laissent voir.

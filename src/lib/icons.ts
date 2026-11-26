@@ -111,6 +111,9 @@ import images from '@phosphor-icons/core/assets/regular/images.svg?raw';
 import imagesF from '@phosphor-icons/core/assets/fill/images-fill.svg?raw';
 import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
 import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw';
+import caretUp from '@phosphor-icons/core/assets/regular/caret-up.svg?raw';
+import caretDown from '@phosphor-icons/core/assets/regular/caret-down.svg?raw';
+import smiley from '@phosphor-icons/core/assets/regular/smiley.svg?raw';
 import grid from '@phosphor-icons/core/assets/regular/squares-four.svg?raw';
 import scribble from '@phosphor-icons/core/assets/regular/scribble-loop.svg?raw';
 import circle from '@phosphor-icons/core/assets/regular/circle.svg?raw';
@@ -134,7 +137,7 @@ export const ICONS = {
   pin, crosshair, flag, plus, minus, gauge, compass, upload, mountains, clock, path, star, done, history, phone, qr, diamond, rise, fall, remove,
   map: mapIc, globe, sun, moon, sunHorizon, cloud, cloudSun, cloudMoon, rain, snow, fog, storm,
   heart, chat, users, user, signout, report, send, prohibit, lock, key, eye, eyeSlash, userPlus, userCheck, more, mail, shield, reuse,
-  camera, images, caretLeft, caretRight, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp, pinPlus, pause,
+  camera, images, caretLeft, caretRight, caretUp, caretDown, smiley, grid, scribble, circle, square, undo, track, toilet, sparkle, arrowUp, pinPlus, pause,
 } as const;
 
 export const ICONS_FILL: Partial<Record<IconName, string>> = {

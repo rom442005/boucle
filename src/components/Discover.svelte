@@ -9,17 +9,20 @@
   import type { LngLat } from '../lib/types';
 
   /*
-   * Découverte, dans les réglages : les lieux emblématiques de la zone affichée sur la carte, en cartes à photo
-   * sur deux colonnes, que l'on fait défiler aux flèches (ou du doigt). Le « + » en fait un point de passage.
-   * Mac : survoler une carte montre le lieu et sa zone sur la carte. iPhone : « Voir sur la carte ».
+   * Découverte, dans les réglages : les lieux emblématiques de la zone affichée sur la carte, en cartes à photo,
+   * quatre par quatre (deux colonnes, deux rangs), qui défilent de haut en bas aux flèches. Tous sont aussi en
+   * pastilles sur la carte (effacées de trop loin). Le « + » en fait un point de passage.
+   * Mac : survoler une carte approche la carte du lieu et montre sa zone. iPhone : « Voir sur la carte ».
    * Repliée par défaut ; rien n'est demandé au réseau tant qu'elle est fermée.
    */
   let open = $state(!!app.flags.decouverte);
   let spots = $state.raw<Spot[]>([]);
   let loading = $state(false);
   let failed = $state(false);
-  let track: HTMLDivElement | undefined = $state();
-  let first = $state(0);
+  /** la page de quatre lieux affichée, et le sens du dernier défilement (1 : vers le bas) */
+  let page = $state(0);
+  let dir = $state<1 | -1>(1);
+  const PER = 4;
   const hover = typeof matchMedia !== 'undefined' && matchMedia('(hover: hover) and (pointer: fine)').matches;
 
   function toggle() {
@@ -28,6 +31,15 @@
     haptic('tick');
     if (!open) app.spotFocus = null;
   }
+
+  // Les lieux sur la carte tant que la Découverte est ouverte.
+  $effect(() => {
+    app.spots = open ? spots : [];
+  });
+  $effect(() => () => {
+    app.spots = [];
+    app.spotFocus = null;
+  });
 
   /** Autour d'un point, 3 km de côté environ (iPhone : la carte est sous la photo, on part du départ). */
   const around = (c: LngLat): BBox => [c[0] - 0.035, c[1] - 0.025, c[0] + 0.035, c[1] + 0.025];
@@ -53,10 +65,7 @@
       const list = await discover(b, c.signal);
       if (c.signal.aborted) return;
       // Même tête de liste : on garde la page où l'on est.
-      if (list[0]?.id !== spots[0]?.id) {
-        first = 0;
-        track?.scrollTo({ left: 0 });
-      }
+      if (list[0]?.id !== spots[0]?.id) page = 0;
       spots = list;
     } catch {
       // Pas de réponse : on garde ce qui est affiché ; sinon, on le dit.
@@ -91,7 +100,7 @@
   let leave: ReturnType<typeof setTimeout> | undefined;
   function preview(s: Spot, fly = false) {
     clearTimeout(leave);
-    app.spotFocus = { coord: s.coord, bounds: s.bounds, emoji: s.emoji, name: s.name, fly };
+    app.spotFocus = { id: s.id, coord: s.coord, bounds: s.bounds, emoji: s.emoji, name: s.name, fly };
   }
   function unpreview() {
     clearTimeout(leave);
@@ -101,22 +110,24 @@
   function see(s: Spot) {
     haptic('tap');
     app.spotView = s;
-    app.spotFocus = { coord: s.coord, bounds: s.bounds, emoji: s.emoji, name: s.name, fly: true };
+    app.spotFocus = { id: s.id, coord: s.coord, bounds: s.bounds, emoji: s.emoji, name: s.name, fly: true };
   }
 
-  /* Défilement par pages de deux cartes. */
-  const GAP = 10;
-  function step(dir: 1 | -1) {
-    if (!track) return;
+  /* Pages de quatre lieux, de haut en bas. */
+  const pages = $derived(Math.max(1, Math.ceil(spots.length / PER)));
+  $effect(() => {
+    if (page > pages - 1) page = pages - 1;
+  });
+  function step(d: 1 | -1) {
+    const n = Math.min(pages - 1, Math.max(0, page + d));
+    if (n === page) return;
     haptic('tick');
-    track.scrollBy({ left: dir * (track.clientWidth + GAP), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    dir = d;
+    page = n;
   }
-  function onScroll() {
-    if (!track) return;
-    const w = (track.clientWidth - GAP) / 2 + GAP;
-    first = Math.round(track.scrollLeft / w);
-  }
-  const last = $derived(Math.min(spots.length, first + 2));
+  const first = $derived(page * PER);
+  const last = $derived(Math.min(spots.length, first + PER));
+  const shown = $derived(spots.slice(first, last));
 </script>
 
 <section class="disc" class:open aria-labelledby="disc-h">
@@ -129,9 +140,10 @@
   {#if open}
     <div class="body" id="disc-body">
       {#if loading}
-        <div class="row-cards" aria-hidden="true">
-          <div class="spot skel"><span class="ph"></span><span class="l1"></span><span class="l2"></span></div>
-          <div class="spot skel"><span class="ph"></span><span class="l1"></span><span class="l2"></span></div>
+        <div class="grid-cards" aria-hidden="true">
+          {#each [0, 1, 2, 3] as k (k)}
+            <div class="spot skel"><span class="ph"></span><span class="l1"></span><span class="l2"></span></div>
+          {/each}
         </div>
         <p class="note">Recherche des lieux emblématiques…</p>
       {:else if failed}
@@ -142,12 +154,13 @@
         <div class="nav">
           <span class="count tabular" aria-live="polite">{first + 1}–{last} sur {spots.length}</span>
           <span class="arrows">
-            <button use:tactile type="button" class="arrow" aria-label="Lieux précédents" disabled={first <= 0} onclick={() => step(-1)}><Icon name="caretLeft" size={16} /></button>
-            <button use:tactile type="button" class="arrow" aria-label="Lieux suivants" disabled={last >= spots.length} onclick={() => step(1)}><Icon name="caretRight" size={16} /></button>
+            <button use:tactile type="button" class="arrow" aria-label="Lieux précédents" disabled={page <= 0} onclick={() => step(-1)}><Icon name="caretUp" size={16} /></button>
+            <button use:tactile type="button" class="arrow" aria-label="Lieux suivants" disabled={page >= pages - 1} onclick={() => step(1)}><Icon name="caretDown" size={16} /></button>
           </span>
         </div>
-        <div class="row-cards track" bind:this={track} onscroll={onScroll} role="list" aria-label="Lieux emblématiques">
-          {#each spots as s, i (s.id)}
+        {#key page}
+        <div class="grid-cards page" style:--dir={dir} role="list" aria-label="Lieux emblématiques">
+          {#each shown as s, i (s.id)}
             {@const h = readHours(s.hours)}
             {@const on = added(s)}
             <!-- svelte-ignore a11y_mouse_events_have_key_events -->
@@ -190,12 +203,11 @@
               {#if dist(s)}<p class="meta tabular">à {dist(s)} du départ</p>{/if}
               {#if !hover}
                 <button use:tactile type="button" class="see" onclick={() => see(s)}><Icon name="map" size={14} />Voir sur la carte</button>
-              {:else}
-                <button type="button" class="see" onclick={() => preview(s, true)}><Icon name="map" size={14} />Voir sur la carte</button>
               {/if}
             </article>
           {/each}
         </div>
+        {/key}
       {/if}
     </div>
   {/if}
@@ -279,30 +291,28 @@
   .arrow:disabled {
     opacity: 0.35;
   }
-  /* Deux colonnes, qui défilent par pages (et du doigt, avec aimantation). */
-  .row-cards {
+  /* Quatre lieux : deux colonnes, deux rangs de même hauteur. */
+  .grid-cards {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: calc((100% - 10px) / 2);
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: 12px 10px;
   }
-  .track {
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    margin: 0 -2px;
-    padding: 0 2px 2px;
+  /* Page suivante : elle monte d'en bas ; précédente : elle descend d'en haut. */
+  .page {
+    animation: page-in 420ms var(--spring) backwards;
   }
-  .track::-webkit-scrollbar {
-    display: none;
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      translate: 0 calc(var(--dir, 1) * 18px);
+    }
   }
   .spot {
     min-width: 0;
-    display: grid;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
     gap: 4px;
-    scroll-snap-align: start;
     animation: spot-in 460ms var(--spring) calc(var(--i, 0) * 50ms) backwards;
   }
   @keyframes spot-in {
@@ -430,12 +440,13 @@
     font-size: 0.75rem;
     color: var(--label-2);
   }
+  /* En bas de la carte, aligné d'une carte à l'autre. */
   .see {
-    justify-self: start;
+    align-self: flex-start;
+    margin-top: auto;
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    margin-top: 2px;
     padding: 5px 10px;
     border-radius: 999px;
     font-size: 0.75rem;
@@ -475,6 +486,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .body,
+    .page,
     .spot,
     .skel .ph,
     .skel .l1,

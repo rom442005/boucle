@@ -1,13 +1,14 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import { app } from '../lib/state.svelte';
+  import EmojiPicker from './EmojiPicker.svelte';
   import { LIST_EMOJIS, saved } from '../lib/saved.svelte';
   import { haptic, tactile } from '../lib/haptics';
 
   /*
    * Enregistrer un lieu dans Mes lieux (ou le modifier) : son nom et sa liste, comme les listes de Google Maps.
-   * Le lieu prend l'émoji de sa liste ; la petite pastille crayon d'une liste en change l'émoji. Une nouvelle
-   * liste se crée sur place.
+   * Le lieu prend l'émoji de sa liste ; la petite pastille crayon d'une liste en change l'émoji (tous les
+   * émojis par thème, ou une recherche en mots). Une nouvelle liste se crée sur place.
    */
   const d = $derived(saved.draft!);
   let name = $state('');
@@ -78,11 +79,7 @@
 <svelte:window onkeydown={onkey} />
 
 {#snippet emojiStrip(id: string, current: string, label: string)}
-  <div class="emojis" role="radiogroup" aria-label="Émoji de la liste {label}">
-    {#each LIST_EMOJIS as e (e)}
-      <button use:tactile type="button" class="emo" class:on={current === e} role="radio" aria-checked={current === e} aria-label={e} onclick={() => setEmoji(id, e)}>{e}</button>
-    {/each}
-  </div>
+  <EmojiPicker value={current} label="Émoji de la liste {label}" onpick={(e) => setEmoji(id, e)} />
 {/snippet}
 
 <button type="button" class="scrim" aria-label="Fermer" onclick={close}></button>
@@ -239,37 +236,6 @@
     margin: 0 14px;
     font-size: 0.8125rem;
     color: rgba(255, 255, 255, 0.7);
-  }
-  .emojis {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
-    padding: 6px;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.06);
-    animation: open 320ms var(--spring) backwards;
-  }
-  @keyframes open {
-    from {
-      opacity: 0;
-      translate: 0 -6px;
-    }
-  }
-  .emo {
-    aspect-ratio: 1;
-    min-height: 40px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    font-size: 1.25rem;
-    transition: transform 240ms var(--spring-bouncy);
-  }
-  .emo.on {
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 0 0 2px #fff;
-  }
-  .emo:active {
-    transform: scale(0.86);
   }
   .k {
     margin: 2px 0 -6px 4px;
