@@ -98,6 +98,25 @@
     return out;
   }
   const fits = $derived(r ? fitsOf(r) : []);
+
+  /**
+   * Le parcours en trois mots, pour donner envie : son relief, le milieu qu'il traverse le plus, son sol (ou
+   * ses points d'eau). Le détail chiffré est plus bas, replié.
+   */
+  const pitch = $derived.by((): string[] => {
+    if (!r) return [];
+    const out: string[] = [];
+    const perKm = r.ascent / Math.max(r.lengthM / 1000, 0.1);
+    const [flat, hilly] = SPORTS[r.sport].bike ? [6, 14] : [8, 20];
+    out.push(perKm < flat ? '🏞️ Plutôt plat' : perKm < hilly ? '〰️ Vallonné' : '⛰️ Ça grimpe');
+    const [top, share] = ENV_ORDER.map((e) => [e, r.env[e] ?? 0] as const).sort((a, b) => b[1] - a[1])[0] ?? [];
+    if (top && share >= 0.25) out.push(`${ENV_EMOJI[top]} ${percent(share)} en ${ENVS[top].short}`);
+    if (r.surface && r.surface.dirt >= 0.35) out.push('🥾 Sentiers');
+    else if (r.waterPoints.length) out.push(`💧 ${r.waterPoints.length} point${r.waterPoints.length > 1 ? 's' : ''} d’eau`);
+    return out;
+  });
+  /** le détail technique (altitude, côtes, milieux, sols), replié */
+  let more = $state(false);
   /** Côtes et descentes notables du parcours sélectionné. */
   const cl = $derived(r ? climbsOf(r) : []);
   const pct = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}${NNBSP}%`;
@@ -198,12 +217,9 @@
         <span class="c-txt">
           <span class="c-name">{x.name}</span>
           <span class="c-meta tabular">{km(x.lengthM)} · {meters(x.ascent)} D+ · {duration(x.durationS)}</span>
-          <span class="c-fit">
-            {#if x.tags?.length}<span class="c-tag" class:best={x.tags[0] === 'Meilleur accord'}>{x.tags[0]}</span>{/if}
-            {#each fitsOf(x) as f, k (k)}
-              <span class="c-f" class:ok={f.ok}><Icon name={f.ok ? 'check' : 'approx'} size={10} />{f.short}</span>
-            {/each}
-          </span>
+          {#if x.tags?.length}
+            <span class="c-fit"><span class="c-tag" class:best={x.tags[0] === 'Meilleur accord'}>{x.tags[0]}</span></span>
+          {/if}
         </span>
       </button>
     {/each}
@@ -261,6 +277,11 @@
     {#if cr}<PhotoStrip r={cr} />{/if}
     {#if doneText}<p class="done-line"><Icon name="done" size={16} fill />{doneText}</p>{/if}
     {/if}
+    {#if pitch.length}
+      <p class="pitch" aria-label="En bref">
+        {#each pitch as t (t)}<span>{t}</span>{/each}
+      </p>
+    {/if}
 
     {#if !app.wide}
       <div class="prof" data-fold>
@@ -274,7 +295,6 @@
       <div><dt>Dénivelé +</dt><dd class="rounded"><RollingNumber value={String(Math.round(r.ascent * app.revealK))} /><small>m</small></dd></div>
       <div><dt>Durée estimée</dt><dd class="rounded"><RollingNumber value={duration(r.durationS * app.revealK)} /></dd></div>
     </dl>
-    <p class="sub tabular">D− {meters(r.descent)} · Altitude {r.minEle} à {meters(r.maxEle)} · Pente max {Math.round(r.maxGrade)}{NNBSP}%</p>
 
     {#if fits.length}
       <ul class="fits" aria-label="Respect de ta demande">
@@ -287,14 +307,13 @@
     {#if conds.length}
       <section class="conds" aria-labelledby="conds-h">
         <h3 id="conds-h" class="field-label">Si tu pars maintenant</h3>
-        <div class="group">
+        <ul class="cond-line">
           {#each conds as c, i (i)}
-            <div class="row">
-              <span class="row-icon" class:warn={c.warn} class:emo={!!c.emoji}>{#if c.emoji}{c.emoji}{:else}<Icon name={c.icon} size={20} />{/if}</span>
-              <span class="row-label">{c.title}<span class="row-sub">{c.sub}</span></span>
-            </div>
+            <li class:warn={c.warn} title={c.sub}>
+              <span aria-hidden="true">{#if c.emoji}{c.emoji}{:else}<Icon name={c.icon} size={16} />{/if}</span><span>{c.title}</span>
+            </li>
           {/each}
-        </div>
+        </ul>
       </section>
     {/if}
 
@@ -357,6 +376,13 @@
       </div>
     {/if}
 
+    <button use:tactile type="button" class="more" aria-expanded={more} aria-controls="more-body" onclick={() => (more = !more)}>
+      <span>Plus de détails</span><small>côtes, milieux, sols</small>
+      <span class="chev" aria-hidden="true"><Icon name="down" size={16} /></span>
+    </button>
+    {#if more}
+    <div id="more-body" class="more-body">
+    <p class="sub tabular">D− {meters(r.descent)} · Altitude {r.minEle} à {meters(r.maxEle)} · Pente max {Math.round(r.maxGrade)}{NNBSP}%</p>
     <section class="climbs" aria-labelledby="climbs-h">
       <div class="climbs-head">
         <h3 id="climbs-h" class="field-label">Côtes et descentes</h3>
@@ -385,6 +411,8 @@
     {/if}
     {#if r.surface}
       <Breakdown title="Sols" items={surfItems(r)} note={r.busy != null ? `Grands axes : ${percent(r.busy)}` : undefined} />
+    {/if}
+    </div>
     {/if}
     {#if cr}<Comments r={cr} />{/if}
   </article>
@@ -517,22 +545,10 @@
     gap: 4px 10px;
     margin-top: 2px;
   }
-  .c-f {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 0.75rem;
-    color: var(--label-2);
-  }
-  .c-f.ok {
-    color: var(--label);
-  }
-  .c-f :global(.icon) {
-    color: var(--label-3);
-  }
-  .c-f.ok :global(.icon) {
-    color: var(--ok);
-  }
+
+
+
+
   .c-tag {
     justify-self: start;
     font-size: 0.75rem;
@@ -666,26 +682,76 @@
     display: grid;
     gap: 8px;
   }
+  /* En bref, et la météo du départ : des pastilles, lues d'un coup d'œil. */
+  .pitch,
+  .cond-line {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pitch span,
+  .cond-line li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: var(--fill-2);
+  }
+  .cond-line li.warn {
+    color: var(--warn, #ff9f0a);
+  }
+  .more {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 4px;
+    text-align: left;
+    color: var(--label);
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  .more small {
+    flex: 1;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--label-2);
+  }
+  .more .chev {
+    display: grid;
+    color: var(--label-2);
+    transition: rotate 320ms var(--spring);
+  }
+  .more[aria-expanded='true'] .chev {
+    rotate: 180deg;
+  }
+  .more-body {
+    display: grid;
+    gap: 16px;
+    animation: more-in 360ms var(--spring) backwards;
+  }
+  @keyframes more-in {
+    from {
+      opacity: 0;
+      translate: 0 -6px;
+    }
+  }
   .conds h3 {
     margin: 0;
   }
-  .conds .row-label {
-    font-size: 0.9375rem;
-    font-weight: 500;
-  }
-  .conds .row-icon {
-    display: grid;
-    color: var(--label-2);
-  }
+
+
   /* Départ ou retour dans le noir : l'icône passe à l'ambre des avertissements. */
-  .conds .row-icon.warn {
-    color: var(--warn);
-  }
-  .conds .row-icon.emo {
-    font-size: 1.375rem;
-    line-height: 1;
-    place-items: center;
-  }
+
+
   .actions {
     display: grid;
     grid-template-columns: repeat(var(--n, 5), 1fr);

@@ -8,7 +8,7 @@
   import { SPORTS } from '../lib/sports';
   import { kmSetting } from '../lib/format';
   import { hasDrawing, isStroke, presetDrawing, simplifyPts, smoothStroke, type DrawPreset, type Pt } from '../lib/drawing';
-  import { EXAMPLES, localIdeas, type Idea } from '../lib/shapes';
+  import { localIdeas, type Idea } from '../lib/shapes';
   import { community } from '../lib/community.svelte';
   import { CommunityError } from '../lib/community/types';
   import type { IconName } from '../lib/icons';
@@ -20,6 +20,7 @@
    * le dernier trait, tout effacer. Déplié avec un dessin, la boucle créée suit le dessin.
    * En haut, une discussion : on écrit la forme voulue (« un diamant », « 2027 ») et des idées de dessins
    * s'affichent (bibliothèque de l'app, et l'IA quand elle est branchée sur le serveur).
+   * Épuré : pas d'exemples ni de départ à changer ici (le départ se règle en haut des réglages).
    */
   const PRESETS: { k: DrawPreset; icon: IconName; label: string }[] = [
     { k: 'circle', icon: 'circle', label: 'Rond' },
@@ -162,7 +163,6 @@
   const reachMax = $derived(bike ? 40 : 15);
   const reachStep = $derived(bike ? 1 : 0.5);
   const reach = $derived(Math.min(app.drawReach, reachMax));
-  const startName = $derived(app.start ? (app.start.kind === 'gps' ? 'Ma position' : app.start.name) : 'À choisir');
 </script>
 
 <div class="draw" class:open={app.drawOpen}>
@@ -209,12 +209,6 @@
         </div>
       {:else if asked && !asking}
         <p class="ask-note">Aucune idée pour « {asked} » : dessine-la ci-dessous.</p>
-      {:else if !asked}
-        <div class="examples" aria-label="Exemples">
-          {#each EXAMPLES as ex (ex)}
-            <button use:tactile type="button" class="ex" onclick={() => ask(ex)}>{ex}</button>
-          {/each}
-        </div>
       {/if}
       {#if askNote}<p class="ask-note">{askNote}</p>{/if}
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -263,12 +257,6 @@
       </div>
 
       <div class="where">
-        <!-- D'où l'on part (position, maison…) : le dessin se pose autour. -->
-        <div class="from">
-          <span class="f-ic" aria-hidden="true"><Icon name={app.start?.kind === 'gps' ? 'locate' : 'pin'} size={15} fill /></span>
-          <span class="f-txt"><small>Départ</small><b>{startName}</b></span>
-          <button use:tactile type="button" class="change" aria-label="Changer le lieu de départ" onclick={() => (app.search = 'start')}>Changer</button>
-        </div>
         <Ruler
           id="reach"
           label="Lieu du dessin"
@@ -618,24 +606,6 @@
   .i-name :global(.icon) {
     color: var(--tint);
   }
-  .examples {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .ex {
-    min-height: 30px;
-    padding: 0 12px;
-    border-radius: 999px;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--label-2);
-    background: var(--fill-2);
-    transition: transform 240ms var(--spring);
-  }
-  .ex:active {
-    transform: scale(0.94);
-  }
   .ask-note {
     margin: 0;
     font-size: 0.8125rem;
@@ -645,57 +615,6 @@
     display: grid;
     gap: 10px;
     padding-top: 4px;
-  }
-  .from {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 48px;
-    padding: 6px 8px 6px 6px;
-    border-radius: 16px;
-    background: var(--fill-2);
-  }
-  .f-ic {
-    width: 32px;
-    height: 32px;
-    flex: none;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    color: #fff;
-    background: var(--tint);
-  }
-  .f-txt {
-    flex: 1;
-    min-width: 0;
-    display: grid;
-    line-height: 1.2;
-  }
-  .f-txt small {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--label-2);
-  }
-  .f-txt b {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .change {
-    flex: none;
-    min-height: 34px;
-    padding: 0 14px;
-    border-radius: 999px;
-    font-size: 0.875rem;
-    font-weight: 650;
-    color: var(--tint);
-    background: var(--tint-soft);
-    transition: transform 240ms var(--spring);
-  }
-  .change:active {
-    transform: scale(0.94);
   }
   .approach {
     padding: 4px 4px 4px 8px;

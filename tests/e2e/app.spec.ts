@@ -155,10 +155,12 @@ test('dessiner le parcours : la boucle suit le dessin', async ({ page }) => {
   await expect(pad.locator('circle.start')).toHaveCount(1);
   // Le dessin peut aller chercher le meilleur endroit autour du départ.
   await expect(page.getByRole('slider', { name: 'Lieu du dessin' })).toBeVisible();
-  // … ou une forme toute prête. Le relief et le milieu ne comptent plus : grisés.
+  // … ou une forme toute prête. Le relief et le milieu ne comptent plus : masqués, comme le choix du départ.
   await page.getByRole('button', { name: 'Étoile' }).click();
   await expect(page.getByRole('button', { name: 'Étoile' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.fold.muted')).toHaveCount(2);
+  await expect(page.getByRole('slider', { name: 'Dénivelé positif' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Milieu' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Changer le lieu de départ' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Tracer mon dessin' }).click();
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
   const folded = page.getByRole('button', { name: /Taille du panneau : réduit/ });
@@ -573,6 +575,9 @@ test('la 3D met la ville en volume, avec sa légende', async ({ page, browserNam
 test('côtes et descentes : liste, carte et profil', async ({ page }) => {
   await open(page);
   await createLoop(page);
+  // Le descriptif reste court : les côtes sont dans « Plus de détails », replié.
+  await expect(page.getByRole('heading', { name: 'Côtes et descentes' })).toHaveCount(0);
+  await page.getByRole('button', { name: /Plus de détails/ }).click();
   await expect(page.getByRole('heading', { name: 'Côtes et descentes' })).toBeAttached();
   await expect(page.getByRole('img', { name: /Couleur de la pente/ }).first()).toBeAttached();
   const list = page.getByRole('list', { name: 'Côtes et descentes du parcours' });

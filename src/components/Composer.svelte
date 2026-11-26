@@ -98,7 +98,8 @@
       {/if}
     </div>
 
-    <div class="sub">
+    <!-- Repère de mi-hauteur du panneau : sous la distance quand le dénivelé est masqué (dessin). -->
+    <div class="sub" data-fold={app.drawActive ? '' : undefined}>
       <Ruler
         id="distance"
         label="Distance"
@@ -114,8 +115,9 @@
       />
     </div>
 
-    <!-- Un dessin décide seul du chemin : le relief et le milieu ne comptent plus (grisés). -->
-    <div class="sub fold" class:muted={app.drawActive} inert={app.drawActive} data-fold>
+    <!-- Un dessin décide seul du chemin : le relief et le milieu ne comptent plus, ils disparaissent. -->
+    {#if !app.drawActive}
+    <div class="sub" data-fold>
       <Ruler
         id="elevation"
         label="Dénivelé +"
@@ -136,10 +138,9 @@
 
     <div class="sub" aria-labelledby="env-l">
       <h3 id="env-l" class="field-label">Milieu</h3>
-      <div class="fold" class:muted={app.drawActive} inert={app.drawActive}>
-        <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
-      </div>
+      <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
     </div>
+    {/if}
 
     <!-- Sur Mac, ces lieux sont en haut de la colonne, sous le départ. Un dessin n'a pas de point de passage. -->
     {#if !app.wide && !app.drawActive}
@@ -270,13 +271,6 @@
     text-align: center;
     font-size: 0.9375rem;
     font-weight: 600;
-  }
-  .fold {
-    display: grid;
-    transition: opacity 320ms var(--ease-out);
-  }
-  .fold.muted {
-    opacity: 0.32;
   }
   @media (max-width: 859px) {
     .composer {
