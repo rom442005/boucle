@@ -36,6 +36,23 @@ export const SPORTS: Record<Sport, SportDef> = {
     kmMark: 1,
     gpxType: 'running',
   },
+  walk: {
+    label: 'Marche',
+    long: 'Marche',
+    distance: { min: 1, max: 30, step: 0.1, def: 5 },
+    elevation: { max: 1500, step: 10 },
+    ruler: { km: { every: 1 }, dplus: { every: 100 } },
+    surfaces: { a: 'Bitume', b: 'Mixte', c: 'Chemins' },
+    surfaceHint: {
+      a: 'Rues et trottoirs, le moins de chemins possible.',
+      b: 'Ce qui passe le mieux, chemins compris.',
+      c: 'Parcs, berges et chemins dès que possible.',
+    },
+    defaultSurface: 'b',
+    bike: false,
+    kmMark: 1,
+    gpxType: 'walking',
+  },
   trail: {
     label: 'Trail',
     long: 'Trail',
@@ -85,7 +102,7 @@ export const SPORTS: Record<Sport, SportDef> = {
   },
 };
 
-export const SPORT_ORDER: Sport[] = ['run', 'trail', 'road', 'gravel'];
+export const SPORT_ORDER: Sport[] = ['run', 'walk', 'trail', 'road', 'gravel'];
 
 export const SHAPES: Record<Shape, { label: string; cta: string }> = {
   loop: { label: 'Boucle', cta: 'Créer la boucle' },
@@ -121,6 +138,8 @@ export function defaultParams(sport: Sport = 'run'): Params {
 
 export const DEFAULT_SETTINGS: Settings = {
   paceRun: 330,
+  /** 12 min/km : 5 km/h */
+  paceWalk: 720,
   paceTrail: 450,
   speedRoad: 26,
   speedGravel: 19,
@@ -135,12 +154,14 @@ export function elevationLevel(dplus: number, km: number): string {
   return 'Montagneux';
 }
 
-/** Durée estimée en secondes. Course : allure x km-effort (1 km par 100 m de D+). Vélo : vitesse à plat + 6 à 8 min par 100 m de D+. */
+/** Durée estimée en secondes. Course et marche : allure x km-effort (1 km par 100 m de D+). Vélo : vitesse à plat + 6 à 8 min par 100 m de D+. */
 export function estimateDuration(sport: Sport, lengthM: number, ascent: number, s: Settings): number {
   const km = lengthM / 1000;
   switch (sport) {
     case 'run':
       return s.paceRun * (km + ascent / 100);
+    case 'walk':
+      return s.paceWalk * (km + ascent / 100);
     case 'trail':
       return s.paceTrail * (km + ascent / 100);
     case 'road':

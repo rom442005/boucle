@@ -87,13 +87,12 @@
   .lbl {
     white-space: nowrap;
   }
-  /* iPhone : icône et libellé sur une ligne, contrôle moins haut. */
+  /* iPhone : l'icône au-dessus du libellé, pour que cinq sports tiennent sans se toucher. */
   @media (max-width: 859px) {
     .seg.tall button {
-      min-height: 38px;
-      flex-direction: row;
-      gap: 5px;
-      font-size: 0.8125rem;
+      min-height: 48px;
+      gap: 1px;
+      font-size: 0.6875rem;
     }
   }
 </style>

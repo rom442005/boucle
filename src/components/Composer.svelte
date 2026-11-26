@@ -15,7 +15,7 @@
   import type { Shape } from '../lib/types';
   import type { IconName } from '../lib/icons';
 
-  const SPORT_ICON: Record<string, IconName> = { run: 'run', trail: 'hike', road: 'bicycle', gravel: 'bike' };
+  const SPORT_ICON: Record<string, IconName> = { run: 'run', walk: 'walk', trail: 'hike', road: 'bicycle', gravel: 'bike' };
 
   // Dans Safari sur iPhone (pas encore installée) : rappel pour l'ajouter à l'écran d'accueil.
   const installHint = $derived(isIOS && !isStandalone && !app.flags.installVu);
@@ -52,11 +52,11 @@
   }
 
   const isRun = $derived(!def.bike);
-  const paceKey = $derived(p.sport === 'run' ? 'paceRun' : p.sport === 'trail' ? 'paceTrail' : p.sport === 'road' ? 'speedRoad' : 'speedGravel');
+  const paceKey = $derived(p.sport === 'run' ? 'paceRun' : p.sport === 'walk' ? 'paceWalk' : p.sport === 'trail' ? 'paceTrail' : p.sport === 'road' ? 'speedRoad' : 'speedGravel');
   const paceValue = $derived(app.settings[paceKey]);
   function stepPace(dir: 1 | -1) {
     const s = app.settings;
-    if (isRun) s[paceKey] = Math.min(720, Math.max(180, s[paceKey] + dir * 10));
+    if (isRun) s[paceKey] = Math.min(p.sport === 'walk' ? 1200 : 720, Math.max(180, s[paceKey] + dir * 10));
     else s[paceKey] = Math.min(45, Math.max(8, s[paceKey] + dir));
     app.saveSettings();
     haptic('tick');
@@ -163,7 +163,7 @@
         <span class="row-label">Éviter les grands axes</span>
         <input class="switch" type="checkbox" use:asSwitch checked={p.avoidBusy} onchange={() => toggle('avoidBusy')} />
       </label>
-      {#if p.sport === 'run'}
+      {#if p.sport === 'run' || p.sport === 'walk'}
         <label class="row">
           <span class="row-icon"><Icon name="bulb" /></span>
           <span class="row-label">Rues éclairées</span>

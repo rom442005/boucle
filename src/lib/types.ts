@@ -1,6 +1,6 @@
 export type LngLat = [number, number];
 
-export type Sport = 'run' | 'trail' | 'road' | 'gravel';
+export type Sport = 'run' | 'walk' | 'trail' | 'road' | 'gravel';
 export type Shape = 'loop' | 'outback' | 'oneway';
 export type EnvClass = 'forest' | 'water' | 'park' | 'fields' | 'urban';
 /** Préférence de sol. Le sens dépend du sport (voir SPORTS dans sports.ts). */
@@ -32,6 +32,7 @@ export interface Params {
 export interface Settings {
   /** secondes par km */
   paceRun: number;
+  paceWalk: number;
   paceTrail: number;
   /** km/h */
   speedRoad: number;

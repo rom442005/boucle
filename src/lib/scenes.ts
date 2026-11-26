@@ -66,9 +66,9 @@ export function warmScene(i: number) {
 }
 
 /** Teinte de chaque sport (cartes du fil sans photo). */
-export const SPORT_TONE: Record<Sport, string> = { run: '#3d4a2a', trail: '#5d6170', road: '#4f5d3c', gravel: '#7a8584' };
+export const SPORT_TONE: Record<Sport, string> = { run: '#3d4a2a', walk: '#4a5a4a', trail: '#5d6170', road: '#4f5d3c', gravel: '#7a8584' };
 
-export const SPORT_EMOJI: Record<Sport, string> = { run: '🏃', trail: '⛰️', road: '🚴', gravel: '🚵' };
+export const SPORT_EMOJI: Record<Sport, string> = { run: '🏃', walk: '🚶', trail: '⛰️', road: '🚴', gravel: '🚵' };
 export const ENV_EMOJI: Record<EnvClass, string> = { forest: '🌲', water: '🌊', park: '🌳', fields: '🌾', urban: '🏙️' };
 
 /** Le ciel en un émoji, d'après le code météo OMM. */
@@ -127,7 +127,7 @@ export function recentActivity(history: HistoryEntry[], now = Date.now()) {
 }
 
 /** Couleur de chaque sport dans les graphiques d'activité (vives, lisibles sur le verre fumé). */
-export const SPORT_COLOR: Record<Sport, string> = { run: '#ff4f7b', trail: '#ffb340', road: '#5ac8fa', gravel: '#8ee35f' };
+export const SPORT_COLOR: Record<Sport, string> = { run: '#ff4f7b', walk: '#bf5af2', trail: '#ffb340', road: '#5ac8fa', gravel: '#8ee35f' };
 
 /** Les 28 derniers jours : distance par jour et sport dominant du jour (le plus ancien d'abord). */
 /** Une sortie, ou un parcours publié : sa date, sa longueur, son sport. */

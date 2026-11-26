@@ -96,10 +96,10 @@ const debug = (msg: string) => (globalThis as { __boucleDebug?: (m: string) => v
 export function unpavedWeight(p: Params): number {
   if (p.sport === 'trail') return p.surface === 'a' ? 0.6 : p.surface === 'b' ? 0.9 : 1;
   if (p.sport === 'gravel') return p.surface === 'a' ? 0.45 : 1;
-  if (p.sport === 'run') return p.surface === 'c' ? 0.85 : 0;
+  if (p.sport === 'run' || p.sport === 'walk') return p.surface === 'c' ? 0.85 : 0;
   return 0;
 }
-const wantsPaved = (p: Params) => p.sport === 'run' && p.surface === 'a';
+const wantsPaved = (p: Params) => (p.sport === 'run' || p.sport === 'walk') && p.surface === 'a';
 const angDiff = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 
 function bboxAround(c: LngLat, r: number): BBox {

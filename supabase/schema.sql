@@ -9,7 +9,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   first_name text not null check (char_length(btrim(first_name)) between 1 and 40),
   city text check (city is null or char_length(city) <= 60),
-  sports text[] not null default '{}' check (sports <@ array['run', 'trail', 'road', 'gravel']),
+  sports text[] not null default '{}' check (sports <@ array['run', 'walk', 'trail', 'road', 'gravel']),
   level text not null default 'regular' check (level in ('debut', 'regular', 'confirmed', 'expert')),
   practice_years int check (practice_years is null or practice_years between 0 and 80),
   bio text check (bio is null or char_length(bio) <= 300),
@@ -41,7 +41,7 @@ create table if not exists public.routes (
   author_id uuid not null references public.profiles (id) on delete cascade,
   name text not null check (char_length(btrim(name)) between 1 and 80),
   description text check (description is null or char_length(description) <= 500),
-  sport text not null check (sport in ('run', 'trail', 'road', 'gravel')),
+  sport text not null check (sport in ('run', 'walk', 'trail', 'road', 'gravel')),
   shape text not null check (shape in ('loop', 'outback', 'oneway')),
   distance_m int not null check (distance_m > 0),
   ascent_m int not null default 0,
@@ -555,3 +555,9 @@ create table if not exists dessin_usage (
 alter table dessin_usage enable row level security;
 revoke all on dessin_usage from anon, authenticated;
 
+
+-- 26/11/2026 : la marche (« walk ») parmi les sports, sur une base déjà créée.
+alter table public.profiles drop constraint if exists profiles_sports_check;
+alter table public.profiles add constraint profiles_sports_check check (sports <@ array['run', 'walk', 'trail', 'road', 'gravel']);
+alter table public.routes drop constraint if exists routes_sport_check;
+alter table public.routes add constraint routes_sport_check check (sport in ('run', 'walk', 'trail', 'road', 'gravel'));

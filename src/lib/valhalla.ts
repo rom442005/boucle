@@ -155,6 +155,23 @@ export function costingFor(p: Params, s: Settings): Costing {
           use_ferry: 0,
         },
       };
+    case 'walk':
+      // Marche : comme la course, à son allure, escaliers acceptés.
+      return {
+        costing: 'pedestrian',
+        options: {
+          use_hills,
+          use_tracks: p.surface === 'a' ? 0 : p.surface === 'b' ? 0.5 : 1,
+          walkway_factor: p.surface === 'a' ? 1.1 : p.surface === 'c' ? 0.55 : p.avoidBusy ? 0.8 : 1,
+          sidewalk_factor: p.avoidBusy ? 0.95 : 1,
+          use_living_streets: 0.8,
+          use_lit: p.lit ? 1 : 0,
+          walking_speed: Math.round((3600 / s.paceWalk) * 10) / 10,
+          step_penalty: 5,
+          max_hiking_difficulty: 1,
+          use_ferry: 0,
+        },
+      };
     case 'trail':
       return {
         costing: 'pedestrian',

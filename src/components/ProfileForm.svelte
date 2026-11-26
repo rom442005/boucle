@@ -17,7 +17,7 @@
   /** Profil : à la création du compte (avec l'accord aux conditions) ou pour le modifier. */
   let { creating = false, ondone }: { creating?: boolean; ondone: () => void } = $props();
 
-  const SPORT_ICON: Record<Sport, IconName> = { run: 'run', trail: 'hike', road: 'bicycle', gravel: 'bike' };
+  const SPORT_ICON: Record<Sport, IconName> = { run: 'run', walk: 'walk', trail: 'hike', road: 'bicycle', gravel: 'bike' };
   const me = community.me;
   const year = new Date().getFullYear();
 

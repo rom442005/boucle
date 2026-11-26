@@ -18,7 +18,7 @@
    * récapitulatif (combien de parcours, de membres, et leurs publications des 28 derniers jours en barres),
    * trois blocs-onglets avec leur nombre, les sports en pastilles, puis chaque parcours en bloc de verre.
    */
-  const SPORT_ICON: Record<Sport, IconName> = { run: 'run', trail: 'hike', road: 'bicycle', gravel: 'bike' };
+  const SPORT_ICON: Record<Sport, IconName> = { run: 'run', walk: 'walk', trail: 'hike', road: 'bicycle', gravel: 'bike' };
   const KINDS: { k: FeedKind; emoji: string; label: string; title: string }[] = [
     { k: 'nearby', emoji: '📍', label: 'Autour', title: 'Autour de toi' },
     { k: 'following', emoji: '👥', label: 'Suivis', title: 'Abonnements' },
