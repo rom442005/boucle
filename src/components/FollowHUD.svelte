@@ -160,7 +160,7 @@
     font-size: 0.875rem;
     color: var(--label);
     white-space: nowrap;
-    animation: drop 520ms var(--spring) backwards;
+    animation: drop 400ms var(--spring) backwards;
   }
   .note.warn {
     color: var(--warn);
@@ -220,7 +220,7 @@
     display: grid;
     gap: 10px;
     overflow: hidden;
-    animation: up 640ms var(--spring) backwards;
+    animation: up 420ms var(--spring) backwards;
   }
   @keyframes up {
     from {

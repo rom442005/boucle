@@ -56,7 +56,7 @@
     border-radius: 3px;
     background: var(--c);
     transform-origin: bottom;
-    animation: grow 620ms var(--spring) calc(160ms + var(--i) * 14ms) backwards;
+    animation: grow 480ms var(--spring) calc(160ms + var(--i) * 14ms) backwards;
   }
   li.empty {
     height: 5px;

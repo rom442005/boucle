@@ -206,8 +206,21 @@ components:
 9. **Le mouvement.** La photo dérive lentement et se fond toutes les 5 minutes ; les blocs montent en cascade avec un léger ressort ; le panneau glisse au centre sur Mac ; la bulle de l'onglet choisi s'étire vers son nouvel onglet puis se resserre (comme Deezer), et tout bouton de verre gonfle sous le doigt. Rien ne clignote.
 10. **Le centre de l'écran d'abord (iPhone).** Une seule ligne en bas : la capsule des onglets et la bulle rose « Faire une boucle » ; le contenu défile dessous. Pas de poignée ni de titre sur les onglets principaux : le premier bloc est tout en haut. Résumé replié d'un parcours sur une ligne, ▶ pour suivre. Météo en une pastille. Au lancement, une vue d'ensemble, jamais un gros plan sur la position.
 11. **Une seule grammaire.** Un nouvel écran reprend d'abord les blocs existants (`.cards`, `.card.wide`, `.tabcard`, `.photo-card`, `ActivityBars`) ; s'il en faut un nouveau, il rejoint ce fichier.
+12. **Le mouvement a des règles chiffrées** (27/11/2026, skills `ux-motion` et `ui-principles` dans `~/.claude/skills/`, à appliquer à tout nouvel écran) :
+    - **Durées** : appui 90 ms (`--t-press`, règle globale sur `:active`) ; transitions d'interface 150 à 300 ms (`--t-ui` 240 ms) ; grands panneaux 400 ms au plus (`--t-panel`) ; plus de 500 ms seulement pour un moment rare (ouverture de l'app, réussite).
+    - **Courbes** : ease-out pour entrer (`--ease-out`), ease-in pour sortir (`--ease-in`), ease-in-out pour se déplacer (`--ease-in-out`) ; linéaire seulement pour une barre ou une rotation.
+    - **Fermer vite** : une sortie dure la moitié à un tiers de l'entrée (le carnet de dessin : 360 ms pour ouvrir, 160 ms pour fermer).
+    - **Cascades** : 40 à 45 ms entre deux éléments, 8 au plus, au-delà tout arrive ensemble.
+    - **Toucher** : toute zone tactile fait au moins 44 × 44 pt (la couche `.tactile` s'agrandit seule autour des petites icônes).
+    - **Rien ne saute** : place réservée pour ce qui arrive tard (photos, cartes de la Découverte), animations en `transform` et `opacity` seulement.
+    - **Annuler plutôt que confirmer** : une suppression se fait tout de suite, et le message porte « Annuler » pendant 5 s (`app.showToast(texte, annuler)`). Une boîte de confirmation seulement pour l'irréversible (supprimer son compte), avec l'action écrite sur le bouton.
+    - **Messages en pile** : 3 au plus, le plus récent devant, les autres en retrait de 14 px et 5 % ; au survol, la pile s'étale et attend.
+    - **Voiles** : 60 % de noir derrière une fenêtre (interface sombre), jamais derrière un menu ou un message.
+    - **Origine** : un menu s'ouvre depuis son bouton (`transform-origin` sur le déclencheur).
+    - **Chiffres qui changent** : ils roulent (`RollingNumber`), 340 ms.
+    - **Réduire les animations** : respecté partout (réglage du système) ; le mouvement devient un simple fondu ou rien.
 
-**Avant de livrer :** photo derrière ? Seulement des blocs de verre ? Un chiffre héros par bloc ? Des étiquettes d'un ou deux mots ? Le rose réservé à l'action ? Lisible sur la photo la plus claire (s8, s17) comme sur la plus sombre (s9, s20) ?
+**Avant de livrer :** photo derrière ? Seulement des blocs de verre ? Un chiffre héros par bloc ? Des étiquettes d'un ou deux mots ? Le rose réservé à l'action ? Lisible sur la photo la plus claire (s8, s17) comme sur la plus sombre (s9, s20) ? Durées dans les fourchettes, fermeture plus rapide que l'ouverture, zones de 44 pt, « Annuler » au lieu de « Êtes-vous sûr ? » ?
 
 
 ## Overview

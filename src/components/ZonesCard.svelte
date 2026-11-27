@@ -62,7 +62,7 @@
     border-radius: 999px;
     --g-bg: rgba(24, 26, 28, 0.62);
     --blur: 22px;
-    animation: zones-in 640ms var(--spring) 320ms backwards;
+    animation: zones-in 420ms var(--spring) 120ms backwards;
   }
   @keyframes zones-in {
     from {
@@ -74,8 +74,8 @@
   /* À l'arrivée, les icônes entrent l'une après l'autre (sur leur emplacement, pour ne pas rejouer). */
   .slot {
     display: flex;
-    animation: zone-in 520ms var(--spring) backwards;
-    animation-delay: calc(380ms + var(--i) * 45ms);
+    animation: zone-in 360ms var(--spring) backwards;
+    animation-delay: calc(160ms + var(--i) * 40ms);
   }
   @keyframes zone-in {
     from {

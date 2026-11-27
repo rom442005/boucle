@@ -284,7 +284,7 @@
     border-radius: 26px;
     padding: 14px 16px;
     min-width: 0;
-    animation: card-in 560ms var(--spring) calc(var(--i) * 55ms) backwards;
+    animation: card-in 380ms var(--spring) calc(var(--i) * 40ms) backwards;
   }
   @keyframes card-in {
     from {

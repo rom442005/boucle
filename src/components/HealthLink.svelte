@@ -152,8 +152,8 @@
     display: grid;
     grid-template-columns: 28px 1fr;
     gap: 12px;
-    animation: step-in 520ms var(--spring) backwards;
-    animation-delay: calc(140ms + var(--i) * 70ms);
+    animation: step-in 380ms var(--spring) backwards;
+    animation-delay: calc(100ms + var(--i) * 45ms);
   }
   @keyframes step-in {
     from {

@@ -150,7 +150,12 @@
       <button use:tactile type="button" class="lemo" class:open={picking === 'edit'} aria-label="Changer l’émoji de la liste ({openList.emoji})" aria-expanded={picking === 'edit'} onclick={() => (picking = picking === 'edit' ? null : 'edit')}>{openList.emoji}</button>
       <input bind:value={listName} maxlength="30" aria-label="Nom de la liste" onchange={() => saved.renameList(openList.id, listName, openList.emoji)} />
       {#if saved.lists.length > 1}
-        <button use:tactile type="button" class="lx danger" aria-label="Supprimer la liste {openList.name} et ses lieux" onclick={() => saved.removeList(openList.id)}><Icon name="trash" size={15} /></button>
+        <button use:tactile type="button" class="lx danger" aria-label="Supprimer la liste {openList.name} et ses lieux" onclick={() => {
+          const snap = saved.snapshot();
+          const name = openList.name;
+          saved.removeList(openList.id);
+          app.showToast(`Liste ${name} supprimée`, () => saved.restore(snap));
+        }}><Icon name="trash" size={15} /></button>
       {/if}
     </div>
     {#if picking === 'edit'}
@@ -162,7 +167,11 @@
       {#each listPlaces as it, i (it.p.id)}
         <li class="li" style:--i={Math.min(i, 8)}>
           {#if editing}
-            <button use:tactile type="button" class="del" aria-label="Retirer {it.p.name}" onclick={() => saved.remove(it.p.id)}><Icon name="remove" size={24} /></button>
+            <button use:tactile type="button" class="del" aria-label="Retirer {it.p.name}" onclick={() => {
+              const snap = saved.snapshot();
+              saved.remove(it.p.id);
+              app.showToast(`${it.p.name} retiré`, () => saved.restore(snap));
+            }}><Icon name="remove" size={24} /></button>
           {/if}
           <button use:tactile type="button" class="item" disabled={editing} onclick={() => app.showSavedPlace(it.p.id)}>
             <span class="pemo" aria-hidden="true">{saved.emojiOf(it.p)}</span>
@@ -282,7 +291,7 @@
     padding: 14px 16px;
     text-align: left;
     color: var(--label);
-    animation: card-in 560ms var(--spring) backwards;
+    animation: card-in 380ms var(--spring) backwards;
   }
   .cards > :nth-child(2) { animation-delay: 70ms; }
   .cards > :nth-child(3) { animation-delay: 110ms; }

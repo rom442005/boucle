@@ -131,7 +131,9 @@ $ANDROID_HOME/platform-tools/adb shell am start -n fr.boucle.parcours/.SeedHealt
 - La page ne charge du code que d'elle-même et ne contacte que les services listés (`Content-Security-Policy` dans `index.html`).
 - Dans Supabase, chaque table a des règles d'accès ligne par ligne : chacun ne modifie que ce qui est à lui (`supabase/schema.sql`). Les images ne s'écrivent que dans le dossier de leur propriétaire.
 - Les photos envoyées sont réencodées sur l'appareil : leurs informations cachées (position GPS comprise) disparaissent.
-- Un parcours publié commence et finit à 300 m du départ réel de son auteur.
+- Un parcours publié commence et finit à au moins 300 m du départ réel de son auteur, à une distance tirée au hasard (cercle décalé de 0 à 120 m, rayon de 420 à 600 m) : croiser plusieurs parcours ne retrouve pas l'adresse. Si le départ ne peut pas être masqué (parcours trop court), la publication est refusée, jamais faite en entier.
+- Un auteur ne peut écrire que le contenu de son parcours (nom, description, tracé), jamais ses compteurs (j'aime, commentaires, reprises, photos), tenus par les déclencheurs du serveur. « Utilisé N fois » compte une fois par personne (`route_uses`).
+- La connexion à Strava porte un jeton tiré au hasard, vérifié au retour : une connexion lancée depuis un autre site est ignorée.
 - La clé Supabase présente dans l'app est la clé publique, faite pour être visible ; la clé secrète n'est jamais dans le code.
 
 ## Failles connues et acceptées
@@ -139,6 +141,8 @@ $ANDROID_HOME/platform-tools/adb shell am start -n fr.boucle.parcours/.SeedHealt
 Au 22/11/2026, `npm audit` signale 4 failles modérées dans `glob` et `minimatch`, utilisés seulement par l'outil qui fabrique la version hors ligne de l'app (`vite-plugin-pwa`), sur la machine de construction. Elles ne partent pas chez les utilisateurs. La correction proposée ferait revenir à une ancienne version de l'outil : on attend sa prochaine mise à jour, que Dependabot proposera.
 
 ## Journal
+
+- **27/11/2026** : audit de sécurité de tout le code (règles Supabase, fonctions serveur, affichage, applis du téléphone) : rien de grave. Corrigé : zone privée (distance au hasard, refus au lieu de publier en entier), compteurs protégés, reprise comptée une fois, jeton Strava aléatoire. Migration à lancer dans l'éditeur SQL : la fin de `supabase/schema.sql` (bloc « 27/11/2026 (audit de sécurité) »). Restent acceptés : connexion par lien e-mail en flux implicite (un lien piégé peut connecter quelqu'un au compte d'un autre, sans accès à ses données), blocages appliqués dans l'app seulement, comptes « Santé » anonymes qui comptent comme des comptes. UX : principes `ux-motion` et `ui-principles` dans le fil rouge (DESIGN.md, point 12), durées resserrées, zones de 44 pt, « Annuler » sur les suppressions, messages en pile.
 
 - **25/11/2026** : création de boucle refaite (blocs de verre aussi sur Mac, bloc « Le parcours » qui regroupe forme, distance, dénivelé et milieu) ; Découverte des lieux emblématiques (OpenStreetMap + Wikipédia, en cache) ; horaires d'ouverture sur les fiches des lieux de la carte ; serveur Overpass d'OpenStreetMap France en premier (les deux autres étaient en panne : les points d'eau ne marchaient plus). Vérifié ensuite sur les vraies données du centre de Nantes : Wikipédia complète tous les lieux qui peuvent entrer dans la liste (pas seulement les 50 premiers, les grues Titan en manquaient), Wikidata ramène la Tour LU (pas d'article français), grues un peu plus haut dans le classement ; Jardin des Plantes 4e, Machines 5e, grues Titan 14e et 15e, Tour LU 16e, Tour Bretagne 21e.
 - **26/11/2026** : la Marche parmi les sports (piéton Valhalla à l'allure réglée, 12 min/km par défaut, escaliers acceptés ; base Supabase mise à jour : contraintes `profiles_sports_check` et `routes_sport_check`, voir la fin de `supabase/schema.sql`). Sur iPhone, les 5 sports ont l'icône au-dessus du nom.

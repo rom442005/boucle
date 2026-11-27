@@ -1,6 +1,6 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
-  import { cubicOut } from 'svelte/easing';
+  import { cubicIn, cubicOut } from 'svelte/easing';
   import Icon from './Icon.svelte';
   import Ruler from './Ruler.svelte';
   import { app } from '../lib/state.svelte';
@@ -184,7 +184,7 @@
   </button>
 
   {#if app.drawOpen}
-    <div id="draw-sheet" class="sheet" transition:slide={{ duration: 420, easing: cubicOut }}>
+    <div id="draw-sheet" class="sheet" in:slide={{ duration: 360, easing: cubicOut }} out:slide={{ duration: 160, easing: cubicIn }}>
       <form
         class="ask"
         onsubmit={(e) => {
@@ -271,7 +271,7 @@
           onchange={(v) => app.setDrawPrefs({ reach: v })}
         />
         {#if reach > 0}
-          <label class="row approach" transition:slide={{ duration: 300, easing: cubicOut }}>
+          <label class="row approach" in:slide={{ duration: 260, easing: cubicOut }} out:slide={{ duration: 140, easing: cubicIn }}>
             <span class="row-icon"><Icon name="path" /></span>
             <span class="row-label">Y aller depuis le départ</span>
             <input

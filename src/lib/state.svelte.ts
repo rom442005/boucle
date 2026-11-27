@@ -256,7 +256,12 @@ class AppState {
 
   search = $state<null | PlaceKind>(null);
   pickOnMap = $state<null | PlaceKind>(null);
-  toast = $state<{ text: string; id: number } | null>(null);
+  /** Messages en pile (3 au plus, le plus récent devant) ; « Annuler » sur ceux qui le permettent. */
+  toasts = $state<{ text: string; id: number; undo?: () => void }[]>([]);
+  /** Le message le plus récent. */
+  get toast() {
+    return this.toasts.at(-1) ?? null;
+  }
 
   detent = $state<Detent>('half');
   /** côte ou descente mise en avant (indice dans climbsOf(route)), null sinon */
@@ -322,7 +327,8 @@ class AppState {
   private onHide: (() => void) | null = null;
   private abort: AbortController | null = null;
   private seed = Math.floor(Math.random() * 1e9);
-  private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private toastSeq = 0;
 
   constructor() {
     if (typeof window !== 'undefined') window.addEventListener('pagehide', () => this.persistNow());
@@ -391,10 +397,41 @@ class AppState {
 
   /* ------------------------------ Lieux ------------------------------ */
 
-  showToast(text: string) {
-    clearTimeout(this.toastTimer);
-    this.toast = { text, id: Date.now() };
-    this.toastTimer = setTimeout(() => (this.toast = null), 2800);
+  /**
+   * Un message en haut de l'écran. Avec `undo`, il porte « Annuler » et reste 5 s (au lieu de 2,8 s) : une suppression
+   * se fait tout de suite et se rattrape, sans « Êtes-vous sûr ? ».
+   */
+  showToast(text: string, undo?: () => void) {
+    const id = ++this.toastSeq;
+    const all = [...this.toasts, { text, id, undo }];
+    for (const old of all.slice(0, -3)) this.clearToastTimer(old.id);
+    this.toasts = all.slice(-3);
+    this.armToast(id, undo ? 5000 : 2800);
+  }
+  private armToast(id: number, ms: number) {
+    this.clearToastTimer(id);
+    this.toastTimers.set(id, setTimeout(() => this.dismissToast(id), ms));
+  }
+  private clearToastTimer(id: number) {
+    clearTimeout(this.toastTimers.get(id));
+    this.toastTimers.delete(id);
+  }
+  dismissToast(id: number) {
+    this.clearToastTimer(id);
+    this.toasts = this.toasts.filter((t) => t.id !== id);
+  }
+  /** « Annuler » : défait l'action et retire le message. */
+  undoToast(id: number) {
+    const t = this.toasts.find((x) => x.id === id);
+    this.dismissToast(id);
+    t?.undo?.();
+  }
+  /** Survol de la pile : les messages restent ; ils repartent 2 s après. */
+  holdToasts(hold: boolean) {
+    for (const t of this.toasts) {
+      if (hold) this.clearToastTimer(t.id);
+      else this.armToast(t.id, t.undo ? 3500 : 2000);
+    }
   }
 
   locate(): Promise<LngLat | null> {
@@ -481,10 +518,18 @@ class AppState {
   }
 
   /** Retire un point de passage. */
+  /** Retire un point de passage ; le message propose « Annuler ». */
   removeVia(i: number) {
+    const before = $state.snapshot(this.vias);
+    const v = this.vias[i];
     this.vias.splice(i, 1);
     this.editVia = null;
     this.persist();
+    if (v)
+      this.showToast(`${v.name} retiré du parcours`, () => {
+        this.vias = before;
+        this.persist();
+      });
   }
 
   /** Arrivée libre pour un aller simple : le parcours s'arrête là où la distance est atteinte. */
@@ -849,8 +894,13 @@ class AppState {
   }
 
   removeHistory(id: string) {
+    const before = this.history;
     this.history = this.history.filter((h) => h.id !== id);
     saveHistory(this.history);
+    this.showToast('Sortie supprimée', () => {
+      this.history = before;
+      saveHistory(this.history);
+    });
   }
 
   openHistory(id: string) {

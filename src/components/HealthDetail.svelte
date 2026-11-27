@@ -282,8 +282,9 @@
     position: fixed;
     inset: 0;
     z-index: 44;
-    background: rgba(0, 0, 0, 0.45);
-    animation: fade 240ms var(--ease-out);
+    /* Interface sombre sur photo : un voile à 60 % (32 % ne se voit pas sur du sombre). */
+    background: rgba(0, 0, 0, 0.6);
+    animation: fade 200ms var(--ease-out);
   }
   @keyframes fade {
     from {
@@ -305,7 +306,7 @@
     --blur: 30px;
     overflow: hidden;
     contain: layout paint;
-    animation: up 520ms var(--spring) backwards;
+    animation: up 400ms var(--spring) backwards;
   }
   @keyframes up {
     from {
@@ -467,7 +468,7 @@
     transition:
       opacity 200ms var(--ease-out),
       fill 200ms var(--ease-out);
-    animation: grow 560ms var(--spring) calc(var(--i) * 14ms) backwards;
+    animation: grow 440ms var(--spring) calc(var(--i) * 14ms) backwards;
   }
   @keyframes grow {
     from {

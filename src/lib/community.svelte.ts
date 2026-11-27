@@ -658,8 +658,14 @@ class CommunityState {
       }
     }
     try {
-      // Zone privée : le parcours publié commence et finit à 300 m de ton départ.
-      const t = opts.hideStart ? hidePrivateZone(route.coords, route.profile, 300) : { coords: route.coords, profile: route.profile, removed: 0 };
+      // Zone privée : le parcours publié commence et finit à au moins 300 m de ton départ (distance tirée au hasard).
+      const t = opts.hideStart ? hidePrivateZone(route.coords, route.profile, 300) : { coords: route.coords, profile: route.profile, removed: 0, ok: true };
+      // Jamais de repli sur le parcours entier : si le départ ne peut pas être masqué, on ne publie pas.
+      if (!t.ok) {
+        haptic('warn');
+        app.showToast('Ce parcours reste trop près de ton départ pour le masquer. Choisis un parcours plus long, ou publie sans masquer le départ.');
+        return false;
+      }
       const cum = cumulative(t.coords);
       const lengthM = cum[cum.length - 1] ?? route.lengthM;
       const shown: Route = { ...route, name, coords: t.coords, profile: t.profile, lengthM, vias: undefined };

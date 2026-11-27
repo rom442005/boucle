@@ -74,7 +74,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 600ms var(--ease-out);
+    transition: transform 400ms var(--ease-out);
   }
   .c-open:active .c-media img {
     transform: scale(1.03);

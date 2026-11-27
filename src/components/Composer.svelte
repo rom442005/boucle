@@ -203,7 +203,7 @@
   }
   /* Les blocs arrivent l'un après l'autre, juste derrière le panneau qui monte. */
   .composer > :global(*) {
-    animation: set-in 520ms var(--ease-out) backwards;
+    animation: set-in 320ms var(--ease-out) backwards;
   }
   .composer > :global(*:nth-child(1)) { animation-delay: 140ms; }
   .composer > :global(*:nth-child(2)) { animation-delay: 190ms; }

@@ -189,6 +189,17 @@ class Saved {
     this.persist();
   }
 
+  /** Remet Mes lieux tels qu'ils étaient (« Annuler » d'une suppression). */
+  restore(snap: { places: SavedPlace[]; lists: SavedList[] }) {
+    this.places = snap.places;
+    this.lists = snap.lists;
+    this.persist();
+  }
+  /** L'état actuel, à garder avant une suppression. */
+  snapshot() {
+    return { places: this.places, lists: this.lists };
+  }
+
   addList(name: string, emoji: string): SavedList {
     const l: SavedList = { id: uid(), name: name.trim() || 'Nouvelle liste', emoji, t: Date.now() };
     this.lists = [...this.lists, l];

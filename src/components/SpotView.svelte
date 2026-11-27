@@ -75,7 +75,7 @@
     border-radius: 30px;
     color: #fff;
     --g-bg: rgba(22, 23, 25, 0.86);
-    animation: rise 520ms var(--spring) backwards;
+    animation: rise 400ms var(--spring) backwards;
   }
   @keyframes rise {
     from {

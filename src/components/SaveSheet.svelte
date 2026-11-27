@@ -65,10 +65,11 @@
     if (!d.id) return;
     haptic('warn');
     const n = d.name;
+    const snap = saved.snapshot();
     saved.remove(d.id);
     if (app.place?.savedId === d.id) app.closePlace();
     saved.draft = null;
-    app.showToast(`${n} retiré de Mes lieux`);
+    app.showToast(`${n} retiré de Mes lieux`, () => saved.restore(snap));
   }
   const close = () => (saved.draft = null);
   function onkey(e: KeyboardEvent) {
@@ -141,8 +142,9 @@
     position: fixed;
     inset: 0;
     z-index: 44;
-    background: rgba(0, 0, 0, 0.4);
-    animation: fade 240ms var(--ease-out);
+    /* Interface sombre sur photo : un voile à 60 % (32 % ne se voit pas sur du sombre). */
+    background: rgba(0, 0, 0, 0.6);
+    animation: fade 200ms var(--ease-out);
   }
   @keyframes fade {
     from {
@@ -164,7 +166,7 @@
     gap: 12px;
     --g-bg: rgba(22, 23, 25, 0.88);
     --blur: 30px;
-    animation: up 520ms var(--spring) backwards;
+    animation: up 400ms var(--spring) backwards;
   }
   @keyframes up {
     from {

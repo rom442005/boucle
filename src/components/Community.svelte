@@ -172,7 +172,7 @@
     padding: 14px 16px;
     text-align: left;
     color: var(--label);
-    animation: card-in 560ms var(--spring) backwards;
+    animation: card-in 380ms var(--spring) backwards;
   }
   .cards > :nth-child(2) { animation-delay: 70ms; }
   .cards > :nth-child(3) { animation-delay: 110ms; }
@@ -284,7 +284,7 @@
     overflow-x: auto;
     scrollbar-width: none;
     padding: 2px 0;
-    animation: card-in 560ms var(--spring) 130ms backwards;
+    animation: card-in 380ms var(--spring) 80ms backwards;
   }
   .sports::-webkit-scrollbar {
     display: none;

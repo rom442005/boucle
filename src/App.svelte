@@ -66,6 +66,8 @@
   /** Premier lancement : te connecter ou créer un compte (une fois, ensuite plus jamais imposé). */
   const WELCOME_KEY = 'boucle.bienvenue';
   let welcome = $state(false);
+  /** pile des messages étalée (survol) */
+  let toastsOpen = $state(false);
   function closeWelcome() {
     welcome = false;
     try {
@@ -506,12 +508,15 @@
 {#if welcome}<Welcome onclose={closeWelcome} />{/if}
 {#if community.lightbox}<Lightbox />{/if}
 
-<div class="toast-zone" aria-live="polite">
-  {#if app.toast}
-    {#key app.toast.id}
-      <div class="toast glass">{app.toast.text}</div>
-    {/key}
-  {/if}
+<!-- Messages en pile : le plus récent devant, les plus anciens en retrait derrière ; au survol, la pile s'étale. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="toast-zone" class:open={toastsOpen} aria-live="polite" onmouseenter={() => ((toastsOpen = true), app.holdToasts(true))} onmouseleave={() => ((toastsOpen = false), app.holdToasts(false))}>
+  {#each app.toasts as t, i (t.id)}
+    <div class="toast glass" class:back={app.toasts.length - 1 - i > 0} style:--d={app.toasts.length - 1 - i}>
+      <span class="t-text">{t.text}</span>
+      {#if t.undo}<button use:tactile type="button" class="undo" onclick={() => app.undoToast(t.id)}>Annuler</button>{/if}
+    </div>
+  {/each}
 </div>
 
 <style>
@@ -881,18 +886,49 @@
     left: 0;
     right: 0;
     top: calc(var(--safe-top) + 70px);
-    display: flex;
-    justify-content: center;
+    display: grid;
+    justify-items: center;
     pointer-events: none;
   }
+  /* Tous dans la même case : les plus anciens glissent 14 px dessous et rapetissent de 5 % par rang, texte caché. */
   .toast {
+    grid-area: 1 / 1;
+    z-index: calc(10 - var(--d, 0));
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 10px 18px;
     border-radius: 999px;
     font-size: 0.9375rem;
     font-weight: 500;
     max-width: calc(100vw - 32px);
     text-align: center;
-    animation: toast-in 380ms var(--spring);
+    pointer-events: auto;
+    transform: translateY(calc(var(--d, 0) * 14px)) scale(calc(1 - var(--d, 0) * 0.05));
+    transition: transform 240ms var(--ease-out);
+    animation: toast-in 300ms var(--spring);
+  }
+  .toast.back .t-text,
+  .toast.back .undo {
+    opacity: 0;
+    transition: opacity 160ms var(--ease-out);
+  }
+  .toast-zone.open .toast {
+    transform: translateY(calc(var(--d, 0) * (100% + 14px)));
+  }
+  .toast-zone.open .toast.back .t-text,
+  .toast-zone.open .toast.back .undo {
+    opacity: 1;
+  }
+  .undo {
+    position: relative;
+    flex: none;
+    font-weight: 700;
+    color: var(--tint);
+    padding: 2px 0;
+  }
+  :global(.on-photo) .undo {
+    color: #ff8fa6;
   }
   @keyframes toast-in {
     from {

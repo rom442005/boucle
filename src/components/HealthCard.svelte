@@ -209,7 +209,7 @@
     background: rgba(255, 255, 255, 0.34);
     transform-origin: bottom;
     animation: bar-grow 700ms var(--spring) backwards;
-    animation-delay: calc(260ms + var(--i) * 55ms);
+    animation-delay: calc(160ms + var(--i) * 40ms);
   }
   .today .bar {
     background: var(--tint);
@@ -243,7 +243,7 @@
     gap: 4px;
     min-width: 0;
     animation: trio-in 520ms var(--spring) backwards;
-    animation-delay: calc(520ms + var(--i) * 70ms);
+    animation-delay: calc(300ms + var(--i) * 45ms);
   }
   @keyframes trio-in {
     from {

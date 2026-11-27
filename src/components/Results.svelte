@@ -443,8 +443,8 @@
   }
   /* Les propositions arrivent l'une après l'autre (fondu et léger recul : pas de flou animé, coûteux sur iPhone). */
   .card {
-    animation: card-in 520ms var(--ease-out) backwards;
-    animation-delay: calc(var(--i, 0) * 70ms + 80ms);
+    animation: card-in 380ms var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 45ms + 60ms);
   }
   @keyframes card-in {
     from {

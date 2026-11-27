@@ -84,7 +84,6 @@
     if (i >= 0) {
       app.removeVia(i);
       haptic('tap');
-      app.showToast(`${s.name} retiré du parcours`);
       return;
     }
     if (!app.addVia({ name: s.name, detail: s.kind, coord: s.coord, kind: 'search' })) {
@@ -313,7 +312,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    animation: spot-in 460ms var(--spring) calc(var(--i, 0) * 50ms) backwards;
+    animation: spot-in 360ms var(--spring) calc(var(--i, 0) * 40ms) backwards;
   }
   @keyframes spot-in {
     from {
@@ -339,7 +338,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 600ms var(--ease-out);
+    transition: transform 400ms var(--ease-out);
   }
   @media (hover: hover) {
     .spot:hover .ph img {

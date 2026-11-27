@@ -316,11 +316,11 @@
     border-radius: 30px 30px 40px 40px;
     overflow: hidden;
     /* Ressort : le panneau se pose avec un très léger rebond. */
-    transition: height 620ms var(--sheet-ease);
+    transition: height 400ms var(--sheet-ease);
     will-change: height;
     contain: layout paint;
     /* À l'ouverture, le panneau monte du bas de l'écran, avec un léger rebond. */
-    animation: panel-rise 640ms var(--sheet-ease) backwards;
+    animation: panel-rise 420ms var(--sheet-ease) backwards;
   }
   @keyframes panel-rise {
     from {
@@ -456,7 +456,7 @@
   }
   .panel.over-tabs {
     transition:
-      height 620ms var(--sheet-ease),
+      height 400ms var(--sheet-ease),
       bottom 320ms var(--ease-out);
   }
   /* iPhone sur la photo : tout l'écran, du haut (sous l'heure) au bas (sous la barre d'onglets en verre). */

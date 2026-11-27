@@ -16,7 +16,8 @@ const HEALTH_KEY = 'boucle.sante';
 const SHORTCUT_KEY = 'boucle.raccourci';
 /** nom du raccourci (celui du fichier public/sante/…), pour le lancer depuis l'app */
 export const SHORTCUT_NAME = 'Boucle Sante';
-const STATE = 'boucle-strava';
+/** jeton tiré au hasard à chaque connexion à Strava, vérifié au retour (une connexion lancée par un autre site est ignorée) */
+const STATE_KEY = 'boucle.strava.state';
 
 function flag(key: string, v?: string | null): string | null {
   try {
@@ -104,14 +105,33 @@ class Links {
   connectStrava() {
     haptic('tap');
     const back = location.origin + location.pathname;
-    const q = new URLSearchParams({ client_id: STRAVA_CLIENT_ID, response_type: 'code', redirect_uri: back, approval_prompt: 'auto', scope: 'read,activity:read', state: STATE });
+    const state = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+    try {
+      sessionStorage.setItem(STATE_KEY, state);
+    } catch {
+      /* sans mémoire : le retour sera refusé, Strava ne sera pas relié */
+    }
+    const q = new URLSearchParams({ client_id: STRAVA_CLIENT_ID, response_type: 'code', redirect_uri: back, approval_prompt: 'auto', scope: 'read,activity:read', state });
     location.href = `https://www.strava.com/oauth/authorize?${q}`;
   }
 
   /** Retour de Strava : le code est échangé par le serveur, puis le profil s'ouvre avec les chiffres. */
   async finishStrava() {
     const q = new URLSearchParams(location.search);
-    if (q.get('state') !== STATE) return;
+    const got = q.get('state');
+    if (!got) return;
+    let want: string | null = null;
+    try {
+      want = sessionStorage.getItem(STATE_KEY);
+      sessionStorage.removeItem(STATE_KEY);
+    } catch {
+      /* sans mémoire */
+    }
+    if (!want || got !== want) {
+      // Un retour que cet appareil n'a pas demandé : on l'efface sans rien relier.
+      if (q.get('code')) history.replaceState(null, '', location.pathname);
+      return;
+    }
     history.replaceState(null, '', location.pathname);
     const code = q.get('code');
     if (!code || q.get('error')) {

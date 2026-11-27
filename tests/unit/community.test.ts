@@ -23,9 +23,32 @@ describe('zone privée', () => {
     expect(t.removed).toBeGreaterThan(550);
     expect(t.profile.ele.length).toBeGreaterThan(150);
   });
-  it('un parcours trop court reste entier', () => {
+  it('un parcours trop court ne peut pas être masqué : refusé, jamais publié entier', () => {
     const coords = [HOME, destination(HOME, 0, 200), destination(HOME, 45, 250), HOME];
-    expect(hidePrivateZone(coords, { step: 30, ele: [1, 2] }, 300).removed).toBe(0);
+    const t = hidePrivateZone(coords, { step: 30, ele: [1, 2] }, 300);
+    expect(t.ok).toBe(false);
+    expect(t.removed).toBe(0);
+  });
+  it('les bouts publiés ne sont pas à une distance fixe de la porte (cercle décalé, rayon variable)', () => {
+    const side = (from: LngLat, brg: number) => Array.from({ length: 40 }, (_, k) => destination(from, brg, (k + 1) * 50));
+    const a = side(HOME, 0);
+    const b = side(a[39], 90);
+    const c = side(b[39], 180);
+    const d = side(c[39], 270);
+    const coords = [HOME, ...a, ...b, ...c, ...d];
+    const prof = { step: 30, ele: Array.from({ length: 270 }, () => 10) };
+    const dists = new Set<number>();
+    let seed = 1;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let k = 0; k < 8; k++) {
+      const t = hidePrivateZone(coords, prof, 300, rand);
+      expect(t.ok).toBe(true);
+      const d0 = haversine(t.coords[0], HOME);
+      expect(d0).toBeGreaterThanOrEqual(300);
+      expect(d0).toBeLessThanOrEqual(760);
+      dists.add(Math.round(d0 / 25));
+    }
+    expect(dists.size).toBeGreaterThan(3);
   });
 });
 

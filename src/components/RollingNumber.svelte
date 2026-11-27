@@ -41,7 +41,7 @@
   .strip {
     display: flex;
     flex-direction: column;
-    transition: transform 520ms var(--spring-bouncy);
+    transition: transform 340ms var(--spring-bouncy);
     will-change: transform;
   }
   .strip span {

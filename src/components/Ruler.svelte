@@ -355,7 +355,7 @@
     left: 0;
     height: 100%;
     will-change: transform;
-    animation: ruler-in 760ms var(--spring) 160ms backwards;
+    animation: ruler-in 420ms var(--spring) 60ms backwards;
   }
   @keyframes ruler-in {
     from {
@@ -398,7 +398,7 @@
     box-shadow: 0 0 10px color-mix(in srgb, var(--tint) 70%, transparent);
     transition: opacity 200ms var(--ease-out);
     transform-origin: top;
-    animation: mark-in 520ms var(--spring-bouncy) 420ms backwards;
+    animation: mark-in 320ms var(--spring-bouncy) 180ms backwards;
   }
   @keyframes mark-in {
     from {

@@ -561,3 +561,32 @@ alter table public.profiles drop constraint if exists profiles_sports_check;
 alter table public.profiles add constraint profiles_sports_check check (sports <@ array['run', 'walk', 'trail', 'road', 'gravel']);
 alter table public.routes drop constraint if exists routes_sport_check;
 alter table public.routes add constraint routes_sport_check check (sport in ('run', 'walk', 'trail', 'road', 'gravel'));
+
+-- 27/11/2026 (audit de sécurité) : les compteurs ne s'écrivent que par les déclencheurs, et « Utilisé N fois » ne compte
+-- qu'une fois par personne.
+-- Un auteur ne choisit que le contenu de son parcours, jamais ses compteurs (j'aime, commentaires, reprises, photos).
+revoke insert, update on public.routes from anon, authenticated;
+grant insert (author_id, name, description, sport, shape, distance_m, ascent_m, start_lat, start_lng, data) on public.routes to authenticated;
+grant update (name, description) on public.routes to authenticated;
+-- Une reprise par personne et par parcours.
+create table if not exists public.route_uses (
+  route_id uuid not null references public.routes (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (route_id, user_id)
+);
+alter table public.route_uses enable row level security;
+revoke all on public.route_uses from anon, authenticated;
+create or replace function public.use_route(rid uuid) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return; end if;
+  insert into public.route_uses (route_id, user_id)
+    select r.id, auth.uid() from public.routes r where r.id = rid and r.author_id <> auth.uid()
+    on conflict do nothing;
+  if found then
+    update public.routes set uses_count = uses_count + 1 where id = rid;
+  end if;
+end;
+$$;
+revoke all on function public.use_route(uuid) from public, anon;
+grant execute on function public.use_route(uuid) to authenticated;
