@@ -128,6 +128,14 @@
   }
 
   /** Si l'on part maintenant : météo au départ et lumière du jour au retour (pas pour une sortie déjà faite). */
+  // L'image story du parcours affiché, dessinée d'avance au calme : « Partager » part tout de suite.
+  $effect(() => {
+    const cur = r;
+    if (!cur || app.generating) return;
+    const idle = (cb: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(cb, { timeout: 2500 }) : setTimeout(cb, 600));
+    const h = idle(() => void app.prepareStory(cur).catch(() => {}));
+    return () => ('cancelIdleCallback' in window ? cancelIdleCallback(h as number) : clearTimeout(h as ReturnType<typeof setTimeout>));
+  });
   let now = $state(Date.now());
   $effect(() => {
     const t = setInterval(() => (now = Date.now()), 60000);

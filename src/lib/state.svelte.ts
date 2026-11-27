@@ -257,7 +257,7 @@ class AppState {
   search = $state<null | PlaceKind>(null);
   pickOnMap = $state<null | PlaceKind>(null);
   /** Messages en pile (3 au plus, le plus récent devant) ; « Annuler » sur ceux qui le permettent. */
-  toasts = $state<{ text: string; id: number; undo?: () => void }[]>([]);
+  toasts = $state<{ text: string; id: number; undo?: () => void; label?: string }[]>([]);
   /** Le message le plus récent. */
   get toast() {
     return this.toasts.at(-1) ?? null;
@@ -401,9 +401,9 @@ class AppState {
    * Un message en haut de l'écran. Avec `undo`, il porte « Annuler » et reste 5 s (au lieu de 2,8 s) : une suppression
    * se fait tout de suite et se rattrape, sans « Êtes-vous sûr ? ».
    */
-  showToast(text: string, undo?: () => void) {
+  showToast(text: string, undo?: () => void, label = 'Annuler') {
     const id = ++this.toastSeq;
-    const all = [...this.toasts, { text, id, undo }];
+    const all = [...this.toasts, { text, id, undo, label }];
     for (const old of all.slice(0, -3)) this.clearToastTimer(old.id);
     this.toasts = all.slice(-3);
     this.armToast(id, undo ? 5000 : 2800);
@@ -1052,30 +1052,81 @@ class AppState {
     this.showToast('GPX téléchargé');
   }
 
+  /** Images story déjà dessinées, par parcours (dessinées d'avance : le partage part tout de suite, sous le doigt). */
+  private stories = new Map<string, Promise<Blob>>();
+  /** Dessine d'avance l'image story d'un parcours (appelé quand son détail s'ouvre). */
+  prepareStory(r: Route): Promise<Blob> {
+    const key = `${r.id}:${Math.round(r.lengthM)}:${r.name}`;
+    let p = this.stories.get(key);
+    if (!p) {
+      p = Promise.all([import('./story'), import('./scene.svelte')]).then(([{ storyImage }, { sceneNow }]) => storyImage(r, sceneNow.i));
+      p.catch(() => this.stories.delete(key));
+      if (this.stories.size > 8) this.stories.delete(this.stories.keys().next().value!);
+      this.stories.set(key, p);
+    }
+    return p;
+  }
+
+  /**
+   * Partager un parcours : l'image story (tracé sur la photo, nom, chiffres) avec le lien. Téléphone : la feuille de
+   * partage du système (Instagram, WhatsApp, Messages…). Mac : le lien est copié et le message propose l'image.
+   */
   async shareLink(r: Route) {
     const url = `${isNativeApp ? PUBLIC_URL : location.origin + location.pathname}#r=${await packRoute(r)}`;
+    const text = `${r.name} : un parcours Boucle`;
+    const file = async () => new File([await this.prepareStory(r)], `${slug(r.name)}-boucle.jpg`, { type: 'image/jpeg' });
     if (isNativeApp) {
       try {
-        const { Share } = await import('@capacitor/share');
-        await Share.share({ title: r.name, text: `${r.name} — parcours Boucle`, url });
+        const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
+        let files: string[] | undefined;
+        try {
+          const f = await file();
+          const data = await new Promise<string>((ok) => {
+            const fr = new FileReader();
+            fr.onload = () => ok(String(fr.result).split(',')[1] ?? '');
+            fr.readAsDataURL(f);
+          });
+          files = [(await Filesystem.writeFile({ path: f.name, data, directory: Directory.Cache })).uri];
+        } catch {
+          /* sans image : le lien seul */
+        }
+        await Share.share({ title: r.name, text, url, files });
       } catch {
         /* partage annulé */
       }
       return;
     }
     if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       try {
-        await navigator.share({ title: r.name, text: `${r.name} — parcours Boucle`, url });
+        const f = await file().catch(() => null);
+        if (f && nav.canShare?.({ files: [f] })) await navigator.share({ files: [f], title: r.name, text: `${text} ${url}` });
+        else await navigator.share({ title: r.name, text, url });
         return;
       } catch (e) {
         if ((e as DOMException).name === 'AbortError') return;
       }
     }
+    const download = async () => {
+      try {
+        const f = await file();
+        const href = URL.createObjectURL(f);
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = f.name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(href), 4000);
+      } catch {
+        this.showToast('Image impossible à créer pour le moment.');
+      }
+    };
     try {
       await navigator.clipboard.writeText(url);
-      this.showToast('Lien copié : ouvre-le sur ton autre appareil.');
+      this.showToast('Lien copié', () => void download(), 'Image story');
     } catch {
-      this.showToast('Copie impossible dans ce navigateur.');
+      this.showToast('Copie impossible dans ce navigateur.', () => void download(), 'Image story');
     }
   }
 

@@ -126,6 +126,11 @@ $ANDROID_HOME/platform-tools/adb shell am start -n fr.boucle.parcours/.SeedHealt
 
 **On ajoute un nouveau service extérieur.** L'ajouter aussi aux règles de sécurité de la page (`index.html`, balise `Content-Security-Policy`), sinon le navigateur le bloquera ; le garde-fou de la carte le signale.
 
+## Visites et image de partage
+
+- **Visites** : `src/lib/visits.ts` compte une visite par jour et par appareil, sans cookie ni identifiant, avec sa provenance (`?src=tiktok`, `?src=insta`, `?src=youtube` dans les liens des bios ; `lien` pour un parcours partagé ; `app` pour l'app du téléphone ; sinon d'après le site d'où l'on vient). Lecture dans l'éditeur SQL : `select day, src, n from public.visits_daily order by day desc, n desc;`.
+- **Image story** : « Partager » crée une image 1080 × 1920 (photo de l'app, tracé lumineux, nom, distance, dénivelé, durée ; `src/lib/story.ts`), dessinée d'avance quand le détail s'ouvre. Téléphone : partagée avec le lien (Instagram, WhatsApp…). Mac : lien copié, et « Image story » dans le message la télécharge. Aucun fond de carte : seule la forme du tracé.
+
 ## Règles de sécurité en place
 
 - La page ne charge du code que d'elle-même et ne contacte que les services listés (`Content-Security-Policy` dans `index.html`).

@@ -590,3 +590,25 @@ end;
 $$;
 revoke all on function public.use_route(uuid) from public, anon;
 grant execute on function public.use_route(uuid) to authenticated;
+
+-- 27/11/2026 : visites comptées sans rien sur personne (jour + provenance), pour savoir quelle vidéo amène du monde.
+-- Ni IP, ni identifiant : seulement un nombre par jour et par provenance (« tiktok », « insta », « lien », « app »…).
+create table if not exists public.visits_daily (
+  day date not null default current_date,
+  src text not null,
+  n int not null default 0,
+  primary key (day, src)
+);
+alter table public.visits_daily enable row level security;
+revoke all on public.visits_daily from anon, authenticated;
+create or replace function public.count_visit(src text) returns void language plpgsql security definer set search_path = public as $$
+declare s text := lower(coalesce(src, 'direct'));
+begin
+  if s !~ '^[a-z0-9_-]{1,24}$' then s := 'autre'; end if;
+  insert into public.visits_daily (day, src, n) values (current_date, s, 1)
+    on conflict (day, src) do update set n = visits_daily.n + 1;
+end;
+$$;
+revoke all on function public.count_visit(text) from public;
+grant execute on function public.count_visit(text) to anon, authenticated;
+-- Lecture (éditeur SQL) : select day, src, n from public.visits_daily order by day desc, n desc;

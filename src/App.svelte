@@ -514,7 +514,7 @@
   {#each app.toasts as t, i (t.id)}
     <div class="toast glass" class:back={app.toasts.length - 1 - i > 0} style:--d={app.toasts.length - 1 - i}>
       <span class="t-text">{t.text}</span>
-      {#if t.undo}<button use:tactile type="button" class="undo" onclick={() => app.undoToast(t.id)}>Annuler</button>{/if}
+      {#if t.undo}<button use:tactile type="button" class="undo" onclick={() => app.undoToast(t.id)}>{t.label ?? 'Annuler'}</button>{/if}
     </div>
   {/each}
 </div>

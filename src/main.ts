@@ -3,8 +3,13 @@ import './app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { app as state } from './lib/state.svelte';
+import { countVisit, visitSource } from './lib/visits';
 
+// Provenance de la visite, lue avant que l'app ne nettoie l'adresse (lien de parcours partagé, retour de Strava).
+const visitFrom = visitSource();
 const app = mount(App, { target: document.getElementById('app')! });
+// Comptée au calme, après l'ouverture : rien ne ralentit le démarrage.
+setTimeout(() => countVisit(visitFrom), 4000);
 
 /*
  * Ouverture (index.html, scripts/intro.py) : une sortie se trace, les chiffres défilent, « Boucle » se pose. Elle

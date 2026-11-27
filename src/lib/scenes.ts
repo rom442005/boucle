@@ -53,6 +53,8 @@ function size(): 'm' | 'l' {
 /** Version des fichiers : une nouvelle série change d'adresse, l'ancienne gardée hors ligne n'est plus servie. */
 const SCENES_V = 2;
 export const sceneUrl = (i: number) => `${import.meta.env.BASE_URL}scenes/${SCENES[i].file}-${size()}.jpg?v=${SCENES_V}`;
+/** La photo en hauteur (1440 × 3120), pour une image au format story. */
+export const scenePortraitUrl = (i: number) => `${import.meta.env.BASE_URL}scenes/${SCENES[i].file}-m.jpg?v=${SCENES_V}`;
 
 const warmed = new Set<number>();
 /** Télécharge et décode une photo à l'avance : elle apparaîtra sans attendre. */
