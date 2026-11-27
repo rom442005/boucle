@@ -70,11 +70,11 @@ Apple ne laisse pas un site lire Santé. Sur l'iPhone, tant que l'app n'est pas 
 
 La discussion du mode Dessin propose des formes de sa bibliothèque. Pour qu'une IA (Claude) en propose aussi :
 
-1. Crée une clé sur console.anthropic.com (payant à l'usage : quelques centimes par demande ; chaque membre est limité à 20 demandes par jour).
+1. Crée une clé sur console.anthropic.com (payant à l'usage : quelques centimes par demande ; chaque membre est limité à 20 demandes par jour, 5 pour un compte anonyme créé par la connexion Santé).
 2. Dans Supabase › Edge Functions › Secrets, ajoute `ANTHROPIC_API_KEY` avec cette clé.
 3. Dans Supabase › Edge Functions › dessin › Settings, désactive « Verify JWT with legacy secret » (la fonction vérifie elle-même que le membre est connecté ; c'est le réglage recommandé par Supabase), puis Save changes.
 
-Sans clé, la fonction répond « not_configured » et l'app garde sa bibliothèque. Code : `supabase/functions/dessin/index.ts`, compteur : table `dessin_usage`.
+Le code du dépôt (limite de 5 pour les comptes anonymes, 27/11/2026) est à redéployer avec la clé : Supabase › Edge Functions › dessin › Code, coller `supabase/functions/dessin/index.ts`, Deploy. Sans clé, la fonction répond « not_configured » et l'app garde sa bibliothèque. Code : `supabase/functions/dessin/index.ts`, compteur : table `dessin_usage`.
 
 ## Index des pistes d'athlétisme
 

@@ -15,6 +15,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const MODEL = 'claude-opus-5-5';
 const DAILY = 20;
+/** Compte anonyme (connexion par Santé, sans e-mail) : se crée en un geste, donc moins de demandes. */
+const DAILY_ANON = 5;
 
 const SYSTEM = `You design GPS-art drawings: shapes that a runner or a cyclist will trace through city streets while recording with GPS, so that the recorded track draws the shape on the map.
 
@@ -96,12 +98,12 @@ Deno.serve(async (req) => {
   }
   if (!prompt) return json({ error: 'prompt' }, 400);
 
-  // 20 demandes par membre et par jour : l'IA coûte à chaque appel.
+  // 20 demandes par membre et par jour (5 pour un compte anonyme) : l'IA coûte à chaque appel.
   const admin = createClient(url, secret);
   const day = new Date().toISOString().slice(0, 10);
   const { data: row } = await admin.from('dessin_usage').select('n').eq('user_id', user.id).eq('day', day).maybeSingle();
   const used = (row as { n?: number } | null)?.n ?? 0;
-  if (used >= DAILY) return json({ error: 'limit' }, 429);
+  if (used >= (user.is_anonymous ? DAILY_ANON : DAILY)) return json({ error: 'limit' }, 429);
   await admin.from('dessin_usage').upsert({ user_id: user.id, day, n: used + 1 });
 
   const client = new Anthropic({ apiKey: key });
