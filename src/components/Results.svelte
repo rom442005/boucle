@@ -1,6 +1,5 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
-  import RouteGlyph from './RouteGlyph.svelte';
   import ElevationProfile from './ElevationProfile.svelte';
   import Breakdown from './Breakdown.svelte';
   import RollingNumber from './RollingNumber.svelte';
@@ -99,22 +98,6 @@
   }
   const fits = $derived(r ? fitsOf(r) : []);
 
-  /**
-   * Le parcours en trois mots, pour donner envie : son relief, le milieu qu'il traverse le plus, son sol (ou
-   * ses points d'eau). Le détail chiffré est plus bas, replié.
-   */
-  const pitch = $derived.by((): string[] => {
-    if (!r) return [];
-    const out: string[] = [];
-    const perKm = r.ascent / Math.max(r.lengthM / 1000, 0.1);
-    const [flat, hilly] = SPORTS[r.sport].bike ? [6, 14] : [8, 20];
-    out.push(perKm < flat ? '🏞️ Plutôt plat' : perKm < hilly ? '〰️ Vallonné' : '⛰️ Ça grimpe');
-    const [top, share] = ENV_ORDER.map((e) => [e, r.env[e] ?? 0] as const).sort((a, b) => b[1] - a[1])[0] ?? [];
-    if (top && share >= 0.25) out.push(`${ENV_EMOJI[top]} ${percent(share)} en ${ENVS[top].short}`);
-    if (r.surface && r.surface.dirt >= 0.35) out.push('🥾 Sentiers');
-    else if (r.waterPoints.length) out.push(`💧 ${r.waterPoints.length} point${r.waterPoints.length > 1 ? 's' : ''} d’eau`);
-    return out;
-  });
   /** le détail technique (altitude, côtes, milieux, sols), replié */
   let more = $state(false);
   /** Côtes et descentes notables du parcours sélectionné. */
@@ -149,6 +132,56 @@
     if (d) out.push(d);
     return out;
   });
+
+  /**
+   * Sous les trois chiffres, deux ou trois tuiles lues d'un coup d'œil : le temps qu'il fait, la lumière au
+   * retour, et ce que la proposition tient de la demande (un anneau qui se remplit). Le détail est replié plus bas.
+   */
+  interface Tile {
+    key: string;
+    emoji?: string;
+    value: string;
+    caption: string;
+    warn?: boolean;
+    /** anneau : part des critères tenus (0 à 1) */
+    ring?: number;
+  }
+  const okCount = $derived(fits.filter((f) => f.ok).length);
+  const tiles = $derived.by((): Tile[] => {
+    const out: Tile[] = conds.map((c, i) => ({ key: `c${i}`, emoji: c.emoji, value: c.value, caption: c.caption, warn: c.warn }));
+    if (r?.art) out.push({ key: 'fit', value: percent(r.art.fit), caption: 'Ressemblance', ring: r.art.fit });
+    // La demande ne compte que si elle va au-delà de la distance (milieu, dénivelé, eau, passages).
+    else if (fits.length > 1) out.push({ key: 'fit', value: `${okCount}/${fits.length}`, caption: okCount === fits.length ? 'Demande tenue' : 'Critères tenus', ring: okCount / fits.length });
+    return out;
+  });
+
+  /** Les actions : trois en vue, les autres derrière « Plus ». */
+  let menu = $state(false);
+  let menuEl: HTMLDivElement | undefined = $state();
+  $effect(() => {
+    if (!menu) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menuEl?.contains(e.target as Node)) menu = false;
+    };
+    const t = setTimeout(() => {
+      addEventListener('pointerdown', close, true);
+      addEventListener('keydown', close);
+    });
+    return () => {
+      clearTimeout(t);
+      removeEventListener('pointerdown', close, true);
+      removeEventListener('keydown', close);
+    };
+  });
+  // Un autre parcours affiché : le menu se referme.
+  $effect(() => {
+    void r?.id;
+    menu = false;
+  });
+  function pick(f: () => void) {
+    menu = false;
+    f();
+  }
 
   /** Sortie de l'historique affichée en détail. */
   const done = $derived(app.detailFrom?.kind === 'historique' ? app.history.find((h) => h.id === app.detailFrom?.id) ?? null : null);
@@ -221,7 +254,6 @@
   <div class="strip" class:wide={app.wide} bind:this={strip} onscroll={onScroll} role="listbox" aria-label="Propositions" aria-orientation={app.wide ? 'vertical' : 'horizontal'}>
     {#each app.routes as x, i (x.id)}
       <button use:tactile type="button" class="card" class:sel={i === app.selected} role="option" aria-selected={i === app.selected} style:--i={i} onclick={() => app.select(i)}>
-        <RouteGlyph coords={x.coords} active={i === app.selected} />
         <span class="c-txt">
           <span class="c-name">{x.name}</span>
           <span class="c-meta tabular">{km(x.lengthM)} · {meters(x.ascent)} D+ · {duration(x.durationS)}</span>
@@ -234,7 +266,6 @@
     {#if searching}
       <!-- Place réservée : les autres propositions prennent sa place en arrivant, sans que rien ne saute. -->
       <div class="card ghost" aria-hidden="true" style:--i={app.routes.length}>
-        <span class="g-glyph"></span>
         <span class="c-txt">
           <span class="c-name">Autres propositions…</span>
           <span class="g-line"></span>
@@ -285,47 +316,45 @@
     {#if cr}<PhotoStrip r={cr} />{/if}
     {#if doneText}<p class="done-line"><Icon name="done" size={16} fill />{doneText}</p>{/if}
     {/if}
-    {#if pitch.length}
-      <p class="pitch" aria-label="En bref">
-        {#each pitch as t (t)}<span>{t}</span>{/each}
-      </p>
-    {/if}
 
-    {#if !app.wide}
-      <div class="prof" data-fold>
-        <ElevationProfile route={r} height={100} readout="header" />
-        <SlopeLegend />
-      </div>
-    {/if}
-
-    <dl class="stats">
+    <!-- Les trois chiffres, puis deux ou trois tuiles (météo, lumière, demande) : ce qui décide d'un coup d'œil. -->
+    <!-- iPhone : les trois chiffres sont déjà dans l'en-tête du panneau. -->
+    {#if app.wide}
+    <dl class="stats sec">
       <div><dt>Distance</dt><dd class="rounded"><RollingNumber value={kmValue(r.lengthM * app.revealK)} /><small>km</small></dd></div>
       <div><dt>Dénivelé +</dt><dd class="rounded"><RollingNumber value={String(Math.round(r.ascent * app.revealK))} /><small>m</small></dd></div>
       <div><dt>Durée estimée</dt><dd class="rounded"><RollingNumber value={duration(r.durationS * app.revealK)} /></dd></div>
     </dl>
+    {/if}
 
-    {#if fits.length}
-      <ul class="fits" aria-label="Respect de ta demande">
-        {#each fits as f, i (i)}
-          <li class:ok={f.ok}><span class="mark" aria-hidden="true"><Icon name={f.ok ? 'check' : 'approx'} size={12} /></span>{f.text}</li>
+    {#if tiles.length}
+      <ul class="tiles" style:--n={tiles.length} aria-label={conds.length ? 'Si tu pars maintenant' : 'En bref'}>
+        {#each tiles as t (t.key)}
+          <li class="tile" class:warn={t.warn}>
+            {#if t.ring != null}
+              <svg class="ring" viewBox="0 0 36 36" aria-hidden="true">
+                <circle cx="18" cy="18" r="15" pathLength="100" class="ring-bg" />
+                <circle cx="18" cy="18" r="15" pathLength="100" class="ring-fg" class:full={t.ring >= 0.999} style:stroke-dasharray="{Math.max(2, t.ring * 100)} 100" />
+              </svg>
+            {:else}
+              <span class="t-ic" aria-hidden="true">{t.emoji}</span>
+            {/if}
+            <span class="t-val rounded tabular">{t.value}</span>
+            <span class="t-cap">{t.caption}</span>
+          </li>
         {/each}
       </ul>
     {/if}
 
-    {#if conds.length}
-      <section class="conds" aria-labelledby="conds-h">
-        <h3 id="conds-h" class="field-label">Si tu pars maintenant</h3>
-        <ul class="cond-line">
-          {#each conds as c, i (i)}
-            <li class:warn={c.warn} title={c.sub}>
-              <span aria-hidden="true">{#if c.emoji}{c.emoji}{:else}<Icon name={c.icon} size={16} />{/if}</span><span>{c.title}</span>
-            </li>
-          {/each}
-        </ul>
-      </section>
+    {#if !app.wide}
+      <div class="prof sec" data-fold>
+        <ElevationProfile route={r} height={84} readout="header" />
+        <SlopeLegend />
+      </div>
     {/if}
 
-    <div class="actions" style:--n={cr ? 6 : canPublish ? 6 : 5}>
+    <!-- Trois actions en vue ; les autres derrière « Plus », dans un menu qui part du bouton. -->
+    <div class="actions">
       {#if cr}
         <button use:tactile type="button" class="act" aria-pressed={cr.likedByMe} aria-label="J’aime ({cr.likes})" onclick={() => community.toggleLike(cr)}>
           <span class="act-ic like" class:on={cr.likedByMe}><Icon name="heart" fill={cr.likedByMe} /></span><span class="tabular">{cr.likes ? `${cr.likes} j’aime` : 'J’aime'}</span>
@@ -341,36 +370,42 @@
           ><Icon name="star" fill={app.isSaved(r)} /></span
         >Favori
       </button>
-      <button use:tactile type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => {
-        const on = !app.isDoneToday(r);
-        haptic(on ? 'success' : 'tap');
-        app.markDone(r);
-        if (on) burst = 'done';
-      }}>
-        <span class="act-ic ok" class:burst={burst === 'done'} onanimationend={(e) => e.animationName.endsWith('act-burst') && (burst = null)}
-          ><Icon name="done" fill={app.isDoneToday(r)} /></span
-        >Fait
-      </button>
-      <button use:tactile type="button" class="act" onclick={() => app.exportGPX(r)}>
-        <span class="act-ic"><Icon name="download" /></span>GPX
-      </button>
+      {#if !cr}
+        <button use:tactile type="button" class="act" aria-pressed={app.isDoneToday(r)} onclick={() => {
+          const on = !app.isDoneToday(r);
+          haptic(on ? 'success' : 'tap');
+          app.markDone(r);
+          if (on) burst = 'done';
+        }}>
+          <span class="act-ic ok" class:burst={burst === 'done'} onanimationend={(e) => e.animationName.endsWith('act-burst') && (burst = null)}
+            ><Icon name="done" fill={app.isDoneToday(r)} /></span
+          >Fait
+        </button>
+      {/if}
       <button use:tactile type="button" class="act" onclick={() => app.shareLink(r)}>
         <span class="act-ic"><Icon name="share" /></span>Partager
       </button>
-      {#if cr}
-        <button use:tactile type="button" class="act" onclick={() => community.reuseSettings(cr)}>
-          <span class="act-ic"><Icon name="reuse" /></span>Réutiliser
+      <div class="more-wrap" bind:this={menuEl}>
+        <button use:tactile type="button" class="act" aria-haspopup="menu" aria-expanded={menu} aria-controls="act-menu" onclick={() => (menu = !menu)}>
+          <span class="act-ic" class:on={menu}><Icon name="more" /></span>Plus
         </button>
-      {:else}
-        {#if canPublish}
-          <button use:tactile type="button" class="act" onclick={() => community.startPublish()}>
-            <span class="act-ic" class:on={!!community.published[r.id]}><Icon name="users" fill={!!community.published[r.id]} /></span>{community.published[r.id] ? 'Publié' : 'Publier'}
-          </button>
+        {#if menu}
+          <div id="act-menu" class="menu glass" role="menu" aria-label="Autres actions">
+            {#if cr}
+              <button type="button" role="menuitem" onclick={() => pick(() => { haptic('tap'); app.markDone(r); })}><Icon name="done" size={18} fill={app.isDoneToday(r)} />{app.isDoneToday(r) ? 'Fait aujourd’hui' : 'Marquer comme fait'}</button>
+            {/if}
+            <button type="button" role="menuitem" onclick={() => pick(() => app.exportGPX(r))}><Icon name="download" size={18} />Exporter en GPX</button>
+            {#if cr}
+              <button type="button" role="menuitem" onclick={() => pick(() => community.reuseSettings(cr))}><Icon name="reuse" size={18} />Réutiliser les réglages</button>
+            {:else}
+              {#if canPublish}
+                <button type="button" role="menuitem" onclick={() => pick(() => community.startPublish())}><Icon name="users" size={18} fill={!!community.published[r.id]} />{community.published[r.id] ? 'Publié dans la Communauté' : 'Publier dans la Communauté'}</button>
+              {/if}
+              <button type="button" role="menuitem" onclick={() => pick(() => app.reverseSelected())}><Icon name="swap" size={18} />Inverser le sens</button>
+            {/if}
+          </div>
         {/if}
-        <button use:tactile type="button" class="act" onclick={() => app.reverseSelected()}>
-          <span class="act-ic"><Icon name="swap" /></span>Inverser
-        </button>
-      {/if}
+      </div>
     </div>
     {#if cr}
       <div class="cr-meta">
@@ -384,12 +419,23 @@
       </div>
     {/if}
 
+    <div class="sec more-sec">
     <button use:tactile type="button" class="more" aria-expanded={more} aria-controls="more-body" onclick={() => (more = !more)}>
-      <span>Plus de détails</span><small>côtes, milieux, sols</small>
+      <span>Plus de détails</span><small>{fits.length ? 'demande, ' : ''}côtes, milieux, sols</small>
       <span class="chev" aria-hidden="true"><Icon name="down" size={16} /></span>
     </button>
     {#if more}
     <div id="more-body" class="more-body">
+    {#if fits.length}
+      <section class="fit-sec" aria-labelledby="fits-h">
+        <h3 id="fits-h" class="field-label">Ta demande</h3>
+        <ul class="fits" aria-label="Respect de ta demande">
+          {#each fits as f, i (i)}
+            <li class:ok={f.ok}><span class="mark" aria-hidden="true"><Icon name={f.ok ? 'check' : 'approx'} size={12} /></span>{f.text}</li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
     <p class="sub tabular">D− {meters(r.descent)} · Altitude {r.minEle} à {meters(r.maxEle)} · Pente max {Math.round(r.maxGrade)}{NNBSP}%</p>
     <section class="climbs" aria-labelledby="climbs-h">
       <div class="climbs-head">
@@ -422,6 +468,7 @@
     {/if}
     </div>
     {/if}
+    </div>
     {#if cr}<Comments r={cr} />{/if}
   </article>
 {/if}
@@ -467,7 +514,7 @@
     display: flex;
     gap: 12px;
     align-items: center;
-    padding: 10px 14px 10px 10px;
+    padding: 12px 16px;
     border-radius: 22px;
     background: var(--fill-group);
     text-align: left;
@@ -499,14 +546,6 @@
     to {
       translate: 100% 0;
     }
-  }
-  .g-glyph {
-    flex: none;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: 1.5px dashed var(--label-3);
-    opacity: 0.7;
   }
   .ghost .c-name {
     font-weight: 500;
@@ -686,35 +725,6 @@
   .prof {
     margin-top: 2px;
   }
-  .conds {
-    display: grid;
-    gap: 8px;
-  }
-  /* En bref, et la météo du départ : des pastilles, lues d'un coup d'œil. */
-  .pitch,
-  .cond-line {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .pitch span,
-  .cond-line li {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 30px;
-    padding: 0 12px;
-    border-radius: 999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    background: var(--fill-2);
-  }
-  .cond-line li.warn {
-    color: var(--warn, #ff9f0a);
-  }
   .more {
     display: flex;
     align-items: center;
@@ -752,9 +762,6 @@
       translate: 0 -6px;
     }
   }
-  .conds h3 {
-    margin: 0;
-  }
 
 
   /* Départ ou retour dans le noir : l'icône passe à l'ambre des avertissements. */
@@ -762,8 +769,143 @@
 
   .actions {
     display: grid;
-    grid-template-columns: repeat(var(--n, 5), 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 2px;
+  }
+  /* Sections : chaque groupe dans son bloc, comme les widgets Santé. */
+  .sec {
+    padding: 12px 14px;
+    border-radius: 22px;
+    background: var(--fill-group);
+  }
+  .stats.sec {
+    padding: 12px 14px 13px;
+  }
+  .tiles {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tile {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    align-content: start;
+    gap: 3px 7px;
+    padding: 10px 12px 11px;
+    border-radius: 20px;
+    background: var(--fill-group);
+    min-width: 0;
+  }
+  .t-ic {
+    font-size: 1.25rem;
+    line-height: 26px;
+  }
+  .t-cap {
+    grid-column: 1 / -1;
+  }
+  .t-val {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .t-cap {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--label-2);
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .tile.warn .t-cap {
+    color: var(--warn, #ff9f0a);
+  }
+  .ring {
+    width: 24px;
+    height: 24px;
+    rotate: -90deg;
+  }
+  .ring circle {
+    fill: none;
+    stroke-width: 4.5;
+    stroke-linecap: round;
+  }
+  .ring-bg {
+    stroke: var(--fill);
+  }
+  .ring-fg {
+    stroke: var(--tint);
+    transition: stroke-dasharray 400ms var(--ease-out);
+  }
+  .ring-fg.full {
+    stroke: var(--ok);
+  }
+  .more-wrap {
+    position: relative;
+    display: grid;
+  }
+  /* Le menu grandit depuis le bouton « Plus » (coin bas droit), se referme deux fois plus vite. */
+  .menu {
+    position: absolute;
+    z-index: 5;
+    right: 0;
+    bottom: calc(100% + 6px);
+    width: max-content;
+    min-width: 230px;
+    display: grid;
+    padding: 6px;
+    border-radius: 20px;
+    --g-bg: rgba(30, 31, 34, 0.92);
+    transform-origin: 100% 100%;
+    animation: menu-in 220ms var(--ease-out);
+  }
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      scale: 0.9;
+    }
+  }
+  .menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 14px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--label);
+    text-align: left;
+  }
+  .menu button :global(.icon) {
+    color: var(--tint);
+  }
+  .menu button:hover,
+  .menu button:active {
+    background: var(--fill-2);
+  }
+  .more-sec {
+    padding: 2px 10px;
+  }
+  .more-sec .more-body {
+    padding: 2px 4px 14px;
+  }
+  .fit-sec {
+    display: grid;
+    gap: 8px;
+  }
+  .fit-sec h3 {
+    margin: 0;
   }
   .act-ic.like.on,
   .act-ic.on {
@@ -1007,7 +1149,7 @@
       margin-bottom: 10px;
     }
     .card {
-      padding: 8px 12px 8px 8px;
+      padding: 10px 14px;
       gap: 10px;
       border-radius: 20px;
     }

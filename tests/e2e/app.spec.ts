@@ -80,6 +80,17 @@ async function createLoop(page: Page) {
   }
 }
 
+/** « Plus de détails » ouvert : la demande, les côtes, les milieux. */
+async function details(page: Page) {
+  const b = page.getByRole('button', { name: /Plus de détails/ });
+  if ((await b.getAttribute('aria-expanded')) !== 'true') await b.click();
+}
+/** Une action rangée dans le menu « Plus ». */
+async function more(page: Page, name: RegExp) {
+  await page.getByRole('button', { name: 'Plus', exact: true }).click();
+  await page.getByRole('menuitem', { name }).click();
+}
+
 test('créer une boucle, comparer les propositions, parcourir le profil', async ({ page }) => {
   await open(page);
   await createLoop(page);
@@ -87,7 +98,8 @@ test('créer une boucle, comparer les propositions, parcourir le profil', async 
   expect(await options.count()).toBeGreaterThanOrEqual(2);
   await options.nth(1).click();
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
-  // La liste détaillée dit ce que la proposition tient de la demande (les cartes en ont une version courte).
+  // Le détail dit ce que la proposition tient de la demande (replié dans « Plus de détails »).
+  await details(page);
   await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Distance (tenue|à)/)).toBeVisible();
   const profile = page.getByRole('slider', { name: /Profil d’altitude/ });
   await profile.focus();
@@ -165,6 +177,7 @@ test('dessiner le parcours : la boucle suit le dessin', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /propositions?$/ })).toBeVisible({ timeout: 60_000 });
   const folded = page.getByRole('button', { name: /Taille du panneau : réduit/ });
   if (await folded.count()) await folded.click();
+  await details(page);
   await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Ressemblance au dessin : \d+/)).toBeVisible();
   // Les propositions portent le nom de la forme.
   // « Étoile » seule, ou « Étoile par … » quand le tracé a des noms de rues.
@@ -299,9 +312,11 @@ test.describe(() => {
     });
     await open(page);
     await compose(page);
-    // Le parcours d'un seul bloc : forme, distance, dénivelé, milieu.
-    const course = page.getByRole('region', { name: 'Le parcours' });
-    for (const k of ['Forme', 'Distance', 'Dénivelé +', 'Milieu']) await expect(course.getByText(k, { exact: true }).first()).toBeVisible();
+    // Le parcours en blocs séparés : forme, puis distance et dénivelé, puis milieu.
+    await expect(page.getByRole('region', { name: 'Forme' }).getByText('Forme', { exact: true })).toBeVisible();
+    const nums = page.getByRole('region', { name: 'Distance et dénivelé' });
+    for (const k of ['Distance', 'Dénivelé +']) await expect(nums.getByText(k, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Où passer' }).getByText('Milieu', { exact: true })).toBeVisible();
     // Découverte, repliée par défaut : rien n'est demandé tant qu'elle est fermée.
     const head = page.getByRole('button', { name: /Découverte/ });
     await expect(head).toHaveAttribute('aria-expanded', 'false');
@@ -369,7 +384,7 @@ test('mettre en favori, retrouver dans Mes parcours et exporter en GPX', async (
   const items = page.getByRole('list', { name: 'Parcours favoris' }).getByRole('button');
   await expect(items).toHaveCount(1);
   await items.first().click();
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'GPX' }).click()]);
+  const [download] = await Promise.all([page.waitForEvent('download'), more(page, /GPX/)]);
   expect(download.suggestedFilename()).toMatch(/\.gpx$/);
 });
 
@@ -436,7 +451,7 @@ test('une sortie suivie en direct rejoint l’historique', async ({ page, contex
   await open(page);
   await createLoop(page);
   // Coordonnées du tracé, lues dans le GPX exporté.
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'GPX' }).click()]);
+  const [download] = await Promise.all([page.waitForEvent('download'), more(page, /GPX/)]);
   const fs = await import('node:fs/promises');
   const gpx = await fs.readFile((await download.path())!, 'utf8');
   const pts = [...gpx.matchAll(/<trkpt lat="([\d.-]+)" lon="([\d.-]+)"/g)].map((m) => ({ latitude: +m[1], longitude: +m[2] }));
@@ -542,6 +557,7 @@ test('imposer plusieurs points de passage dans une boucle', async ({ page, brows
   await expect(page.locator('.mk-via')).toHaveCount(2);
   await expect(page.getByRole('button', { name: /^Passer par :/ })).toHaveCount(2);
   await createLoop(page);
+  await details(page);
   await expect(page.getByRole('list', { name: 'Respect de ta demande' }).getByText(/Passe (par|près de)/)).toHaveCount(2);
   await expect(page.locator('.mk-via.many b')).toHaveText(['1', '2']);
   // Retour aux réglages : on peut en retirer un.
@@ -656,8 +672,9 @@ test('sur Mac, le bouton Dézoomer mène à la Terre entière, comme dans Plans'
 test('si tu pars maintenant : lumière du jour au retour', async ({ page }) => {
   await open(page);
   await createLoop(page);
-  await expect(page.getByRole('heading', { name: 'Si tu pars maintenant' })).toBeAttached();
-  await expect(page.locator('.conds').getByText(/^(Retour vers .+, (de jour|au crépuscule|de nuit)|Départ de nuit)/)).toBeAttached();
+  const tiles = page.getByRole('list', { name: 'Si tu pars maintenant' });
+  await expect(tiles).toBeAttached();
+  await expect(tiles.getByText(/^(Retour (de jour|au crépuscule|de nuit)|Départ dans le noir|Jour à .+)$/)).toBeAttached();
 });
 
 test('Communauté (démonstration) : compte par code, j’aime, commentaire, abonnement, publication', async ({ page, browserName }) => {
@@ -714,7 +731,7 @@ test('Communauté (démonstration) : compte par code, j’aime, commentaire, abo
   // Le changement d'onglet passe par un fondu : on attend l'écran Créer.
   await expect(page.getByRole('button', { name: /^(Faire une boucle|Créer un parcours)$/ }).or(page.getByRole('heading', { name: 'Nouveau parcours' })).first()).toBeVisible();
   await createLoop(page);
-  await page.getByRole('button', { name: 'Publier' }).click();
+  await more(page, /Publier dans la Communauté/);
   await page.getByRole('textbox', { name: 'Nom' }).fill('Ma boucle de test');
   await page.locator('form').getByRole('button', { name: 'Publier' }).click();
   await expect(page.getByText('Publié dans la Communauté')).toBeVisible();

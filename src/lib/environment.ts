@@ -1,6 +1,6 @@
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
-import type { EnvClass, EnvSplit, LngLat } from './types';
+import type { EnvClass, EnvSplit, EnvZone, LngLat } from './types';
 import { localProjector, resample } from './geo';
 
 /*
@@ -285,6 +285,30 @@ export function trackShare(r: EnvRaster | null, coords: LngLat[]): number | null
     if (ix >= 0 && iy >= 0 && ix < r.size && iy < r.size && r.tracks[iy * r.size + ix]) on++;
   }
   return on / pts.length;
+}
+
+/**
+ * Les tronçons du tracé dans les milieux demandés, en mètres depuis le départ. Les petites coupures (moins de
+ * 60 m, une rue à traverser) sont recousues ; les bouts de moins de 150 m sont laissés de côté.
+ */
+export function envZones(r: EnvRaster | null, coords: LngLat[], wanted: EnvClass[], step = 25): EnvZone[] {
+  if (!r || coords.length < 2 || !wanted.length) return [];
+  const pts = resample(coords, step);
+  const out: EnvZone[] = [];
+  let cur: EnvZone | null = null;
+  for (let i = 0; i < pts.length; i++) {
+    const c = classify(r, pts[i]);
+    const s = i * step;
+    if (c !== 'other' && wanted.includes(c)) {
+      if (cur && cur.c === c && s - cur.b <= 60) cur.b = s;
+      else {
+        if (cur) out.push(cur);
+        cur = { c, a: s, b: s };
+      }
+    }
+  }
+  if (cur) out.push(cur);
+  return out.filter((z) => z.b - z.a >= 150);
 }
 
 export function envShare(split: EnvSplit, wanted: EnvClass[]): number {

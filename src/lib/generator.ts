@@ -17,7 +17,7 @@ import {
   type RouteResult,
   type Waypoint,
 } from './valhalla';
-import { buildEnvRaster, desirability, envShare, envSplit, meanDesirability, pullToward, trackShare, type Desirability, type EnvRaster } from './environment';
+import { buildEnvRaster, desirability, envShare, envSplit, envZones, meanDesirability, pullToward, trackShare, type Desirability, type EnvRaster } from './environment';
 import { drinkingWater, weather, type Weather } from './services';
 import { artName, routeName } from './naming';
 import { drawingLoops } from './art';
@@ -1512,6 +1512,7 @@ function analyse(cand: Cand, c: Ctx, raster: EnvRaster | null, water: LngLat[], 
     busy: null,
     overlap,
     waterPoints,
+    zones: envZones(raster, res.coords, p.envs),
     durationS: estimateDuration(p.sport, lengthM, st.ascent, settings),
     match: {
       distance: 1 - distErr,

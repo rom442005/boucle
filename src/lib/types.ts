@@ -62,6 +62,13 @@ export interface Match {
   score: number;
 }
 
+/** Un tronçon du parcours dans un milieu demandé : de `a` à `b` mètres depuis le départ. */
+export interface EnvZone {
+  c: EnvClass;
+  a: number;
+  b: number;
+}
+
 export interface Route {
   id: string;
   name: string;
@@ -85,6 +92,11 @@ export interface Route {
   /** part du tracé parcourue deux fois */
   overlap: number;
   waterPoints: LngLat[];
+  /**
+   * tronçons dans les milieux demandés (parc, bord de l'eau…), en mètres depuis le départ : la carte les
+   * montre, pour voir où ils tombent sur le parcours
+   */
+  zones?: EnvZone[];
   durationS: number;
   match?: Match;
   /**

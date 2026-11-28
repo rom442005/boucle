@@ -153,6 +153,7 @@ export function reverseRoute(r: Route): Route {
     profile: reverseProfile(r.profile, r.lengthM),
     ascent: r.descent,
     descent: r.ascent,
+    zones: r.zones?.map((z) => ({ c: z.c, a: r.lengthM - z.b, b: r.lengthM - z.a })).reverse(),
     saved: false,
   };
 }

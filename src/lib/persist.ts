@@ -1,4 +1,4 @@
-import type { EnvSplit, LngLat, Params, Route, Settings, Shape, Sport, SurfaceSplit } from './types';
+import type { EnvClass, EnvSplit, LngLat, Params, Route, Settings, Shape, Sport, SurfaceSplit } from './types';
 import { cumulative, decodePolyline, encodePolyline, simplify } from './geo';
 import { decimateProfile, eleAt, elevationStats } from './elevation';
 import { estimateDuration, SPORTS } from './sports';
@@ -27,6 +27,8 @@ export interface SerialRoute {
   /** points de passage (vp : ancien format, un seul) */
   vps?: { n: string; c: LngLat }[];
   vp?: { n: string; c: LngLat };
+  /** tronçons dans les milieux demandés (milieu, début, fin en m) */
+  z?: [EnvClass, number, number][];
 }
 
 export function serialize(r: Route, compact = false): SerialRoute {
@@ -48,6 +50,7 @@ export function serialize(r: Route, compact = false): SerialRoute {
     w: r.waterPoints.map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5]),
     t: r.createdAt,
     pr: compact ? undefined : r.params,
+    z: !compact && r.zones?.length ? r.zones.map((x) => [x.c, Math.round(x.a), Math.round(x.b)] as [EnvClass, number, number]) : undefined,
     vps: r.vias?.length ? r.vias.map((v) => ({ n: v.name, c: [Math.round(v.coord[0] * 1e5) / 1e5, Math.round(v.coord[1] * 1e5) / 1e5] as LngLat })) : undefined,
   };
 }
@@ -82,6 +85,7 @@ export function deserialize(s: SerialRoute, settings: Settings): Route {
     busy: s.busy,
     overlap: 0,
     waterPoints: s.w ?? [],
+    zones: s.z?.map(([c, a, b]) => ({ c, a, b })),
     durationS: estimateDuration(s.s, lengthM, st.ascent, settings),
     params: s.pr,
     createdAt: s.t,

@@ -11,7 +11,8 @@
   let w = $state(320);
   const padL = 40;
   const padR = 10;
-  const padT = 12;
+  // En-tête au-dessus (iPhone) : le graphique monte au plus près.
+  const padT = $derived(readout === 'header' ? 4 : 12);
   const padB = 22;
 
   const L = $derived(route.lengthM);
@@ -21,8 +22,9 @@
     const lo = Math.min(...ele);
     const hi = Math.max(...ele);
     const span = Math.max(hi - lo, 40);
-    const mid = (hi + lo) / 2;
-    return { min: mid - span * 0.58, max: mid + span * 0.62 };
+    // Le point le plus haut juste sous le bord : pas de grand vide au-dessus d'un parcours plat.
+    const max = hi + span * 0.1;
+    return { min: max - span * 1.22, max };
   });
   const innerW = $derived(Math.max(10, w - padL - padR));
   const innerH = $derived(height - padT - padB);

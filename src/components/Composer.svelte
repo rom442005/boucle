@@ -81,23 +81,23 @@
   </section>
 
   <!--
-    Le parcours, d'un seul bloc et dans l'ordre où on le pense : sa forme, sa distance, son dénivelé, le milieu
-    traversé. Chaque rang a la même étiquette et le même filet.
+    Le parcours, en blocs séparés et dans l'ordre où on le pense : sa forme, puis ses chiffres (distance,
+    dénivelé), puis là où l'on veut passer (milieu, points de passage).
   -->
-  <section class="block glass photo-card course" aria-label="Le parcours">
-    <div class="sub">
-      <h3 id="shape-l" class="field-label">Forme</h3>
-      <Segmented
-        label="Forme du parcours"
-        value={p.shape}
-        options={(Object.keys(SHAPES) as Shape[]).map((s) => ({ value: s, label: SHAPES[s].label }))}
-        onchange={setShape}
-      />
-      {#if p.shape === 'loop'}
-        <DrawPad />
-      {/if}
-    </div>
+  <section class="block glass photo-card" aria-labelledby="shape-l">
+    <h3 id="shape-l" class="field-label">Forme</h3>
+    <Segmented
+      label="Forme du parcours"
+      value={p.shape}
+      options={(Object.keys(SHAPES) as Shape[]).map((s) => ({ value: s, label: SHAPES[s].label }))}
+      onchange={setShape}
+    />
+    {#if p.shape === 'loop'}
+      <DrawPad />
+    {/if}
+  </section>
 
+  <section class="block glass photo-card course" aria-label="Distance et dénivelé">
     <!-- Repère de mi-hauteur du panneau : sous la distance quand le dénivelé est masqué (dessin). -->
     <div class="sub" data-fold={app.drawActive ? '' : undefined}>
       <Ruler
@@ -135,18 +135,22 @@
         onreset={() => setElevation(null)}
       />
     </div>
-
-    <div class="sub" aria-labelledby="env-l">
-      <h3 id="env-l" class="field-label">Milieu</h3>
-      <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
-    </div>
-    {/if}
-
-    <!-- Sur Mac, ces lieux sont en haut de la colonne, sous le départ. Un dessin n'a pas de point de passage. -->
-    {#if !app.wide && !app.drawActive}
-      <div class="sub"><Stops /></div>
     {/if}
   </section>
+
+  {#if !app.drawActive}
+    <!-- Où passer : le milieu voulu (montré ensuite sur la carte, le long du parcours) et, sur iPhone, les points
+         de passage (sur Mac, ils sont en haut de la colonne, sous le départ). -->
+    <section class="block glass photo-card course" aria-label="Où passer">
+      <div class="sub" aria-labelledby="env-l">
+        <h3 id="env-l" class="field-label">Milieu</h3>
+        <EnvChips selected={p.envs} ontoggle={(e) => app.toggleEnv(e)} />
+      </div>
+      {#if !app.wide}
+        <div class="sub"><Stops /></div>
+      {/if}
+    </section>
+  {/if}
 
   <!-- Découverte : les lieux emblématiques autour, à ajouter au parcours (pas pour un dessin). -->
   {#if !app.drawActive}

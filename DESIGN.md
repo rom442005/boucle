@@ -219,6 +219,7 @@ components:
     - **Origine** : un menu s'ouvre depuis son bouton (`transform-origin` sur le déclencheur).
     - **Chiffres qui changent** : ils roulent (`RollingNumber`), 340 ms.
     - **Réduire les animations** : respecté partout (réglage du système) ; le mouvement devient un simple fondu ou rien.
+13. **Un écran se lit en sections** (28/11/2026) : chaque groupe dans son propre bloc (Créer : Sport, Forme, Distance et dénivelé, Milieu et passages, Découverte, Options ; détail d'un parcours : chiffres, tuiles, profil, actions, « Plus de détails »). Sous les chiffres héros, 2 ou 3 tuiles au plus (icône, valeur en gros, légende d'un ou deux mots), jamais une rangée de pastilles de texte. 3 actions en vue, les autres derrière « Plus ». Ce que l'on a demandé (parc, bord de l'eau, points d'eau) se voit sur la carte, là où le parcours y passe, plutôt qu'en pourcentage.
 
 **Avant de livrer :** photo derrière ? Seulement des blocs de verre ? Un chiffre héros par bloc ? Des étiquettes d'un ou deux mots ? Le rose réservé à l'action ? Lisible sur la photo la plus claire (s8, s17) comme sur la plus sombre (s9, s20) ? Durées dans les fourchettes, fermeture plus rapide que l'ouverture, zones de 44 pt, « Annuler » au lieu de « Êtes-vous sûr ? » ?
 

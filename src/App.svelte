@@ -316,7 +316,7 @@
   {#if !scene && !app.pickOnMap && app.search !== 'save' && ((athome && !welcome) || (app.wide && app.phase === 'compose'))}
     <!-- Sur la carte : la météo du départ, et dessous les lieux à mettre en valeur (pistes, parcs, eau…). -->
     <!-- iPhone : la barre des lieux seule, tout en haut (la météo se lit dans les propositions). -->
-    <div class="widgets" data-arrive="down" style="--arrive-delay: 380ms" class:full={macHome}>
+    <div class="widgets" data-arrive="down" style="--arrive-delay: 380ms">
       {#if app.wide}<TodayCard />{/if}
       <ZonesCard />
     </div>
@@ -481,7 +481,7 @@
         <h3>Profil</h3>
         <div class="dock-legend"><SlopeLegend /></div>
       </div>
-      <ElevationProfile route={app.route} height={122} />
+      <ElevationProfile route={app.route} height={104} />
     </section>
   {/if}
 {:else}
@@ -676,14 +676,21 @@
   .place-zone {
     display: contents;
   }
+  /*
+   * Mac : la météo et les lieux restent à la même place, panneau ouvert ou fermé, en haut à droite à côté des
+   * commandes de la carte (sous les onglets si l'écran est étroit).
+   */
   @media (min-width: 860px) {
     .widgets {
-      left: 408px;
+      left: auto;
+      right: 72px;
       top: 76px;
+      justify-items: end;
     }
-    /* Réglages fermés : la carte occupe tout, les widgets se rangent à gauche. */
-    .widgets.full {
-      left: var(--gutter);
+  }
+  @media (min-width: 1180px) {
+    .widgets {
+      top: calc(env(safe-area-inset-top, 0px) + 14px);
     }
   }
   /* Mac : « Créer un parcours », pastille rose en bas au centre de la carte. */
@@ -847,7 +854,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 30px;
+    margin-bottom: 12px;
   }
   .dock-head h3 {
     margin: 0;

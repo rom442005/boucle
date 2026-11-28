@@ -46,11 +46,14 @@ export interface Line {
   sub: string;
   /** à signaler : départ ou retour dans le noir */
   warn?: boolean;
+  /** en tuile : la valeur en gros, et sa légende */
+  value: string;
+  caption: string;
 }
 
 export function weatherLine(w: Weather): Line {
   const s = sky(w.code, w.isDay);
-  return { icon: s.icon, emoji: skyEmoji(w.code, w.isDay), title: `${Math.round(w.temperature)}${NNBSP}°C · ${s.label}`, sub: windText(w) };
+  return { icon: s.icon, emoji: skyEmoji(w.code, w.isDay), title: `${Math.round(w.temperature)}${NNBSP}°C · ${s.label}`, sub: windText(w), value: `${Math.round(w.temperature)}°`, caption: s.label };
 }
 
 /** La lumière pour une sortie de `durationS` secondes qui partirait à `now`. */
@@ -58,11 +61,11 @@ export function daylightLine(now: number, lat: number, lng: number, durationS: n
   const t = sunTimes(now, lat, lng);
   if (t.sunrise == null || t.sunset == null || t.dawn == null || t.dusk == null) return null;
   const end = now + durationS * 1000;
-  if (now < t.dawn) return { icon: 'moon', emoji: '🌙', warn: true, title: 'Départ de nuit', sub: `Lever du soleil à ${clock(t.sunrise)}` };
-  if (now > t.dusk) return { icon: 'moon', emoji: '🌙', warn: true, title: 'Départ de nuit', sub: `Nuit depuis ${clock(t.dusk)}` };
-  if (end <= t.sunset) return { icon: 'sunHorizon', emoji: '🌇', title: `Retour vers ${clock(end)}, de jour`, sub: `Coucher du soleil à ${clock(t.sunset)}` };
-  if (end <= t.dusk) return { icon: 'sunHorizon', emoji: '🌆', warn: true, title: `Retour vers ${clock(end)}, au crépuscule`, sub: `Coucher du soleil à ${clock(t.sunset)}` };
-  return { icon: 'moon', emoji: '🌙', warn: true, title: `Retour vers ${clock(end)}, de nuit`, sub: `Nuit à ${clock(t.dusk)}` };
+  if (now < t.dawn) return { icon: 'moon', emoji: '🌙', warn: true, title: 'Départ de nuit', sub: `Lever du soleil à ${clock(t.sunrise)}`, value: 'Nuit', caption: `Jour à ${clock(t.sunrise)}` };
+  if (now > t.dusk) return { icon: 'moon', emoji: '🌙', warn: true, title: 'Départ de nuit', sub: `Nuit depuis ${clock(t.dusk)}`, value: 'Nuit', caption: 'Départ dans le noir' };
+  if (end <= t.sunset) return { icon: 'sunHorizon', emoji: '🌇', title: `Retour vers ${clock(end)}, de jour`, sub: `Coucher du soleil à ${clock(t.sunset)}`, value: clock(end), caption: 'Retour de jour' };
+  if (end <= t.dusk) return { icon: 'sunHorizon', emoji: '🌆', warn: true, title: `Retour vers ${clock(end)}, au crépuscule`, sub: `Coucher du soleil à ${clock(t.sunset)}`, value: clock(end), caption: 'Retour au crépuscule' };
+  return { icon: 'moon', emoji: '🌙', warn: true, title: `Retour vers ${clock(end)}, de nuit`, sub: `Nuit à ${clock(t.dusk)}`, value: clock(end), caption: 'Retour de nuit' };
 }
 
 /** Pour l'option « Rues éclairées » : quand la nuit tombe ce soir. */

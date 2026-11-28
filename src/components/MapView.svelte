@@ -21,10 +21,15 @@
   import { km, kmValue, NNBSP } from '../lib/format';
   import { haptic, tactile } from '../lib/haptics';
   import Icon from './Icon.svelte';
-  import type { LngLat, Route } from '../lib/types';
+  import type { EnvClass, LngLat, Route } from '../lib/types';
+  import { ENV_EMOJI } from '../lib/scenes';
+  import { ENVS } from '../lib/sports';
 
   maplibregl.setWorkerUrl(mapWorkerUrl);
   const VIEW_KEY = 'boucle.vue.v1';
+  const WATER_EMOJI = '💧';
+  /** Couleur du halo des milieux demandés : celles des milieux, éclaircies pour se lire sous le tracé. */
+  const WISH_COLOR: Record<EnvClass, string> = { forest: '#5FBF4A', water: '#4CB3FF', park: '#8FD95C', fields: '#E2BC4F', urban: '#B6B1A6' };
   const NANTES: LngLat = [-1.5536, 47.2184];
   const dark = matchMedia('(prefers-color-scheme: dark)');
   /** Zoom du lancement : la ville et ses environs, jamais un gros plan sur la position. */
@@ -208,7 +213,7 @@
     if (!m.hasImage('chevron')) m.addImage('chevron', chevron(), { pixelRatio: 2 });
     if (!m.hasImage('collider')) m.addImage('collider', new ImageData(68, 68), { pixelRatio: 2 });
     addCityDots();
-    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'start-pt', 'pen', 'sonar', 'art', 'art-start']) {
+    for (const id of ['reach', 'aim', 'community', 'alt', 'climb-hl', 'sel', 'sel-line', 'done', 'marks', 'water', 'wish', 'wish-pts', 'start-pt', 'pen', 'sonar', 'art', 'art-start']) {
       if (!m.getSource(id)) m.addSource(id, { type: 'geojson', data: EMPTY });
     }
     const round = { 'line-join': 'round', 'line-cap': 'round' } as const;
@@ -279,6 +284,14 @@
         'line-width': zw(2, 3.5),
         'line-dasharray': [0.1, 2],
       },
+    });
+    // Les milieux demandés (parc, bord de l'eau…) : un halo de leur couleur sous les tronçons qui y passent.
+    m.addLayer({
+      id: 'wish-halo',
+      type: 'line',
+      source: 'wish',
+      layout: round,
+      paint: { 'line-color': ['get', 'color'], 'line-width': zw(13, 24), 'line-opacity': 0.5, 'line-blur': 2 },
     });
     // Côte ou descente mise en avant : un halo de sa couleur sous le tracé.
     m.addLayer({
@@ -370,11 +383,34 @@
         'circle-pitch-alignment': 'map',
       },
     });
+    // Points d'eau et milieux demandés : des pastilles à émoji posées sur le parcours, leur nom de près.
+    for (const e of [WATER_EMOJI, ...Object.values(ENV_EMOJI)]) if (!m.hasImage(`sv-${e}`)) m.addImage(`sv-${e}`, savedPin(e), { pixelRatio: 2 });
     m.addLayer({
       id: 'water-pts',
-      type: 'circle',
+      type: 'symbol',
       source: 'water',
-      paint: { 'circle-radius': 6, 'circle-color': '#2F8AD1', 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 2 },
+      layout: {
+        'icon-image': `sv-${WATER_EMOJI}`,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.55, 15, 0.8] as unknown as number,
+        'icon-allow-overlap': true,
+      },
+    });
+    m.addLayer({
+      id: 'wish-pins',
+      type: 'symbol',
+      source: 'wish-pts',
+      layout: {
+        'icon-image': ['concat', 'sv-', ['get', 'emoji']],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.72, 15, 1] as unknown as number,
+        'icon-allow-overlap': true,
+        'text-field': ['step', ['zoom'], '', 12.5, ['get', 'label']] as unknown as string,
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 11,
+        'text-offset': [0, 1.5],
+        'text-anchor': 'top',
+        'text-optional': true,
+      },
+      paint: { 'text-color': '#FFFFFF', 'text-halo-color': 'rgba(0, 0, 0, 0.7)', 'text-halo-width': 1.4 },
     });
     m.addLayer({
       id: 'marks-dot',
@@ -684,6 +720,27 @@
     g.textBaseline = 'middle';
     g.fillText(emoji, S / 2, S / 2);
     return g.getImageData(0, 0, S, S);
+  }
+
+  /**
+   * Les milieux demandés sur le parcours affiché : chaque tronçon en halo de sa couleur, et une pastille au
+   * milieu du tronçon (son émoji, son nom de près), pour voir où l'on passera dans le parc ou au bord de l'eau.
+   */
+  function showWishes(r: Route) {
+    const zones = r.zones ?? [];
+    setData('wish', {
+      type: 'FeatureCollection',
+      features: zones.map((z) => lineFeature(sliceBetween(r.coords, z.a, z.b), { color: WISH_COLOR[z.c] })),
+    });
+    const cum = cumulative(r.coords);
+    setData('wish-pts', {
+      type: 'FeatureCollection',
+      features: zones.map((z) => ({
+        type: 'Feature',
+        properties: { emoji: ENV_EMOJI[z.c], label: ENVS[z.c].label },
+        geometry: { type: 'Point', coordinates: pointAt(r.coords, cum, (z.a + z.b) / 2).coord },
+      })),
+    });
   }
 
   /** Mes lieux sur la carte (pas pendant le suivi). */
@@ -2322,7 +2379,7 @@
       lastDrawn = null;
       lastAltCount = 0;
       app.revealK = 1;
-      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'done', 'pen', 'art', 'art-start']) setData(id, EMPTY);
+      for (const id of ['alt', 'sel', 'sel-line', 'marks', 'water', 'wish', 'wish-pts', 'done', 'pen', 'art', 'art-start']) setData(id, EMPTY);
       if (lastTick !== -1 && app.phase === 'compose' && app.start) {
         const D = untrack(() => app.params.distanceKm) * 1000;
         const ring = circlePolygon(app.start.coord, D / 3.7);
@@ -2339,6 +2396,7 @@
     const altCount = alt.features.length;
     setData('alt', alt);
     setData('water', pointsFC(r.waterPoints));
+    showWishes(r);
     setData('art', r.art ? lineFeature(r.art.ghost) : EMPTY);
     const artStart = r.art?.start;
     setData('art-start', artStart && app.start && haversine(artStart, untrack(() => app.start!.coord)) > 80 ? pointsFC([artStart]) : EMPTY);
