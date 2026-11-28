@@ -2,6 +2,8 @@
   import CountUp from './CountUp.svelte';
   import Icon from './Icon.svelte';
   import CommunityItem from './CommunityItem.svelte';
+  import AdCard from './AdCard.svelte';
+  import { promo } from '../lib/promo.svelte';
   import ProfileView from './ProfileView.svelte';
   import ActivityBars from './ActivityBars.svelte';
   import { community } from '../lib/community.svelte';
@@ -133,6 +135,10 @@
       <ul class="c-list wide" aria-label="Parcours publiés" aria-busy={community.loading}>
         {#each community.feed as r, i (r.id)}
           <CommunityItem {r} {i} {from} />
+          <!-- Aperçu des publicités (simulation) : une seule, après le 3e parcours. -->
+          {#if i === Math.min(2, community.feed.length - 1) && promo.ads[1]}
+            <li class="c-li ad-li glass photo-card"><AdCard ad={promo.ads[1]} /></li>
+          {/if}
         {/each}
       </ul>
     {:else}
@@ -337,6 +343,16 @@
   }
   .c-list {
     margin: 0;
+  }
+  .ad-li {
+    list-style: none;
+    border-radius: 26px;
+  }
+  /* Dans le fil, la publicité est le bloc de verre lui-même (pas de bloc dans le bloc). */
+  .ad-li :global(.ad) {
+    background: transparent;
+    box-shadow: none;
+    padding: 14px 16px;
   }
   /* Vide : la boucle en pointillés de Mes parcours, un titre, une action. */
   .empty {

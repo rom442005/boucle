@@ -13,6 +13,8 @@
   import { daylightLine, weatherLine, type Line } from '../lib/conditions';
   import type { EnvClass, Route } from '../lib/types';
   import Avatar from './Avatar.svelte';
+  import AdCard from './AdCard.svelte';
+  import { promo } from '../lib/promo.svelte';
   import Comments from './Comments.svelte';
   import PhotoStrip from './PhotoStrip.svelte';
   import { community } from '../lib/community.svelte';
@@ -418,6 +420,8 @@
         {/if}
       </div>
     {/if}
+
+    {#if promo.ads[0]}<AdCard ad={promo.ads[0]} />{/if}
 
     <div class="sec more-sec">
     <button use:tactile type="button" class="more" aria-expanded={more} aria-controls="more-body" onclick={() => (more = !more)}>

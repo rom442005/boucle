@@ -37,6 +37,8 @@
   import PlaceCard from './components/PlaceCard.svelte';
   import SaveSheet from './components/SaveSheet.svelte';
   import HealthDetail from './components/HealthDetail.svelte';
+  import PlusSheet from './components/PlusSheet.svelte';
+  import { promo } from './lib/promo.svelte';
   import SpotView from './components/SpotView.svelte';
   import { saved } from './lib/saved.svelte';
   import HealthLink from './components/HealthLink.svelte';
@@ -503,6 +505,7 @@
 {/if}
 {#if saved.draft}<SaveSheet />{/if}
 {#if links.detail}<HealthDetail />{/if}
+{#if promo.open}<PlusSheet />{/if}
 {#if app.spotView && !app.wide}<SpotView />{/if}
 
 {#if welcome}<Welcome onclose={closeWelcome} />{/if}

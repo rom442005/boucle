@@ -16,6 +16,8 @@
   import { links, type HealthMetric } from '../lib/links.svelte';
   import { healthPlatform } from '../lib/health';
   import { duration } from '../lib/format';
+  import { promo } from '../lib/promo.svelte';
+  const euro = (v: number) => v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
   /*
    * Un profil en quelques blocs de verre sur la photo : qui (photo, prénom, niveau, ville, présentation),
@@ -90,6 +92,15 @@
     </div>
     {#if p.bio}<p class="bio">{p.bio}</p>{/if}
   </section>
+
+  {#if mine}
+    <!-- Boucle+ (simulation) : le prix du mois et la règle, la feuille complète au toucher. -->
+    <button use:tactile type="button" class="card wide glass photo-card tap plus-card" aria-label="Boucle+, simulation : voir l’abonnement et les publicités" onclick={() => (promo.open = true)}>
+      <div class="card-top"><span class="k">Boucle<b class="plus-mark">+</b> · simulation</span><Icon name="chevron" size={14} /></div>
+      <b class="big2 rounded tabular">{euro(promo.price)}<small>/mois</small></b>
+      <span class="k">{promo.sim.active ? `Mois ${Math.max(1, promo.streak)} d’affilée · le prochain à ${euro(promo.nextPrice)}` : '−0,25 € chaque mois d’affilée, sans publicité'}</span>
+    </button>
+  {/if}
 
   <section class="card stat glass photo-card" aria-label="Parcours publiés">
     <span class="k">Parcours</span><span class="nrow"><span class="emo-s" aria-hidden="true">🗺️</span><b class="n rounded"><CountUp value={v.stats.routes} /></b></span>
@@ -465,6 +476,10 @@
   .pair > span {
     display: grid;
     gap: 2px;
+  }
+  .plus-mark {
+    color: var(--tint);
+    font-weight: 800;
   }
   .big2 {
     font-size: 2rem;
